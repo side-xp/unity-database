@@ -20,7 +20,6 @@ namespace SideXP.Database.EditorOnly
         private const string ListClass = "database-table-list";
         private const string ItemClass = "database-table-list__item";
         private const string ItemNameClass = "database-table-list__name";
-        private const string ObsoleteTagClass = "database-obsolete-tag";
         private const string MessageClass = "database-message";
 
         /// <summary>
@@ -29,10 +28,8 @@ namespace SideXP.Database.EditorOnly
         private const float ItemHeight = 22;
 
         private const string ItemNameElement = "name";
-        private const string ObsoleteTagElement = "obsolete-tag";
+        private const string ObsoleteMarkElement = "obsolete-mark";
 
-        private const string ObsoleteText = "Obsolete";
-        private const string ObsoleteTooltip = "The type of this table is marked [Obsolete].";
         private const string NoTableMessage = "No table found in the project.\nAdd [Table] to a ScriptableObject class to create one.";
         private const string NoMatchMessage = "No table matches the search.";
 
@@ -146,9 +143,9 @@ namespace SideXP.Database.EditorOnly
             nameLabel.AddToClassList(ItemNameClass);
             item.Add(nameLabel);
 
-            Label obsoleteTag = new Label(ObsoleteText) { name = ObsoleteTagElement, tooltip = ObsoleteTooltip };
-            obsoleteTag.AddToClassList(ObsoleteTagClass);
-            item.Add(obsoleteTag);
+            VisualElement obsoleteMark = DatabaseElements.CreateObsoleteMark();
+            obsoleteMark.name = ObsoleteMarkElement;
+            item.Add(obsoleteMark);
 
             // A single click opens the table, since the list is only used to navigate
             item.RegisterCallback<ClickEvent>(evt =>
@@ -171,7 +168,7 @@ namespace SideXP.Database.EditorOnly
             item.userData = table;
             item.tooltip = table.Type.FullName;
             item.Q<Label>(ItemNameElement).text = table.Name;
-            item.Q<Label>(ObsoleteTagElement).SetDisplayed(table.IsObsolete);
+            item.Q(ObsoleteMarkElement).SetDisplayed(table.IsObsolete);
         }
 
         /// <summary>

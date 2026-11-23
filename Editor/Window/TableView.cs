@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -32,7 +31,6 @@ namespace SideXP.Database.EditorOnly
         private const string MessageClass = "database-message";
 
         private const string NoAssetMessage = "There is no asset of this table in the project.";
-        private const string NullReferenceText = "None";
 
         /// <summary>
         /// The height of the rows, in pixels. Smaller than the default height of the list views of the editor, so more rows fit, like
@@ -209,8 +207,8 @@ namespace SideXP.Database.EditorOnly
                 resizable = true,
                 sortable = false,
                 makeHeader = () => MakeHeader(column),
-                makeCell = MakeCell,
-                bindCell = (element, rowIndex) => ((Label)element).text = ToDisplayText(_rows[rowIndex].GetValue(columnIndex)),
+                makeCell = () => MakeCell(column),
+                bindCell = (element, rowIndex) => BindCell(element, column, columnIndex, _rows[rowIndex]),
             };
         }
 
@@ -227,14 +225,45 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Creates the element of a cell.
+        /// Creates the element of a cell: a container, which holds the display created by the handler of the column.
         /// </summary>
+        /// <param name="column">The column of the cell.</param>
         /// <returns>Returns the created element.</returns>
-        private static VisualElement MakeCell()
+        private static VisualElement MakeCell(TableViewColumn column)
         {
-            Label cell = new Label();
+            VisualElement cell = new VisualElement();
             cell.AddToClassList(CellClass);
+            cell.Add(column.Handler.CreateDisplay());
             return cell;
+        }
+
+        /// <summary>
+        /// Shows the cached value of a row in a cell, through the handler of the column.
+        /// </summary>
+        /// <remarks>
+        /// An error of the handler is logged once per column, and doesn't prevent the other cells from being displayed.
+        /// </remarks>
+        /// <param name="cell">The element created by <see cref="MakeCell(TableViewColumn)"/>.</param>
+        /// <param name="column">The column of the cell.</param>
+        /// <param name="columnIndex">The index of the column in the pipeline.</param>
+        /// <param name="row">The row of the cell.</param>
+        private static void BindCell(VisualElement cell, TableViewColumn column, int columnIndex, TableRow row)
+        {
+            try
+            {
+                CellContext context = new CellContext(row.Asset, column.Field, column.Accessor.ValueType);
+                column.Handler.BindDisplay(cell[0], row.GetValue(columnIndex), context);
+            }
+            catch (Exception exception)
+            {
+                if (column.HasLoggedError)
+                    return;
+
+                column.HasLoggedError = true;
+                Debug.LogError($"{DatabaseConstants.LogPrefix}The cell handler {column.Handler.GetType()} failed to display a value of " +
+                    $"the column \"{column.Name}\". The next errors of this column are not logged.");
+                Debug.LogException(exception);
+            }
         }
 
         #endregion
@@ -272,33 +301,6 @@ namespace SideXP.Database.EditorOnly
                 columns.Add(TableViewColumn.FromDefinition(column));
 
             return columns;
-        }
-
-        /// <summary>
-        /// Converts a cached value to the text displayed in its cell.
-        /// </summary>
-        /// <remarks>
-        /// @note Temporary conversion, replaced by the cell handlers in step 5b of the implementation.
-        /// </remarks>
-        /// <param name="value">The value to convert.</param>
-        /// <returns>Returns the text to display.</returns>
-        private static string ToDisplayText(object value)
-        {
-            switch (value)
-            {
-                case null:
-                    return string.Empty;
-
-                // Check Unity objects first, since a missing or destroyed reference is not null for C#
-                case Object unityObject:
-                    return unityObject != null ? unityObject.name : NullReferenceText;
-
-                case IFormattable formattable:
-                    return formattable.ToString(null, CultureInfo.InvariantCulture);
-
-                default:
-                    return value.ToString();
-            }
         }
 
         #endregion

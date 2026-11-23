@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace SideXP.Database.EditorOnly
 {
 
@@ -49,24 +51,44 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         private IValueAccessor _accessor = null;
 
+        /// <summary>
+        /// The field displayed in the column, or null if the column doesn't display a field.
+        /// </summary>
+        private FieldInfo _field = null;
+
+        /// <summary>
+        /// Displays the values of the column, and converts them to text.
+        /// </summary>
+        private CellHandler _handler = null;
+
+        /// <summary>
+        /// Checks if an error of the handler has already been logged for this column, so it's logged once instead of once per cell.
+        /// </summary>
+        private bool _hasLoggedError = false;
+
         #endregion
 
 
         #region Lifecycle
 
-        /// <inheritdoc cref="TableViewColumn"/>
+        /// <summary>
+        /// Creates a column, and selects its handler.
+        /// </summary>
         /// <param name="id"><inheritdoc cref="_id" path="/summary"/></param>
         /// <param name="name"><inheritdoc cref="_name" path="/summary"/></param>
         /// <param name="tooltip"><inheritdoc cref="_tooltip" path="/summary"/></param>
         /// <param name="width"><inheritdoc cref="_width" path="/summary"/></param>
         /// <param name="accessor"><inheritdoc cref="_accessor" path="/summary"/></param>
-        public TableViewColumn(string id, string name, string tooltip, float width, IValueAccessor accessor)
+        /// <param name="field"><inheritdoc cref="_field" path="/summary"/></param>
+        public TableViewColumn(string id, string name, string tooltip, float width, IValueAccessor accessor, FieldInfo field)
         {
             _id = id;
             _name = name;
             _tooltip = tooltip;
             _width = width;
             _accessor = accessor;
+            _field = field;
+            _handler = CellHandlerRegistry.Default.GetHandler(field, accessor.ValueType);
         }
 
         #endregion
@@ -94,6 +116,19 @@ namespace SideXP.Database.EditorOnly
         /// <inheritdoc cref="_accessor"/>
         public IValueAccessor Accessor => _accessor;
 
+        /// <inheritdoc cref="_field"/>
+        public FieldInfo Field => _field;
+
+        /// <inheritdoc cref="_handler"/>
+        public CellHandler Handler => _handler;
+
+        /// <inheritdoc cref="_hasLoggedError"/>
+        public bool HasLoggedError
+        {
+            get => _hasLoggedError;
+            set => _hasLoggedError = value;
+        }
+
         /// <summary>
         /// Creates the column that displays a column of a table definition.
         /// </summary>
@@ -101,7 +136,12 @@ namespace SideXP.Database.EditorOnly
         /// <returns>Returns the created column.</returns>
         public static TableViewColumn FromDefinition(ColumnDefinition column)
         {
-            return new TableViewColumn(column.Id, column.Name, column.Tooltip, column.Width, ValueAccessors.Create(column));
+            // The attributes that select the handler are on the field that holds the value, the last one of the path
+            FieldInfo field = column.Fields != null && column.Fields.Count > 0
+                ? column.Fields[column.Fields.Count - 1]
+                : null;
+
+            return new TableViewColumn(column.Id, column.Name, column.Tooltip, column.Width, ValueAccessors.Create(column), field);
         }
 
         /// <summary>
@@ -110,7 +150,7 @@ namespace SideXP.Database.EditorOnly
         /// <returns>Returns the created column.</returns>
         public static TableViewColumn CreateAssetNameColumn()
         {
-            return new TableViewColumn(AssetNameId, AssetNameTitle, AssetNameTooltip, AssetNameWidth, AssetNameAccessor.Instance);
+            return new TableViewColumn(AssetNameId, AssetNameTitle, AssetNameTooltip, AssetNameWidth, AssetNameAccessor.Instance, null);
         }
 
         #endregion

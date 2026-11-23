@@ -27,14 +27,67 @@
     flex-grow: 1;
 }
 
+/* The container of the display created by the cell handler */
 .database-table-view__cell {
-    -unity-text-align: middle-left;
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
     padding-left: 4px;
     padding-right: 4px;
     overflow: hidden;
+}
+
+/* Public class: CellHandler.DisplayLabelClass, also used by the custom handlers */
+.database-cell__label {
+    -unity-text-align: middle-left;
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    padding-left: 0;
+    padding-right: 0;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.database-cell__toggle {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.database-cell__swatch {
     flex-grow: 1;
+    height: 14px;
+    justify-content: flex-end;
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0.4);
+}
+
+.database-cell__swatch-alpha {
+    height: 2px;
+    background-color: white;
+}
+
+.database-cell__reference {
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+
+.database-cell__reference-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    margin-right: 2px;
+}
+
+.database-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
 }
 
 /* A translucent border works with both the light and the dark editor themes */
@@ -65,12 +118,9 @@
     margin-left: 6px;
 }
 
-/* Muted, so the tag stays discreet next to the table name */
-.database-obsolete-tag {
-    -unity-font-style: italic;
+.database-obsolete-mark {
     -unity-text-align: middle-left;
-    opacity: 0.6;
-    margin-left: 6px;
+    margin-left: 4px;
 }
 
 .database-table-list {

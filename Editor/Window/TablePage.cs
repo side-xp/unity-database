@@ -16,12 +16,9 @@ namespace SideXP.Database.EditorOnly
 
         private const string PageClass = "database-page";
         private const string TitleClass = "database-toolbar__title";
-        private const string ObsoleteTagClass = "database-obsolete-tag";
 
         private const string BackText = "Back";
         private const string BackTooltip = "Back to the table list.";
-        private const string ObsoleteText = "Obsolete";
-        private const string ObsoleteTooltip = "The type of this table is marked [Obsolete].";
 
         /// <summary>
         /// The displayed table, or null if none has been set.
@@ -34,9 +31,9 @@ namespace SideXP.Database.EditorOnly
         private Label _titleLabel = null;
 
         /// <summary>
-        /// The tag shown in the toolbar if the table is obsolete.
+        /// The mark shown in the toolbar if the table is obsolete.
         /// </summary>
-        private Label _obsoleteTag = null;
+        private VisualElement _obsoleteMark = null;
 
         /// <summary>
         /// Displays the rows of the table.
@@ -59,17 +56,17 @@ namespace SideXP.Database.EditorOnly
             AddToClassList(PageClass);
 
             Toolbar toolbar = new Toolbar();
-            ToolbarButton backButton = new ToolbarButton(() => BackClicked?.Invoke()) { text = BackText, tooltip = BackTooltip };
+            ToolbarButton backButton = new ToolbarButton(() => BackClicked?.Invoke()) { tooltip = BackTooltip };
+            DatabaseElements.SetIcon(backButton, BuiltInIcons.Back, BackText);
             toolbar.Add(backButton);
 
             _titleLabel = new Label();
             _titleLabel.AddToClassList(TitleClass);
             toolbar.Add(_titleLabel);
 
-            _obsoleteTag = new Label(ObsoleteText) { tooltip = ObsoleteTooltip };
-            _obsoleteTag.AddToClassList(ObsoleteTagClass);
-            _obsoleteTag.SetDisplayed(false);
-            toolbar.Add(_obsoleteTag);
+            _obsoleteMark = DatabaseElements.CreateObsoleteMark();
+            _obsoleteMark.SetDisplayed(false);
+            toolbar.Add(_obsoleteMark);
             Add(toolbar);
 
             _tableView = new TableView();
@@ -93,7 +90,7 @@ namespace SideXP.Database.EditorOnly
             _table = table;
             _titleLabel.text = table.Name;
             _titleLabel.tooltip = table.Type.FullName;
-            _obsoleteTag.SetDisplayed(table.IsObsolete);
+            _obsoleteMark.SetDisplayed(table.IsObsolete);
             _tableView.SetTable(table);
         }
 
