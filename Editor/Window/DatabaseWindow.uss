@@ -76,6 +76,38 @@
     margin-bottom: 0;
 }
 
+/* The edit field of [Range] (RangeCellHandler): a slider and a number field, or the number field alone in narrow cells. Two classes
+   per selector, so they win over the class of the edit fields */
+.database-cell__range {
+    flex-direction: row;
+    align-items: center;
+}
+
+.database-cell__range > .database-cell__range-slider {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.database-cell__range > .database-cell__range-number {
+    flex-grow: 0;
+    flex-shrink: 0;
+    width: 56px;
+    margin-left: 4px;
+}
+
+.database-cell__range--compact > .database-cell__range-slider {
+    display: none;
+}
+
+.database-cell__range--compact > .database-cell__range-number {
+    flex-grow: 1;
+    flex-shrink: 1;
+    width: auto;
+    margin-left: 0;
+}
+
 /* Public class: CellHandler.DisplayLabelClass, also used by the custom handlers */
 .database-cell__label {
     -unity-text-align: middle-left;

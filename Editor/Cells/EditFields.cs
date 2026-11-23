@@ -3,6 +3,7 @@ using System.Globalization;
 
 using UnityEngine;
 using UnityEngine.UIElements;
+using UnityEditor;
 using UnityEditor.UIElements;
 
 using Object = UnityEngine.Object;
@@ -17,7 +18,8 @@ namespace SideXP.Database.EditorOnly
     /// <remarks>
     /// The fields are not bound to the serialized property: their value is written when the edit is confirmed, so nothing changes
     /// while the user types, and cancelling an edit has nothing to revert. Text fields update their value on each change
-    /// (<see cref="TextInputBaseField{T}.isDelayed"/> disabled), so the value is up to date whenever the edit is confirmed.
+    /// (<see cref="TextInputBaseField{T}.isDelayed"/> disabled), so the value is up to date whenever the edit is confirmed. Curves
+    /// and gradients are the exception: their fields are bound (see <see cref="CreateBoundField(Type, SerializedProperty)"/>).
     /// </remarks>
     internal static class EditFields
     {
@@ -40,6 +42,11 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         private static readonly object NotADefaultField = new object();
 
+        /// <summary>
+        /// The USS class of the edit fields bound to their property, which write it themselves.
+        /// </summary>
+        private const string BoundFieldClass = "database-cell__edit-field--bound";
+
         #endregion
 
 
@@ -50,16 +57,40 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         /// <remarks>
         /// Supported types: strings, characters, numbers, booleans, enums (with flags or not), references to Unity objects, colors,
-        /// vectors, rectangles, bounds, quaternions (as Euler angles), layer masks and <see cref="Hash128"/>.
+        /// vectors, rectangles, bounds, quaternions (as Euler angles), layer masks and <see cref="Hash128"/>. With a property, curves
+        /// and gradients too.
         /// </remarks>
         /// <param name="valueType">The type of the value.</param>
         /// <param name="value">The current value of the cell.</param>
+        /// <param name="property">The edited property, used to bind the fields of the types that must be bound (curves and gradients),
+        /// or null to only create unbound fields.</param>
         /// <returns>Returns the created field, or null if the type has no default edit field.</returns>
-        public static VisualElement Create(Type valueType, object value)
+        public static VisualElement Create(Type valueType, object value, SerializedProperty property = null)
         {
-            VisualElement field = CreateField(valueType, value);
+            VisualElement field = property != null ? CreateBoundField(valueType, property) : null;
+            field ??= CreateField(valueType, value);
             field?.AddToClassList(CellHandler.EditFieldClass);
             return field;
+        }
+
+        /// <summary>
+        /// Marks an edit field as bound to its property: it writes the property itself, so there is no value to write when the edit is
+        /// confirmed.
+        /// </summary>
+        /// <param name="field">The edit field.</param>
+        public static void MarkAsBound(VisualElement field)
+        {
+            field.AddToClassList(BoundFieldClass);
+        }
+
+        /// <summary>
+        /// Checks if an edit field is bound to its property (see <see cref="MarkAsBound(VisualElement)"/>).
+        /// </summary>
+        /// <param name="field">The edit field.</param>
+        /// <returns>Returns true if the field writes its property itself.</returns>
+        public static bool IsBound(VisualElement field)
+        {
+            return field != null && field.ClassListContains(BoundFieldClass);
         }
 
         /// <summary>
@@ -109,6 +140,40 @@ namespace SideXP.Database.EditorOnly
 
 
         #region Private API
+
+        /// <summary>
+        /// Creates the field of a type whose values must be edited by a field bound to their property.
+        /// </summary>
+        /// <remarks>
+        /// Curves and gradients are reference types: their cached value is the instance of the asset itself, which an unbound field
+        /// could change before the edit is confirmed. A bound field edits a copy, and writes it through the property.
+        /// </remarks>
+        /// <param name="valueType">The type of the value.</param>
+        /// <param name="property">The edited property.</param>
+        /// <returns>Returns the created field, bound to the property, or null if the type doesn't need a bound field.</returns>
+        private static VisualElement CreateBoundField(Type valueType, SerializedProperty property)
+        {
+            VisualElement field;
+            if (valueType == typeof(AnimationCurve))
+            {
+                CurveField curveField = new CurveField();
+                curveField.BindProperty(property);
+                field = curveField;
+            }
+            else if (valueType == typeof(Gradient))
+            {
+                GradientField gradientField = new GradientField();
+                gradientField.BindProperty(property);
+                field = gradientField;
+            }
+            else
+            {
+                return null;
+            }
+
+            MarkAsBound(field);
+            return field;
+        }
 
         /// <summary>
         /// Creates the field that matches a type of value, without its USS class.

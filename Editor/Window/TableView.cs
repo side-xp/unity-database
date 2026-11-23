@@ -668,6 +668,8 @@ namespace SideXP.Database.EditorOnly
 
             // Read before the focus changes: ending an edit in progress refreshes the rows, and can rebind this element to another row
             CellId clickedCell = new CellId(binding.Row.Asset, binding.Column.Id);
+            // Ended explicitly, since the field may not have the focus (for example a custom edit field without focusable element)
+            EndEdit(true, false);
             Focus();
             SetActiveCell(clickedCell);
 
@@ -817,7 +819,10 @@ namespace SideXP.Database.EditorOnly
             schedule.Execute(() =>
             {
                 _isRefreshScheduled = false;
-                Refresh();
+                // Fields bound to their property write it while the user edits, which reports changes: the rows must not be sorted
+                // again under the edited cell. The invalidations are applied when the edit ends, since it refreshes the view
+                if (_edit == null)
+                    Refresh();
             });
         }
 

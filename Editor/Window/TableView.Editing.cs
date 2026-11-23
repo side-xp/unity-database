@@ -2,6 +2,7 @@ using System;
 
 using UnityEngine;
 using UnityEngine.UIElements;
+using UnityEditor.UIElements;
 
 namespace SideXP.Database.EditorOnly
 {
@@ -160,6 +161,7 @@ namespace SideXP.Database.EditorOnly
             cell[0].SetDisplayed(false);
             cell.Add(field);
             field.RegisterCallback<FocusOutEvent>(OnEditFieldFocusOut);
+            field.RegisterCallback<PointerDownEvent>(OnEditFieldPointerDown, TrickleDown.TrickleDown);
             field.RegisterCallback<ChangeEvent<bool>>(OnEditFieldChoiceMade);
             field.RegisterCallback<ChangeEvent<Enum>>(OnEditFieldChoiceMade);
             FocusEditField(field, typedCharacter);
@@ -182,22 +184,25 @@ namespace SideXP.Database.EditorOnly
             EditState edit = _edit;
             _edit = null;
 
-            if (isConfirmed)
-            {
+            // The asset may have been deleted during the edit: there is nothing to write then
+            bool isWritten = isConfirmed && edit.Row.Asset != null;
+            if (isWritten)
                 WriteEditedValue(edit);
-                edit.Session.Confirm();
-            }
-            else
-            {
-                edit.Session.Cancel();
-            }
-            edit.Session.Dispose();
 
             if (shouldFocusView)
                 Focus();
 
+            // Unbound and removed before the session is disposed, so a bound field never uses the disposed property
+            edit.Field.Unbind();
             edit.Field.RemoveFromHierarchy();
             edit.CellElement[0].SetDisplayed(true);
+
+            if (isWritten)
+                edit.Session.Confirm();
+            else
+                edit.Session.Cancel();
+
+            edit.Session.Dispose();
 
             // The change is also reported by ObjectChangeEvents, but the cell must not show the previous value until then
             _pipeline?.InvalidateRow(edit.Row.Asset);
@@ -273,6 +278,11 @@ namespace SideXP.Database.EditorOnly
         private static void FocusEditField(VisualElement field, char typedCharacter)
         {
             field.Focus();
+
+            // A container that isn't focusable itself, like a custom edit field made of several fields: focus its first focusable element
+            Focusable focusedElement = field.panel?.focusController?.focusedElement;
+            if (focusedElement is not VisualElement focused || !field.Contains(focused))
+                field.Query<VisualElement>().Where(element => element.focusable && element.canGrabFocus).First()?.Focus();
 
             // Text fields delegate the focus to their inner text element, which handles the selection and the typed characters
             if (field.panel?.focusController?.focusedElement is not TextElement textElement || !field.Contains(textElement))
@@ -410,6 +420,33 @@ namespace SideXP.Database.EditorOnly
                 return;
 
             EndEdit(true, false);
+        }
+
+        /// <summary>
+        /// Called when the edit field is clicked, before its parts get the click. Keeps the focus where it is if the clicked part can't
+        /// take it.
+        /// </summary>
+        /// <remarks>
+        /// Otherwise, the focus controller moves the focus out of the field (to the list view or the table view), which ends the edit:
+        /// for example, the edit would end when the user starts dragging the handle of a slider that is not focusable.
+        /// </remarks>
+        /// <param name="evt">The emitted event.</param>
+        private void OnEditFieldPointerDown(PointerDownEvent evt)
+        {
+            if (_edit == null || evt.currentTarget is not VisualElement field)
+                return;
+
+            for (VisualElement element = evt.target as VisualElement; element != null; element = element.parent)
+            {
+                // The clicked part, or one of its parents in the field, takes the focus: the focus stays in the field
+                if (element.focusable && element.canGrabFocus)
+                    return;
+
+                if (element == field)
+                    break;
+            }
+
+            field.panel?.focusController?.IgnoreEvent(evt);
         }
 
         /// <summary>

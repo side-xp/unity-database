@@ -15,6 +15,11 @@ namespace SideXP.Database.EditorOnly
     /// Each part has a default implementation, so a handler only overrides what it changes. A single instance of each handler is shared
     /// by all the cells of all the tables, so a handler must not keep any state about a cell. Display elements are reused for other
     /// rows when the table scrolls, so <see cref="BindDisplay"/> must set everything that depends on the value.
+    /// <para>
+    /// Displays and edit fields fill their cell. To adapt them to the width of the cell (for example to hide a part of them in narrow
+    /// columns), register a <see cref="GeometryChangedEvent"/> callback on the element, and read the width of its parent (the cell),
+    /// which changes when the column is resized. The built-in handler of <see cref="RangeAttribute"/> hides its slider that way.
+    /// </para>
     /// </remarks>
     public abstract class CellHandler
     {
@@ -127,18 +132,19 @@ namespace SideXP.Database.EditorOnly
         /// <param name="value">The current value of the cell, read from the value cache.</param>
         /// <param name="context">Informations about the cell.</param>
         /// <returns>Returns the created field, or null if the cell can't be edited. By default, the UI Toolkit field that matches the type
-        /// of the value (text, number, toggle, enum, object, color, vector, ...). For the other types, a text field that goes through
-        /// <see cref="ToText"/> and <see cref="TryParse"/>, if the text of the current value can be converted back. Otherwise, the cell
-        /// can't be edited.</returns>
+        /// of the value (text, number, toggle, enum, object, color, vector, curve, ...). For the other types, a text field that goes
+        /// through <see cref="ToText"/> and <see cref="TryParse(string, CellContext, out object)"/>, if the text of the current value
+        /// can be converted back. Otherwise, the cell can't be edited. Property drawers are never used: a handler registered for the
+        /// attribute of a field gives the cells a GUI designed for them.</returns>
         public virtual VisualElement CreateEditField(SerializedProperty property, object value, CellContext context)
         {
-            VisualElement field = EditFields.Create(context.ValueType, value);
+            VisualElement field = EditFields.Create(context.ValueType, value, property);
             if (field != null)
                 return field;
 
             // The other types are edited as text, if the text conversion of this handler supports them
             string text = ToText(value);
-            return TryParse(text, context.ValueType, out _)
+            return TryParse(text, context, out _)
                 ? EditFields.CreateTextConversionField(text)
                 : null;
         }
@@ -151,13 +157,20 @@ namespace SideXP.Database.EditorOnly
         /// <param name="value">Outputs the value to write, of the type of the property.</param>
         /// <returns>Returns true if there is a value to write. Returns false if the field writes the property itself (bound field), or if
         /// the value is rejected: nothing is then written. By default, reads the default fields, and rejects the values that don't fit
-        /// in the type of the column, or the texts that <see cref="TryParse"/> can't convert.</returns>
+        /// in the type of the column, or the texts that <see cref="TryParse(string, CellContext, out object)"/> can't convert.</returns>
         public virtual bool TryGetEditedValue(VisualElement field, CellContext context, out object value)
         {
+            // Curves and gradients write their property themselves
+            if (EditFields.IsBound(field))
+            {
+                value = null;
+                return false;
+            }
+
             if (!EditFields.TryGetConvertedText(field, out string text))
                 return EditFields.TryGetValue(field, context.ValueType, out value);
 
-            if (TryParse(text, context.ValueType, out value))
+            if (TryParse(text, context, out value))
                 return true;
 
             Debug.LogWarning($"{DatabaseConstants.LogPrefix}The text \"{text}\" can't be converted to a {context.ValueType.Name}: the " +
@@ -225,6 +238,42 @@ namespace SideXP.Database.EditorOnly
         public virtual bool TryParse(string text, Type valueType, out object value)
         {
             return TextConversion.TryParse(text, valueType, out value);
+        }
+
+        /// <summary>
+        /// Converts a text to the value of a cell, for paste, import and the edit as text. Override it instead of
+        /// <see cref="TryParse(string, Type, out object)"/> when the value depends on the field of the cell, for example to apply the
+        /// limits of its attributes.
+        /// </summary>
+        /// <param name="text">The text to convert.</param>
+        /// <param name="context">Informations about the cell.</param>
+        /// <param name="value">Outputs the converted value.</param>
+        /// <returns>Returns true if the text has been converted. By default, calls <see cref="TryParse(string, Type, out object)"/>
+        /// with the type of the column.</returns>
+        public virtual bool TryParse(string text, CellContext context, out object value)
+        {
+            return TryParse(text, context.ValueType, out value);
+        }
+
+        #endregion
+
+
+        #region Field limits
+
+        /// <summary>
+        /// Clamps a number to the limits that the attributes of the field of its cell declare (<see cref="RangeAttribute"/> and
+        /// <see cref="MinAttribute"/>), like the Inspector does.
+        /// </summary>
+        /// <remarks>
+        /// Use it in custom handlers registered for another attribute of a field, so the limits still apply: a column uses a single
+        /// handler, the one of the first attribute of its field that has one.
+        /// </remarks>
+        /// <param name="value">The value to clamp, of the type of the column.</param>
+        /// <param name="context">Informations about the cell.</param>
+        /// <returns>Returns the clamped value, or the value itself if it's not a number or if the field declares no limit.</returns>
+        protected static object ClampToFieldLimits(object value, CellContext context)
+        {
+            return FieldLimits.Clamp(value, context.Field);
         }
 
         #endregion
