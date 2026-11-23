@@ -1,4 +1,7 @@
+using System;
 using System.Reflection;
+
+using UnityEngine;
 
 namespace SideXP.Database.EditorOnly
 {
@@ -62,6 +65,11 @@ namespace SideXP.Database.EditorOnly
         private CellHandler _handler = null;
 
         /// <summary>
+        /// Checks if the column can be sorted, as decided by its handler when the column is created.
+        /// </summary>
+        private bool _isSortable = false;
+
+        /// <summary>
         /// Checks if an error of the handler has already been logged for this column, so it's logged once instead of once per cell.
         /// </summary>
         private bool _hasLoggedError = false;
@@ -72,7 +80,7 @@ namespace SideXP.Database.EditorOnly
         #region Lifecycle
 
         /// <summary>
-        /// Creates a column, and selects its handler.
+        /// Creates a column, selects its handler, and asks the handler if the column can be sorted.
         /// </summary>
         /// <param name="id"><inheritdoc cref="_id" path="/summary"/></param>
         /// <param name="name"><inheritdoc cref="_name" path="/summary"/></param>
@@ -89,6 +97,18 @@ namespace SideXP.Database.EditorOnly
             _accessor = accessor;
             _field = field;
             _handler = CellHandlerRegistry.Default.GetHandler(field, accessor.ValueType);
+
+            try
+            {
+                _isSortable = _handler.CanCompare(accessor.ValueType);
+            }
+            catch (Exception exception)
+            {
+                // A broken custom handler makes the column unsortable, instead of preventing the table from opening
+                Debug.LogError($"{DatabaseConstants.LogPrefix}The cell handler {_handler.GetType()} failed to tell if the column " +
+                    $"\"{name}\" can be sorted. The column can't be sorted.");
+                Debug.LogException(exception);
+            }
         }
 
         #endregion
@@ -121,6 +141,9 @@ namespace SideXP.Database.EditorOnly
 
         /// <inheritdoc cref="_handler"/>
         public CellHandler Handler => _handler;
+
+        /// <inheritdoc cref="_isSortable"/>
+        public bool IsSortable => _isSortable;
 
         /// <inheritdoc cref="_hasLoggedError"/>
         public bool HasLoggedError

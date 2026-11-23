@@ -6,8 +6,8 @@ namespace SideXP.Database.EditorOnly
 {
 
     /// <summary>
-    /// Defines how the values of a column are handled by the Database window: how they are displayed, and how they are converted to
-    /// text and back. Register a handler with <see cref="CustomCellHandlerAttribute"/>.
+    /// Defines how the values of a column are handled by the Database window: how they are displayed, compared for sorting, and
+    /// converted to text and back. Register a handler with <see cref="CustomCellHandlerAttribute"/>.
     /// </summary>
     /// <remarks>
     /// Each part has a default implementation, so a handler only overrides what it changes. A single instance of each handler is shared
@@ -52,6 +52,39 @@ namespace SideXP.Database.EditorOnly
         {
             if (element is Label label)
                 label.text = ToText(value);
+        }
+
+        #endregion
+
+
+        #region Compare
+
+        /// <summary>
+        /// Checks if the values of a column can be sorted. Called once per column, when the table loads: the header of a column that
+        /// can't be sorted doesn't react to clicks.
+        /// </summary>
+        /// <param name="valueType">The type of the values of the column.</param>
+        /// <returns>Returns true if the values can be compared with <see cref="Compare"/>. By default, true for the types that implement
+        /// <see cref="IComparable"/>, like strings, numbers, booleans and enums.</returns>
+        public virtual bool CanCompare(Type valueType)
+        {
+            return ValueComparison.CanCompare(valueType);
+        }
+
+        /// <summary>
+        /// Compares two values of a column, for sorting. Only called if <see cref="CanCompare"/> returns true for the column.
+        /// </summary>
+        /// <remarks>
+        /// The sort is stable: the rows of equal values keep the order of the assets in the project.
+        /// </remarks>
+        /// <param name="a">The first value, read from the value cache.</param>
+        /// <param name="b">The second value, read from the value cache.</param>
+        /// <returns>Returns a negative number if <paramref name="a"/> comes before <paramref name="b"/> in ascending order, a positive
+        /// number if it comes after, or 0 if they are equal. By default, null values come first, strings use the natural order of the
+        /// Project window (<c>Sword 2</c> before <c>Sword 10</c>), and other values use <see cref="IComparable"/>.</returns>
+        public virtual int Compare(object a, object b)
+        {
+            return ValueComparison.Compare(a, b);
         }
 
         #endregion

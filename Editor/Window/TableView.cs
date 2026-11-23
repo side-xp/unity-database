@@ -106,6 +106,11 @@ namespace SideXP.Database.EditorOnly
         private bool _isRefreshScheduled = false;
 
         /// <summary>
+        /// Checks if the view is changing the sort descriptions of the headers itself, so it ignores the events this raises.
+        /// </summary>
+        private bool _isUpdatingSort = false;
+
+        /// <summary>
         /// The message shown instead of the rows when the table has no asset.
         /// </summary>
         private Label _messageLabel = null;
@@ -322,15 +327,18 @@ namespace SideXP.Database.EditorOnly
         /// <returns>Returns the created list view.</returns>
         private MultiColumnListView CreateListView()
         {
-            return new MultiColumnListView
+            MultiColumnListView listView = new MultiColumnListView
             {
                 itemsSource = _rows,
                 fixedItemHeight = RowHeight,
                 selectionType = SelectionType.None,
-                sortingMode = ColumnSortingMode.None,
+                // The header only reports the sort: the pipeline sorts the rows
+                sortingMode = ColumnSortingMode.Custom,
                 horizontalScrollingEnabled = true,
                 showAlternatingRowBackgrounds = AlternatingRowBackground.ContentOnly,
             };
+            listView.columnSortingChanged += () => OnColumnSortingChanged(listView);
+            return listView;
         }
 
         /// <summary>
@@ -353,7 +361,7 @@ namespace SideXP.Database.EditorOnly
                 minWidth = MinColumnWidth,
                 stretchable = isStretchable,
                 resizable = true,
-                sortable = false,
+                sortable = column.IsSortable,
                 makeHeader = () => MakeHeader(column),
                 makeCell = () =>
                 {
@@ -416,6 +424,110 @@ namespace SideXP.Database.EditorOnly
                 Debug.LogError($"{DatabaseConstants.LogPrefix}The cell handler {column.Handler.GetType()} failed to display a value of " +
                     $"the column \"{column.Name}\". The next errors of this column are not logged.");
                 Debug.LogException(exception);
+            }
+        }
+
+        #endregion
+
+
+        #region Sorting
+
+        /// <summary>
+        /// Called when the user clicks the header of a sortable column, in the frozen list or in the main list. Sorts the rows by that
+        /// column.
+        /// </summary>
+        /// <remarks>
+        /// The table is sorted by a single column until multi-column sorting (Next milestone). The headers can describe several sorted
+        /// columns (Shift-click), so only the last sorted column is kept, and the header of the other list is cleared.
+        /// </remarks>
+        /// <param name="listView">The list view whose header has been clicked.</param>
+        private void OnColumnSortingChanged(MultiColumnListView listView)
+        {
+            // Changing the sort descriptions below raises this event again
+            if (_isUpdatingSort || _pipeline == null)
+                return;
+
+            _isUpdatingSort = true;
+            try
+            {
+                SortColumnDescriptions descriptions = listView.sortColumnDescriptions;
+                SortColumnDescription description = descriptions.Count > 0 ? descriptions[descriptions.Count - 1] : null;
+                if (descriptions.Count > 1)
+                {
+                    descriptions.Clear();
+                    descriptions.Add(description);
+                }
+
+                MultiColumnListView otherListView = listView == _listView ? _frozenListView : _listView;
+                if (description != null && otherListView != null && otherListView.sortColumnDescriptions.Count > 0)
+                    otherListView.sortColumnDescriptions.Clear();
+
+                int columnIndex = description != null ? GetColumnIndex(listView, description) : -1;
+                if (columnIndex >= 0)
+                {
+                    TableViewColumn column = _columns[columnIndex];
+                    bool isDescending = description.direction == SortDirection.Descending;
+                    _pipeline.SetSort(columnIndex, isDescending, (a, b) => Compare(column, a, b));
+                }
+                else
+                {
+                    _pipeline.ClearSort();
+                }
+            }
+            finally
+            {
+                _isUpdatingSort = false;
+            }
+
+            Refresh();
+        }
+
+        /// <summary>
+        /// Gets the index of the column of the table described by a sort description of a list view.
+        /// </summary>
+        /// <param name="listView">The list view that owns the description.</param>
+        /// <param name="description">The sort description.</param>
+        /// <returns>Returns the index of the column in the pipeline, or -1 if it's not found.</returns>
+        private int GetColumnIndex(MultiColumnListView listView, SortColumnDescription description)
+        {
+            // The columns of the list views are named after the identifiers of the columns of the table
+            string columnId = description.column?.name;
+            if (string.IsNullOrEmpty(columnId))
+                columnId = description.columnName;
+
+            if (string.IsNullOrEmpty(columnId) && description.columnIndex >= 0 && description.columnIndex < listView.columns.Count)
+                columnId = listView.columns[description.columnIndex].name;
+
+            return _columns.FindIndex(column => column.Id == columnId);
+        }
+
+        /// <summary>
+        /// Compares two values of a column through its handler.
+        /// </summary>
+        /// <remarks>
+        /// An error of the handler is logged once per column, and the values are then considered equal, so a broken custom handler
+        /// doesn't prevent the table from being displayed.
+        /// </remarks>
+        /// <param name="column">The column of the values.</param>
+        /// <param name="a">The first value.</param>
+        /// <param name="b">The second value.</param>
+        /// <returns>Returns the result of the handler, or 0 if it fails.</returns>
+        private static int Compare(TableViewColumn column, object a, object b)
+        {
+            try
+            {
+                return column.Handler.Compare(a, b);
+            }
+            catch (Exception exception)
+            {
+                if (!column.HasLoggedError)
+                {
+                    column.HasLoggedError = true;
+                    Debug.LogError($"{DatabaseConstants.LogPrefix}The cell handler {column.Handler.GetType()} failed to compare " +
+                        $"values of the column \"{column.Name}\". The next errors of this column are not logged.");
+                    Debug.LogException(exception);
+                }
+                return 0;
             }
         }
 

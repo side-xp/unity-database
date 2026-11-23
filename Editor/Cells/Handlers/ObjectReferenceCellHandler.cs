@@ -28,6 +28,21 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         private const char SubAssetSeparator = '#';
 
+        /// <summary>
+        /// The rank of empty references (<i>None</i>) in ascending order: before all the others.
+        /// </summary>
+        private const int EmptyReferenceRank = 0;
+
+        /// <summary>
+        /// The rank of missing references (deleted assets) in ascending order: after the empty references.
+        /// </summary>
+        private const int MissingReferenceRank = 1;
+
+        /// <summary>
+        /// The rank of the references to existing objects in ascending order: last, sorted by name.
+        /// </summary>
+        private const int ValidReferenceRank = 2;
+
         #endregion
 
 
@@ -71,6 +86,49 @@ namespace SideXP.Database.EditorOnly
                 label.text = value is Object ? $"Missing ({typeName})" : $"None ({typeName})";
                 element.tooltip = null;
             }
+        }
+
+        #endregion
+
+
+        #region Compare
+
+        /// <summary>
+        /// References can always be sorted, by the name of the referenced object.
+        /// </summary>
+        /// <inheritdoc/>
+        public override bool CanCompare(Type valueType)
+        {
+            return true;
+        }
+
+        /// <summary>
+        /// Compares two references: empty references (<i>None</i>) first, then missing references (deleted assets), then the others by
+        /// the name of the referenced object, in the natural order of the Project window.
+        /// </summary>
+        /// <inheritdoc/>
+        public override int Compare(object a, object b)
+        {
+            int rankA = GetCompareRank(a);
+            int rankB = GetCompareRank(b);
+            if (rankA != rankB || rankA != ValidReferenceRank)
+                return rankA.CompareTo(rankB);
+
+            return EditorUtility.NaturalCompare(((Object)a).name, ((Object)b).name);
+        }
+
+        /// <summary>
+        /// Gets the rank of a reference in ascending order.
+        /// </summary>
+        /// <param name="value">The reference.</param>
+        /// <returns>Returns <see cref="EmptyReferenceRank"/>, <see cref="MissingReferenceRank"/> or <see cref="ValidReferenceRank"/>.</returns>
+        private static int GetCompareRank(object value)
+        {
+            if (value is not Object reference)
+                return EmptyReferenceRank;
+
+            // A missing reference (deleted asset) is not null for C#, but is null for Unity
+            return reference != null ? ValidReferenceRank : MissingReferenceRank;
         }
 
         #endregion
