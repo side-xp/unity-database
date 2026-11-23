@@ -1,0 +1,16 @@
+{
+  "name": "SideXP.Unity.Database",
+  "rootNamespace": "SideXP.Database",
+  "references": [
+    "SideXP.Unity.Core"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

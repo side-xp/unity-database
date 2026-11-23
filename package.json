@@ -1,9 +1,12 @@
 {
-  "name": "com.side-xp.@todo",
+  "name": "com.side-xp.database",
   "version": "0.0.0",
-  "description": "@todo",
-  "displayName": "SideXP - @todo",
-  "unity": "6000.5",
+  "description": "Spreadsheet-like view for editing Unity assets in a more practical way.",
+  "displayName": "SideXP - Database",
+  "unity": "6000.3",
+  "dependencies": {
+    "com.side-xp.core": "1.6.0"
+  },
   "author": {
     "name": "Sideways Experiments",
     "email": "dev@side-xp.com",
