@@ -1,5 +1,7 @@
 using System;
+using System.Globalization;
 
+using UnityEngine;
 using UnityEditor;
 
 using Object = UnityEngine.Object;
@@ -100,7 +102,7 @@ namespace SideXP.Database.EditorOnly
         public bool Write(object value)
         {
             _serializedObject.Update();
-            _property.boxedValue = value;
+            SetValue(_property, value);
             return _serializedObject.ApplyModifiedProperties();
         }
 
@@ -127,6 +129,46 @@ namespace SideXP.Database.EditorOnly
             _isEnded = true;
             // Always reverted, since fields bound to the property write it without going through this session
             Undo.RevertAllDownToGroup(_undoGroup);
+        }
+
+        #endregion
+
+
+        #region Private API
+
+        /// <summary>
+        /// Sets the value of a serialized property.
+        /// </summary>
+        /// <remarks>
+        /// Uses <see cref="SerializedProperty.boxedValue"/>, except for the property types stored as integers (enums, characters and
+        /// layer masks) and for <see cref="Color32"/>, which go through their own setters. Their C# values don't match the type that
+        /// <see cref="SerializedProperty.boxedValue"/> expects, and their setters convert them reliably.
+        /// </remarks>
+        /// <param name="property">The property to set.</param>
+        /// <param name="value">The value to set, of the C# type of the field.</param>
+        private static void SetValue(SerializedProperty property, object value)
+        {
+            switch (property.propertyType)
+            {
+                case SerializedPropertyType.Enum:
+                case SerializedPropertyType.Character:
+                    property.intValue = Convert.ToInt32(value, CultureInfo.InvariantCulture);
+                    break;
+
+                case SerializedPropertyType.LayerMask:
+                    property.intValue = value is LayerMask mask
+                        ? mask.value
+                        : Convert.ToInt32(value, CultureInfo.InvariantCulture);
+                    break;
+
+                case SerializedPropertyType.Color when value is Color32 color32:
+                    property.colorValue = color32;
+                    break;
+
+                default:
+                    property.boxedValue = value;
+                    break;
+            }
         }
 
         #endregion

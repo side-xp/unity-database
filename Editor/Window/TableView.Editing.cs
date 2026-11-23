@@ -12,7 +12,8 @@ namespace SideXP.Database.EditorOnly
     /// <remarks>
     /// <list type="bullet">
     /// <item>A double-click, Enter or F2 edits the active cell. Typing a character edits it too, starting with that character.</item>
-    /// <item>Enter confirms the edit, as well as clicking outside of the edited cell (the field loses the focus).</item>
+    /// <item>Enter confirms the edit, as well as clicking outside of the edited cell (the field loses the focus), and picking a value
+    /// in a toggle or an enum field.</item>
     /// <item>Escape cancels the edit, and reverts its writes.</item>
     /// </list>
     /// </remarks>
@@ -159,6 +160,8 @@ namespace SideXP.Database.EditorOnly
             cell[0].SetDisplayed(false);
             cell.Add(field);
             field.RegisterCallback<FocusOutEvent>(OnEditFieldFocusOut);
+            field.RegisterCallback<ChangeEvent<bool>>(OnEditFieldChoiceMade);
+            field.RegisterCallback<ChangeEvent<Enum>>(OnEditFieldChoiceMade);
             FocusEditField(field, typedCharacter);
             return true;
         }
@@ -351,11 +354,38 @@ namespace SideXP.Database.EditorOnly
             if (_edit == null)
                 return;
 
-            // The focus can move between the parts of the field
-            if (evt.relatedTarget is VisualElement newFocus && _edit.Field.Contains(newFocus))
+            // The focus can move between the parts of the field (for example the axes of a vector). If it goes nowhere in this window,
+            // the field may have opened a picker or a menu in another window (object picker, color picker, enum dropdown): the edit
+            // goes on until the user confirms it or clicks elsewhere in the window
+            if (evt.relatedTarget is not VisualElement newFocus || _edit.Field.Contains(newFocus))
                 return;
 
             EndEdit(true, false);
+        }
+
+        /// <summary>
+        /// Called when the value of the edit field changes, for the fields where the user picks a single value: toggles and enums.
+        /// Confirms the edit, so a pick applies right away.
+        /// </summary>
+        /// <remarks>
+        /// Reference fields are not confirmed on change, since the object picker changes their value each time the selection changes
+        /// in the picker: the following picks would be lost.
+        /// </remarks>
+        /// <typeparam name="T">The type of the value of the field.</typeparam>
+        /// <param name="evt">The emitted event.</param>
+        private void OnEditFieldChoiceMade<T>(ChangeEvent<T> evt)
+        {
+            // Only the edit field itself: a custom field may hold toggles or other fields of these types that are only part of its value
+            if (_edit == null || evt.target != _edit.Field)
+                return;
+
+            // Deferred, since the field is still dispatching its change
+            EditState edit = _edit;
+            schedule.Execute(() =>
+            {
+                if (_edit == edit)
+                    EndEdit(true, true);
+            });
         }
 
         /// <summary>

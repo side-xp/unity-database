@@ -1,5 +1,6 @@
 using System;
 
+using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEditor;
 
@@ -78,11 +79,21 @@ namespace SideXP.Database.EditorOnly
         /// <param name="property">The serialized property of the cell, valid until the edit ends.</param>
         /// <param name="value">The current value of the cell, read from the value cache.</param>
         /// <param name="context">Informations about the cell.</param>
-        /// <returns>Returns the created field, or null if the cell can't be edited. By default, a text field for strings, and a number
-        /// field for numbers.</returns>
+        /// <returns>Returns the created field, or null if the cell can't be edited. By default, the UI Toolkit field that matches the type
+        /// of the value (text, number, toggle, enum, object, color, vector, ...). For the other types, a text field that goes through
+        /// <see cref="ToText"/> and <see cref="TryParse"/>, if the text of the current value can be converted back. Otherwise, the cell
+        /// can't be edited.</returns>
         public virtual VisualElement CreateEditField(SerializedProperty property, object value, CellContext context)
         {
-            return EditFields.Create(context.ValueType, value);
+            VisualElement field = EditFields.Create(context.ValueType, value);
+            if (field != null)
+                return field;
+
+            // The other types are edited as text, if the text conversion of this handler supports them
+            string text = ToText(value);
+            return TryParse(text, context.ValueType, out _)
+                ? EditFields.CreateTextConversionField(text)
+                : null;
         }
 
         /// <summary>
@@ -92,11 +103,19 @@ namespace SideXP.Database.EditorOnly
         /// <param name="context">Informations about the cell.</param>
         /// <param name="value">Outputs the value to write, of the type of the property.</param>
         /// <returns>Returns true if there is a value to write. Returns false if the field writes the property itself (bound field), or if
-        /// the value is rejected: nothing is then written. By default, reads the default fields, and rejects the numbers that don't fit
-        /// in the type of the column.</returns>
+        /// the value is rejected: nothing is then written. By default, reads the default fields, and rejects the values that don't fit
+        /// in the type of the column, or the texts that <see cref="TryParse"/> can't convert.</returns>
         public virtual bool TryGetEditedValue(VisualElement field, CellContext context, out object value)
         {
-            return EditFields.TryGetValue(field, context.ValueType, out value);
+            if (!EditFields.TryGetConvertedText(field, out string text))
+                return EditFields.TryGetValue(field, context.ValueType, out value);
+
+            if (TryParse(text, context.ValueType, out value))
+                return true;
+
+            Debug.LogWarning($"{DatabaseConstants.LogPrefix}The text \"{text}\" can't be converted to a {context.ValueType.Name}: the " +
+                "edit is ignored.");
+            return false;
         }
 
         #endregion
