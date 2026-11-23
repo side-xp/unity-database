@@ -1,14 +1,12 @@
 using UnityEngine.UIElements;
+using UnityEditor;
 
 namespace SideXP.Database.EditorOnly
 {
 
     /// <summary>
-    /// Displays booleans as checkboxes.
+    /// Displays booleans as live checkboxes: clicking a checkbox changes the value, without selecting the cell.
     /// </summary>
-    /// <remarks>
-    /// @note The checkboxes are read-only (and so look disabled) until the live controls of step 10 of the implementation.
-    /// </remarks>
     [CustomCellHandler(typeof(bool))]
     internal class BoolCellHandler : CellHandler
     {
@@ -25,9 +23,10 @@ namespace SideXP.Database.EditorOnly
         /// <inheritdoc/>
         public override VisualElement CreateDisplay()
         {
-            Toggle toggle = new Toggle { focusable = false };
+            Toggle toggle = new Toggle();
             toggle.AddToClassList(ToggleClass);
-            toggle.SetEnabled(false);
+            SetLiveControl(toggle);
+            toggle.RegisterValueChangedCallback(evt => SubmitValue(toggle, evt.newValue));
             return toggle;
         }
 
@@ -35,6 +34,20 @@ namespace SideXP.Database.EditorOnly
         public override void BindDisplay(VisualElement element, object value, CellContext context)
         {
             ((Toggle)element).SetValueWithoutNotify(value is bool isChecked && isChecked);
+        }
+
+        #endregion
+
+
+        #region Edit
+
+        /// <summary>
+        /// Booleans have no edit mode: the checkbox of the display changes them.
+        /// </summary>
+        /// <inheritdoc/>
+        public override VisualElement CreateEditField(SerializedProperty property, object value, CellContext context)
+        {
+            return null;
         }
 
         #endregion

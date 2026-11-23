@@ -290,6 +290,55 @@ namespace SideXP.Database.EditorOnly
         #endregion
 
 
+        #region Live controls
+
+        /// <summary>
+        /// Called when a live control of a cell display submits a value (see <c>CellHandler.SubmitValue()</c>). Writes it to the asset
+        /// of the row.
+        /// </summary>
+        /// <param name="evt">The emitted event.</param>
+        private void OnCellValueSubmitted(CellValueSubmitEvent evt)
+        {
+            evt.StopPropagation();
+            if (evt.currentTarget is VisualElement cell && cell.userData is CellBinding binding && binding.Row != null)
+                WriteLiveValue(binding.Row, binding.Column, evt.Value);
+        }
+
+        /// <summary>
+        /// Writes a value submitted by a live control, as a single Undo step, and refreshes the row.
+        /// </summary>
+        /// <remarks>
+        /// The row is refreshed even if the value can't be written, so the control shows the value of the asset again.
+        /// </remarks>
+        /// <param name="row">The row of the cell.</param>
+        /// <param name="column">The column of the cell.</param>
+        /// <param name="value">The submitted value.</param>
+        private void WriteLiveValue(TableRow row, TableViewColumn column, object value)
+        {
+            if (column.HasProperty && row.Asset != null)
+            {
+                try
+                {
+                    using (CellEditSession session = new CellEditSession(row.Asset, column.PropertyPath, $"Edit {column.Name}"))
+                    {
+                        session.Write(value);
+                        session.Confirm();
+                    }
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogWarning($"{DatabaseConstants.LogPrefix}The value {TextConversion.ToText(value)} can't be written " +
+                        $"to the column \"{column.Name}\": {exception.Message}");
+                }
+            }
+
+            _pipeline?.InvalidateRow(row.Asset);
+            Refresh();
+        }
+
+        #endregion
+
+
         #region Events
 
         /// <summary>

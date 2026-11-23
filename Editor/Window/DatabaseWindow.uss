@@ -95,6 +95,15 @@
     margin-right: 0;
 }
 
+/* Holds the live dropdown of an enum, created when the first value is bound */
+.database-cell__dropdown {
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+
 .database-cell__swatch {
     flex-grow: 1;
     height: 14px;

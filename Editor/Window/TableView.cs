@@ -515,6 +515,7 @@ namespace SideXP.Database.EditorOnly
             cell.RegisterCallback<PointerDownEvent>(OnCellPointerDown);
             cell.RegisterCallback<PointerEnterEvent>(OnCellPointerEnter);
             cell.RegisterCallback<PointerLeaveEvent>(OnCellPointerLeave);
+            cell.RegisterCallback<CellValueSubmitEvent>(OnCellValueSubmitted);
             return cell;
         }
 

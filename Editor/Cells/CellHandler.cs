@@ -65,6 +65,53 @@ namespace SideXP.Database.EditorOnly
         #endregion
 
 
+        #region Live controls
+
+        /// <summary>
+        /// Makes an element of a display a live control, like the built-in checkboxes and dropdowns: the user changes the value of the
+        /// cell with it, without entering the edit mode. Clicking the control doesn't select the cell, and doesn't change the focus.
+        /// </summary>
+        /// <remarks>
+        /// Call it in <see cref="CreateDisplay"/>, then call <see cref="SubmitValue(VisualElement, object)"/> when the value of the
+        /// control changes. A handler whose display is a live control usually has no edit field (<see cref="CreateEditField"/> returns
+        /// null).
+        /// </remarks>
+        /// <param name="control">The element that changes the value.</param>
+        protected static void SetLiveControl(VisualElement control)
+        {
+            // Not focusable, so the keys keep going to the table, and a reused element never keeps the focus of another row
+            control.focusable = false;
+            control.RegisterCallback<PointerDownEvent>(OnLiveControlPointerDown);
+        }
+
+        /// <summary>
+        /// Writes a value chosen with a live control to the asset of its cell, as a single Undo step. If the value can't be written, the
+        /// cell shows its previous value again.
+        /// </summary>
+        /// <param name="control">The live control, in the display of the cell.</param>
+        /// <param name="value">The chosen value, of the type of the column.</param>
+        protected static void SubmitValue(VisualElement control, object value)
+        {
+            using (CellValueSubmitEvent evt = CellValueSubmitEvent.GetPooled(value))
+                control.SendEvent(evt);
+        }
+
+        /// <summary>
+        /// Called when a live control is clicked. Prevents the click from selecting the cell and from changing the focus.
+        /// </summary>
+        /// <param name="evt">The emitted event.</param>
+        private static void OnLiveControlPointerDown(PointerDownEvent evt)
+        {
+            if (evt.currentTarget is VisualElement control)
+                control.panel?.focusController?.IgnoreEvent(evt);
+
+            // The control handles the click on itself or its children before this callback, so stopping here only stops the cell
+            evt.StopPropagation();
+        }
+
+        #endregion
+
+
         #region Edit
 
         /// <summary>

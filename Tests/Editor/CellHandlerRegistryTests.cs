@@ -75,6 +75,8 @@ namespace SideXP.Database.Tests
         [TestCase(typeof(UnityEngine.Object), typeof(ObjectReferenceCellHandler))]
         [TestCase(typeof(Sprite), typeof(ObjectReferenceCellHandler))]
         [TestCase(typeof(ScriptableObject), typeof(ObjectReferenceCellHandler))]
+        [TestCase(typeof(DayOfWeek), typeof(EnumCellHandler))]
+        [TestCase(typeof(AttributeTargets), typeof(EnumCellHandler))]
         public void GetHandler_BuiltInType_UsesBuiltInHandler(Type valueType, Type handlerType)
         {
             Assert.IsInstanceOf(handlerType, CellHandlerRegistry.Default.GetHandler(null, valueType));
@@ -86,7 +88,6 @@ namespace SideXP.Database.Tests
         /// <param name="valueType">The type of the values.</param>
         [TestCase(typeof(int))]
         [TestCase(typeof(string))]
-        [TestCase(typeof(DayOfWeek))]
         [TestCase(typeof(Vector3))]
         public void GetHandler_TypeWithoutHandler_UsesDefaultHandler(Type valueType)
         {
