@@ -39,15 +39,22 @@ namespace SideXP.Database.EditorOnly
             public readonly TableViewColumn Column;
 
             /// <summary>
+            /// Checks if the element is a cell of the frozen list.
+            /// </summary>
+            public readonly bool IsFrozen;
+
+            /// <summary>
             /// The row currently displayed by the element, or null if the element is not bound.
             /// </summary>
             public TableRow Row = null;
 
             /// <inheritdoc cref="CellBinding"/>
             /// <param name="column"><inheritdoc cref="Column" path="/summary"/></param>
-            public CellBinding(TableViewColumn column)
+            /// <param name="isFrozen"><inheritdoc cref="IsFrozen" path="/summary"/></param>
+            public CellBinding(TableViewColumn column, bool isFrozen)
             {
                 Column = column;
+                IsFrozen = isFrozen;
             }
 
         }
@@ -64,6 +71,7 @@ namespace SideXP.Database.EditorOnly
         private const string HeaderClass = "database-table-view__header";
         private const string CellClass = "database-table-view__cell";
         private const string ActiveCellClass = "database-table-view__cell--active";
+        private const string HoverMirrorRowClass = "database-table-view__row--hover-mirror";
         private const string StatusBarClass = "database-status-bar";
         private const string StatusLabelClass = "database-status-bar__label";
         private const string MessageClass = "database-message";
@@ -154,6 +162,16 @@ namespace SideXP.Database.EditorOnly
         /// Cell elements are reused for other rows when the table scrolls, so the element is updated each time a cell is bound.
         /// </remarks>
         private VisualElement _activeCellElement = null;
+
+        /// <summary>
+        /// The row under the pointer, or null if the pointer is not over a cell.
+        /// </summary>
+        private TableRow _hoveredRow = null;
+
+        /// <summary>
+        /// Checks if the pointer is over the frozen list, instead of the main list.
+        /// </summary>
+        private bool _isHoverInFrozenList = false;
 
         /// <summary>
         /// The message shown instead of the rows when the table has no asset.
@@ -270,6 +288,7 @@ namespace SideXP.Database.EditorOnly
             _rows.Clear();
             _activeCell = CellId.None;
             _activeCellElement = null;
+            _hoveredRow = null;
 
             _body.Clear();
             _listView = null;
@@ -377,6 +396,10 @@ namespace SideXP.Database.EditorOnly
             _listView.columns.stretchMode = Columns.StretchMode.GrowAndFill;
             _body.Add(_listView);
 
+            // Scrolling moves the rows under the pointer: the mirrored hover is shown again when the pointer enters another cell
+            _hoveredRow = null;
+            _listView.Q<ScrollView>().verticalScroller.valueChanged += value => SetHoveredRow(null, false);
+
             int firstMainColumn = 0;
             if (hasFrozenColumn)
             {
@@ -441,7 +464,7 @@ namespace SideXP.Database.EditorOnly
                 makeHeader = () => MakeHeader(column),
                 makeCell = () =>
                 {
-                    VisualElement cell = MakeCell(column);
+                    VisualElement cell = MakeCell(column, frozenColumnLink != null);
                     frozenColumnLink?.TrackCell(cell);
                     return cell;
                 },
@@ -471,13 +494,16 @@ namespace SideXP.Database.EditorOnly
         /// reaches the container.
         /// </remarks>
         /// <param name="column">The column of the cell.</param>
+        /// <param name="isFrozen">Checks if the cell is in the frozen list.</param>
         /// <returns>Returns the created element.</returns>
-        private VisualElement MakeCell(TableViewColumn column)
+        private VisualElement MakeCell(TableViewColumn column, bool isFrozen)
         {
-            VisualElement cell = new VisualElement { userData = new CellBinding(column) };
+            VisualElement cell = new VisualElement { userData = new CellBinding(column, isFrozen) };
             cell.AddToClassList(CellClass);
             cell.Add(column.Handler.CreateDisplay());
             cell.RegisterCallback<PointerDownEvent>(OnCellPointerDown);
+            cell.RegisterCallback<PointerEnterEvent>(OnCellPointerEnter);
+            cell.RegisterCallback<PointerLeaveEvent>(OnCellPointerLeave);
             return cell;
         }
 
@@ -487,7 +513,7 @@ namespace SideXP.Database.EditorOnly
         /// <remarks>
         /// An error of the handler is logged once per column, and doesn't prevent the other cells from being displayed.
         /// </remarks>
-        /// <param name="cell">The element created by <see cref="MakeCell(TableViewColumn)"/>.</param>
+        /// <param name="cell">The element created by <see cref="MakeCell(TableViewColumn, bool)"/>.</param>
         /// <param name="column">The column of the cell.</param>
         /// <param name="columnIndex">The index of the column in the pipeline.</param>
         /// <param name="row">The row of the cell.</param>
@@ -495,6 +521,7 @@ namespace SideXP.Database.EditorOnly
         {
             ((CellBinding)cell.userData).Row = row;
             UpdateActiveCellHighlight(cell);
+            UpdateHoverMirror(cell);
 
             try
             {
@@ -516,12 +543,88 @@ namespace SideXP.Database.EditorOnly
         /// <summary>
         /// Detaches a cell from its row, when the list view releases its element.
         /// </summary>
-        /// <param name="cell">The element created by <see cref="MakeCell(TableViewColumn)"/>.</param>
+        /// <param name="cell">The element created by <see cref="MakeCell(TableViewColumn, bool)"/>.</param>
         private void UnbindCell(VisualElement cell)
         {
             // A released element may stay in the hierarchy, hidden, so it must not keep the highlight of its last row
             ((CellBinding)cell.userData).Row = null;
             UpdateActiveCellHighlight(cell);
+            UpdateHoverMirror(cell);
+        }
+
+        #endregion
+
+
+        #region Hover
+
+        /// <summary>
+        /// Called when the pointer enters a cell. Shows the hover of its row in the other list.
+        /// </summary>
+        /// <param name="evt">The emitted event.</param>
+        private void OnCellPointerEnter(PointerEnterEvent evt)
+        {
+            if (evt.currentTarget is VisualElement cell && cell.userData is CellBinding binding)
+                SetHoveredRow(binding.Row, binding.IsFrozen);
+        }
+
+        /// <summary>
+        /// Called when the pointer leaves a cell. Removes the hover of its row from the other list, until the pointer enters another
+        /// cell.
+        /// </summary>
+        /// <param name="evt">The emitted event.</param>
+        private void OnCellPointerLeave(PointerLeaveEvent evt)
+        {
+            SetHoveredRow(null, false);
+        }
+
+        /// <summary>
+        /// Sets the row under the pointer, and updates the hover shown in the other list.
+        /// </summary>
+        /// <remarks>
+        /// The frozen list and the main list are separate list views, so the hover style of Unity only shows on the row of the list under
+        /// the pointer. The row of the other list gets the same style through a class.
+        /// </remarks>
+        /// <param name="row">The row under the pointer, or null if the pointer is not over a cell.</param>
+        /// <param name="isInFrozenList">Checks if the pointer is over the frozen list.</param>
+        private void SetHoveredRow(TableRow row, bool isInFrozenList)
+        {
+            if (row == _hoveredRow && isInFrozenList == _isHoverInFrozenList)
+                return;
+
+            _hoveredRow = row;
+            _isHoverInFrozenList = isInFrozenList;
+            _body.Query(className: CellClass).ForEach(UpdateHoverMirror);
+        }
+
+        /// <summary>
+        /// Shows the hover style on the row of a cell if the pointer is over the same row in the other list, and removes it otherwise.
+        /// </summary>
+        /// <param name="cell">The element created by <see cref="MakeCell(TableViewColumn, bool)"/>.</param>
+        private void UpdateHoverMirror(VisualElement cell)
+        {
+            if (cell.userData is not CellBinding binding)
+                return;
+
+            VisualElement rowElement = GetRowElement(cell);
+            if (rowElement == null)
+                return;
+
+            bool isMirrored = binding.Row != null && binding.Row == _hoveredRow && binding.IsFrozen != _isHoverInFrozenList;
+            rowElement.EnableInClassList(HoverMirrorRowClass, isMirrored);
+        }
+
+        /// <summary>
+        /// Gets the element of the list view that holds the row of a cell, which has the hover style of Unity.
+        /// </summary>
+        /// <param name="cell">The element created by <see cref="MakeCell(TableViewColumn, bool)"/>.</param>
+        /// <returns>Returns the found element, or null if the cell is not in a list view.</returns>
+        private static VisualElement GetRowElement(VisualElement cell)
+        {
+            VisualElement element = cell.parent;
+            while (element != null && !element.ClassListContains(BaseVerticalCollectionView.itemUssClassName))
+                element = element.parent;
+
+            return element;
         }
 
         #endregion
@@ -545,7 +648,7 @@ namespace SideXP.Database.EditorOnly
         /// <summary>
         /// Highlights a cell element if it displays the active cell, and removes its highlight otherwise.
         /// </summary>
-        /// <param name="cell">The element created by <see cref="MakeCell(TableViewColumn)"/>.</param>
+        /// <param name="cell">The element created by <see cref="MakeCell(TableViewColumn, bool)"/>.</param>
         private void UpdateActiveCellHighlight(VisualElement cell)
         {
             if (cell.userData is not CellBinding binding)

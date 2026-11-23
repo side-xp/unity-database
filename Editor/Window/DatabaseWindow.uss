@@ -50,6 +50,12 @@
     overflow: hidden;
 }
 
+/* The row of the other list when the pointer is over a row of the frozen list or of the main list, which are separate list views. Same
+   color as the hover of Unity's list views, and two classes so it wins over the alternating row background */
+.unity-collection-view__item.database-table-view__row--hover-mirror {
+    background-color: var(--unity-colors-list_view_item-background-hover);
+}
+
 /* The padding is reduced by the width of the border, so the content of the active cell doesn't move. Temporary look, until the style
    pass */
 .database-table-view__cell--active {
