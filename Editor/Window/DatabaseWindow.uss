@@ -4,8 +4,54 @@
     flex-grow: 1;
 }
 
-.database-page__content {
+.database-table-view {
     flex-grow: 1;
+}
+
+.database-table-view__list {
+    flex-grow: 1;
+}
+
+/* The message takes the place of the list, so the status line stays at the bottom */
+.database-table-view > .database-message {
+    flex-grow: 1;
+}
+
+.database-table-view__header {
+    -unity-text-align: middle-left;
+    padding-left: 4px;
+    padding-right: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-grow: 1;
+}
+
+.database-table-view__cell {
+    -unity-text-align: middle-left;
+    padding-left: 4px;
+    padding-right: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-grow: 1;
+}
+
+/* A translucent border works with both the light and the dark editor themes */
+.database-status-bar {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    height: 20px;
+    padding-left: 6px;
+    padding-right: 6px;
+    border-top-width: 1px;
+    border-top-color: rgba(0, 0, 0, 0.3);
+}
+
+.database-status-bar__label {
+    -unity-text-align: middle-left;
+    opacity: 0.8;
 }
 
 .database-toolbar__search {

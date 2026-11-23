@@ -15,7 +15,6 @@ namespace SideXP.Database.EditorOnly
         #region Fields
 
         private const string PageClass = "database-page";
-        private const string ContentClass = "database-page__content";
         private const string TitleClass = "database-toolbar__title";
         private const string ObsoleteTagClass = "database-obsolete-tag";
 
@@ -38,6 +37,11 @@ namespace SideXP.Database.EditorOnly
         /// The tag shown in the toolbar if the table is obsolete.
         /// </summary>
         private Label _obsoleteTag = null;
+
+        /// <summary>
+        /// Displays the rows of the table.
+        /// </summary>
+        private TableView _tableView = null;
 
         /// <summary>
         /// Called when the user asks to go back to the table list.
@@ -68,10 +72,8 @@ namespace SideXP.Database.EditorOnly
             toolbar.Add(_obsoleteTag);
             Add(toolbar);
 
-            // @note The table view (header, rows and status line) is built in step 5 of the implementation
-            VisualElement content = new VisualElement();
-            content.AddToClassList(ContentClass);
-            Add(content);
+            _tableView = new TableView();
+            Add(_tableView);
         }
 
         #endregion
@@ -83,7 +85,7 @@ namespace SideXP.Database.EditorOnly
         public TableDefinition Table => _table;
 
         /// <summary>
-        /// Sets the displayed table.
+        /// Sets the displayed table, and loads its assets.
         /// </summary>
         /// <param name="table">The table to display.</param>
         public void SetTable(TableDefinition table)
@@ -92,6 +94,7 @@ namespace SideXP.Database.EditorOnly
             _titleLabel.text = table.Name;
             _titleLabel.tooltip = table.Type.FullName;
             _obsoleteTag.SetDisplayed(table.IsObsolete);
+            _tableView.SetTable(table);
         }
 
         #endregion
