@@ -16,9 +16,13 @@ namespace SideXP.Database.EditorOnly
 
         private const string PageClass = "database-page";
         private const string TitleClass = "database-toolbar__title";
+        private const string SpacerClass = "database-toolbar__spacer";
 
         private const string BackText = "Back";
         private const string BackTooltip = "Back to the table list.";
+        private const string RefreshText = "Refresh";
+        private const string RefreshTooltip = "Loads the assets of the table again. Use it if a change made outside of the window " +
+            "doesn't show up, such as a value written by a script without notifying Unity.";
 
         /// <summary>
         /// The displayed table, or null if none has been set.
@@ -67,9 +71,15 @@ namespace SideXP.Database.EditorOnly
             _obsoleteMark = DatabaseElements.CreateObsoleteMark();
             _obsoleteMark.SetDisplayed(false);
             toolbar.Add(_obsoleteMark);
-            Add(toolbar);
+
+            VisualElement spacer = new VisualElement();
+            spacer.AddToClassList(SpacerClass);
+            toolbar.Add(spacer);
 
             _tableView = new TableView();
+            ToolbarButton refreshButton = new ToolbarButton(_tableView.Reload) { text = RefreshText, tooltip = RefreshTooltip };
+            toolbar.Add(refreshButton);
+            Add(toolbar);
             Add(_tableView);
         }
 
@@ -92,6 +102,15 @@ namespace SideXP.Database.EditorOnly
             _titleLabel.tooltip = table.Type.FullName;
             _obsoleteMark.SetDisplayed(table.IsObsolete);
             _tableView.SetTable(table);
+        }
+
+        /// <summary>
+        /// Removes the displayed table, so it stops tracking the changes of its assets while the page is hidden.
+        /// </summary>
+        public void ClearTable()
+        {
+            _table = null;
+            _tableView.ClearTable();
         }
 
         #endregion

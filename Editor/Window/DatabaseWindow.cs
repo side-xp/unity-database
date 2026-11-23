@@ -157,9 +157,14 @@ namespace SideXP.Database.EditorOnly
 
             bool isTableOpen = TableRegistry.TryGet(_openTableId, out TableDefinition table);
             if (isTableOpen)
+            {
                 _tablePage.SetTable(table);
+            }
             else
+            {
                 _openTableId = null;
+                _tablePage.ClearTable();
+            }
 
             _tablePage.SetDisplayed(isTableOpen);
             _tableListPage.SetDisplayed(!isTableOpen);

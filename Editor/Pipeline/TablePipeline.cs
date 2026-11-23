@@ -65,6 +65,11 @@ namespace SideXP.Database.EditorOnly
         private Comparison<object> _sortComparison = null;
 
         /// <summary>
+        /// The number of times the source has been loaded, so the users of the pipeline can tell when its rows have been replaced.
+        /// </summary>
+        private int _sourceVersion = 0;
+
+        /// <summary>
         /// Checks if the rows match the assets of the source.
         /// </summary>
         private bool _isSourceValid = false;
@@ -113,6 +118,9 @@ namespace SideXP.Database.EditorOnly
 
         /// <inheritdoc cref="_visibleRows"/>
         public IReadOnlyList<TableRow> VisibleRows => _visibleRows;
+
+        /// <inheritdoc cref="_sourceVersion"/>
+        public int SourceVersion => _sourceVersion;
 
         /// <inheritdoc cref="_sortColumnIndex"/>
         public int SortColumnIndex => _sortColumnIndex;
@@ -275,6 +283,7 @@ namespace SideXP.Database.EditorOnly
                 _rowsByAsset.Add(asset, row);
             }
 
+            _sourceVersion++;
             _isSourceValid = true;
             _hasInvalidRows = true;
         }

@@ -95,6 +95,17 @@ namespace SideXP.Database.EditorOnly
         private FrozenColumnLink _frozenColumnLink = null;
 
         /// <summary>
+        /// Tracks the changes of the assets of the table, or null if no table is displayed. Listens only while the view is attached
+        /// to a panel.
+        /// </summary>
+        private TableChangeTracker _changeTracker = null;
+
+        /// <summary>
+        /// Checks if a refresh is scheduled for the next update of the view, so several changes only cause one refresh.
+        /// </summary>
+        private bool _isRefreshScheduled = false;
+
+        /// <summary>
         /// The message shown instead of the rows when the table has no asset.
         /// </summary>
         private Label _messageLabel = null;
@@ -129,6 +140,33 @@ namespace SideXP.Database.EditorOnly
             _statusLabel.AddToClassList(StatusLabelClass);
             statusBar.Add(_statusLabel);
             Add(statusBar);
+
+            RegisterCallback<AttachToPanelEvent>(OnAttachToPanel);
+            RegisterCallback<DetachFromPanelEvent>(OnDetachFromPanel);
+        }
+
+        /// <summary>
+        /// Called when the view is added to a panel, for example when its window is opened or docked elsewhere.
+        /// </summary>
+        /// <param name="evt">The emitted event.</param>
+        private void OnAttachToPanel(AttachToPanelEvent evt)
+        {
+            if (_changeTracker == null)
+                return;
+
+            // Changes may have been missed while the view was detached
+            _changeTracker.Start();
+            _pipeline.InvalidateSource();
+            ScheduleRefresh();
+        }
+
+        /// <summary>
+        /// Called when the view is removed from its panel, for example when its window is closed.
+        /// </summary>
+        /// <param name="evt">The emitted event.</param>
+        private void OnDetachFromPanel(DetachFromPanelEvent evt)
+        {
+            _changeTracker?.Stop();
         }
 
         #endregion
@@ -145,6 +183,7 @@ namespace SideXP.Database.EditorOnly
         /// <param name="table">The table to display.</param>
         public void SetTable(TableDefinition table)
         {
+            _changeTracker?.Stop();
             _table = table;
 
             ProjectAssetSource source = new ProjectAssetSource(table.Type);
@@ -157,13 +196,55 @@ namespace SideXP.Database.EditorOnly
 
             _pipeline = new TablePipeline(new PreloadedAssetSource(assets, source), accessors);
 
+            _changeTracker = new TableChangeTracker(table.Type, _pipeline);
+            _changeTracker.Changed += ScheduleRefresh;
+            if (panel != null)
+                _changeTracker.Start();
+
             RebuildListViews();
+            Refresh();
+        }
+
+        /// <summary>
+        /// Removes the displayed table, and stops tracking its changes.
+        /// </summary>
+        public void ClearTable()
+        {
+            _changeTracker?.Stop();
+            _changeTracker = null;
+            _table = null;
+            _pipeline = null;
+            _columns = new List<TableViewColumn>();
+            _rows.Clear();
+
+            _body.Clear();
+            _listView = null;
+            _frozenListView = null;
+            _frozenColumnLink = null;
+        }
+
+        /// <summary>
+        /// Loads the assets of the table again, and reads all their values. Keeps the sort, the filter and the scroll position.
+        /// </summary>
+        /// <remarks>
+        /// Changes are usually detected automatically. This covers the changes the view can't detect, such as a script that writes a
+        /// field without notifying Unity.
+        /// </remarks>
+        public void Reload()
+        {
+            if (_pipeline == null)
+                return;
+
+            _pipeline.InvalidateSource();
             Refresh();
         }
 
         /// <summary>
         /// Updates the pipeline, and the display if the rows have changed.
         /// </summary>
+        /// <remarks>
+        /// The list views are refreshed, not rebuilt, so they keep their scroll position.
+        /// </remarks>
         public void Refresh()
         {
             if (_pipeline == null)
@@ -171,6 +252,7 @@ namespace SideXP.Database.EditorOnly
 
             if (_pipeline.Update())
             {
+                _changeTracker.UpdateIndex();
                 _rows.Clear();
                 _rows.AddRange(_pipeline.VisibleRows);
                 _listView.RefreshItems();
@@ -341,6 +423,26 @@ namespace SideXP.Database.EditorOnly
 
 
         #region Private API
+
+        /// <summary>
+        /// Refreshes the view on its next update. Several calls before that update only cause one refresh.
+        /// </summary>
+        /// <remarks>
+        /// Changes are reported during the postprocess of the imports, where loading assets is fragile, so the refresh is deferred. The
+        /// scheduler of the view only runs while it's attached to a panel.
+        /// </remarks>
+        private void ScheduleRefresh()
+        {
+            if (_isRefreshScheduled)
+                return;
+
+            _isRefreshScheduled = true;
+            schedule.Execute(() =>
+            {
+                _isRefreshScheduled = false;
+                Refresh();
+            });
+        }
 
         /// <summary>
         /// Creates the columns displayed for a table: the <i>Asset Name</i> column (unless the table hides it), then the columns of the

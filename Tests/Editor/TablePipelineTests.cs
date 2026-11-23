@@ -276,6 +276,24 @@ namespace SideXP.Database.Tests
             Assert.AreEqual(4, _numberAccessor.ReadCount);
         }
 
+        /// <summary>
+        /// The source version changes each time the source is loaded, and only then.
+        /// </summary>
+        [Test]
+        public void SourceVersion_SourceLoaded_Changes()
+        {
+            _pipeline.Update();
+            int firstVersion = _pipeline.SourceVersion;
+
+            _pipeline.InvalidateRow(_assets[0]);
+            _pipeline.Update();
+            Assert.AreEqual(firstVersion, _pipeline.SourceVersion);
+
+            _pipeline.InvalidateSource();
+            _pipeline.Update();
+            Assert.AreNotEqual(firstVersion, _pipeline.SourceVersion);
+        }
+
         #endregion
 
 

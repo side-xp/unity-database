@@ -125,6 +125,11 @@
     width: auto;
 }
 
+/* Pushes the next toolbar items to the right */
+.database-toolbar__spacer {
+    flex-grow: 1;
+}
+
 .database-toolbar__title {
     -unity-font-style: bold;
     -unity-text-align: middle-left;
