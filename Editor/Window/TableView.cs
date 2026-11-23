@@ -24,6 +24,37 @@ namespace SideXP.Database.EditorOnly
     internal class TableView : VisualElement
     {
 
+        #region Subclasses
+
+        /// <summary>
+        /// What a cell element displays: its column, and its current row. Stored in the <see cref="VisualElement.userData"/> of the
+        /// element, since elements are reused for other rows when the table scrolls.
+        /// </summary>
+        private class CellBinding
+        {
+
+            /// <summary>
+            /// The column of the cell, which never changes for an element.
+            /// </summary>
+            public readonly TableViewColumn Column;
+
+            /// <summary>
+            /// The row currently displayed by the element, or null if the element is not bound.
+            /// </summary>
+            public TableRow Row = null;
+
+            /// <inheritdoc cref="CellBinding"/>
+            /// <param name="column"><inheritdoc cref="Column" path="/summary"/></param>
+            public CellBinding(TableViewColumn column)
+            {
+                Column = column;
+            }
+
+        }
+
+        #endregion
+
+
         #region Fields
 
         private const string ViewClass = "database-table-view";
@@ -32,6 +63,7 @@ namespace SideXP.Database.EditorOnly
         private const string FrozenListClass = "database-table-view__frozen-list";
         private const string HeaderClass = "database-table-view__header";
         private const string CellClass = "database-table-view__cell";
+        private const string ActiveCellClass = "database-table-view__cell--active";
         private const string StatusBarClass = "database-status-bar";
         private const string StatusLabelClass = "database-status-bar__label";
         private const string MessageClass = "database-message";
@@ -109,6 +141,19 @@ namespace SideXP.Database.EditorOnly
         /// Checks if the view is changing the sort descriptions of the headers itself, so it ignores the events this raises.
         /// </summary>
         private bool _isUpdatingSort = false;
+
+        /// <summary>
+        /// The active cell, or <see cref="CellId.None"/> if there is none.
+        /// </summary>
+        private CellId _activeCell = CellId.None;
+
+        /// <summary>
+        /// The element that currently displays the active cell, or null if the active cell is not visible.
+        /// </summary>
+        /// <remarks>
+        /// Cell elements are reused for other rows when the table scrolls, so the element is updated each time a cell is bound.
+        /// </remarks>
+        private VisualElement _activeCellElement = null;
 
         /// <summary>
         /// The message shown instead of the rows when the table has no asset.
@@ -190,6 +235,8 @@ namespace SideXP.Database.EditorOnly
         {
             _changeTracker?.Stop();
             _table = table;
+            _activeCell = CellId.None;
+            _activeCellElement = null;
 
             ProjectAssetSource source = new ProjectAssetSource(table.Type);
             IReadOnlyList<Object> assets = source.LoadAssets();
@@ -221,11 +268,35 @@ namespace SideXP.Database.EditorOnly
             _pipeline = null;
             _columns = new List<TableViewColumn>();
             _rows.Clear();
+            _activeCell = CellId.None;
+            _activeCellElement = null;
 
             _body.Clear();
             _listView = null;
             _frozenListView = null;
             _frozenColumnLink = null;
+        }
+
+        /// <inheritdoc cref="_activeCell"/>
+        public CellId ActiveCell => _activeCell;
+
+        /// <summary>
+        /// Sets the active cell, and highlights it.
+        /// </summary>
+        /// <param name="cell">The cell to activate, or <see cref="CellId.None"/> to have no active cell.</param>
+        public void SetActiveCell(CellId cell)
+        {
+            if (cell.Equals(_activeCell))
+                return;
+
+            _activeCell = cell;
+            _activeCellElement?.RemoveFromClassList(ActiveCellClass);
+            _activeCellElement = null;
+
+            // Find the element of the new active cell among the visible cells. Elements that are not visible get the highlight when
+            // they are bound
+            if (!cell.IsNone)
+                _body.Query(className: CellClass).ForEach(UpdateActiveCellHighlight);
         }
 
         /// <summary>
@@ -258,6 +329,11 @@ namespace SideXP.Database.EditorOnly
             if (_pipeline.Update())
             {
                 _changeTracker.UpdateIndex();
+
+                // The asset of the active cell may have been deleted, or may not be in the table anymore
+                if (!_activeCell.IsNone && (_activeCell.Asset == null || !_pipeline.TryGetRow(_activeCell.Asset, out _)))
+                    SetActiveCell(CellId.None);
+
                 _rows.Clear();
                 _rows.AddRange(_pipeline.VisibleRows);
                 _listView.RefreshItems();
@@ -370,6 +446,7 @@ namespace SideXP.Database.EditorOnly
                     return cell;
                 },
                 bindCell = (element, rowIndex) => BindCell(element, column, columnIndex, _rows[rowIndex]),
+                unbindCell = (element, rowIndex) => UnbindCell(element),
             };
         }
 
@@ -388,18 +465,24 @@ namespace SideXP.Database.EditorOnly
         /// <summary>
         /// Creates the element of a cell: a container, which holds the display created by the handler of the column.
         /// </summary>
+        /// <remarks>
+        /// The container knows its column and its current row (see <see cref="CellBinding"/>), and activates its cell when it's
+        /// clicked. The display is a child of the container, so a live control that handles the click itself can stop it before it
+        /// reaches the container.
+        /// </remarks>
         /// <param name="column">The column of the cell.</param>
         /// <returns>Returns the created element.</returns>
-        private static VisualElement MakeCell(TableViewColumn column)
+        private VisualElement MakeCell(TableViewColumn column)
         {
-            VisualElement cell = new VisualElement();
+            VisualElement cell = new VisualElement { userData = new CellBinding(column) };
             cell.AddToClassList(CellClass);
             cell.Add(column.Handler.CreateDisplay());
+            cell.RegisterCallback<PointerDownEvent>(OnCellPointerDown);
             return cell;
         }
 
         /// <summary>
-        /// Shows the cached value of a row in a cell, through the handler of the column.
+        /// Shows the cached value of a row in a cell, through the handler of the column, and highlights the cell if it's active.
         /// </summary>
         /// <remarks>
         /// An error of the handler is logged once per column, and doesn't prevent the other cells from being displayed.
@@ -408,8 +491,11 @@ namespace SideXP.Database.EditorOnly
         /// <param name="column">The column of the cell.</param>
         /// <param name="columnIndex">The index of the column in the pipeline.</param>
         /// <param name="row">The row of the cell.</param>
-        private static void BindCell(VisualElement cell, TableViewColumn column, int columnIndex, TableRow row)
+        private void BindCell(VisualElement cell, TableViewColumn column, int columnIndex, TableRow row)
         {
+            ((CellBinding)cell.userData).Row = row;
+            UpdateActiveCellHighlight(cell);
+
             try
             {
                 CellContext context = new CellContext(row.Asset, column.Field, column.Accessor.ValueType);
@@ -425,6 +511,52 @@ namespace SideXP.Database.EditorOnly
                     $"the column \"{column.Name}\". The next errors of this column are not logged.");
                 Debug.LogException(exception);
             }
+        }
+
+        /// <summary>
+        /// Detaches a cell from its row, when the list view releases its element.
+        /// </summary>
+        /// <param name="cell">The element created by <see cref="MakeCell(TableViewColumn)"/>.</param>
+        private void UnbindCell(VisualElement cell)
+        {
+            // A released element may stay in the hierarchy, hidden, so it must not keep the highlight of its last row
+            ((CellBinding)cell.userData).Row = null;
+            UpdateActiveCellHighlight(cell);
+        }
+
+        #endregion
+
+
+        #region Active cell
+
+        /// <summary>
+        /// Called when a cell is clicked. Activates the cell.
+        /// </summary>
+        /// <param name="evt">The emitted event.</param>
+        private void OnCellPointerDown(PointerDownEvent evt)
+        {
+            if (evt.button != (int)MouseButton.LeftMouse)
+                return;
+
+            if (evt.currentTarget is VisualElement cell && cell.userData is CellBinding binding && binding.Row != null)
+                SetActiveCell(new CellId(binding.Row.Asset, binding.Column.Id));
+        }
+
+        /// <summary>
+        /// Highlights a cell element if it displays the active cell, and removes its highlight otherwise.
+        /// </summary>
+        /// <param name="cell">The element created by <see cref="MakeCell(TableViewColumn)"/>.</param>
+        private void UpdateActiveCellHighlight(VisualElement cell)
+        {
+            if (cell.userData is not CellBinding binding)
+                return;
+
+            bool isActive = binding.Row != null && _activeCell.Is(binding.Row.Asset, binding.Column.Id);
+            cell.EnableInClassList(ActiveCellClass, isActive);
+            if (isActive)
+                _activeCellElement = cell;
+            else if (_activeCellElement == cell)
+                _activeCellElement = null;
         }
 
         #endregion

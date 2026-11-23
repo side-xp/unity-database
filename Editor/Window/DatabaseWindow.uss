@@ -50,6 +50,16 @@
     overflow: hidden;
 }
 
+/* The padding is reduced by the width of the border, so the content of the active cell doesn't move. Temporary look, until the style
+   pass */
+.database-table-view__cell--active {
+    padding-left: 3px;
+    padding-right: 3px;
+    border-width: 1px;
+    border-color: rgb(58, 121, 187);
+    background-color: rgba(58, 121, 187, 0.25);
+}
+
 /* Public class: CellHandler.DisplayLabelClass, also used by the custom handlers */
 .database-cell__label {
     -unity-text-align: middle-left;
