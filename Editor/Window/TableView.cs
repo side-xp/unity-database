@@ -21,7 +21,7 @@ namespace SideXP.Database.EditorOnly
     /// visible when the table is scrolled horizontally (see <see cref="FrozenColumnLink"/>).
     /// </para>
     /// </remarks>
-    internal class TableView : VisualElement
+    internal partial class TableView : VisualElement
     {
 
         #region Subclasses
@@ -211,6 +211,10 @@ namespace SideXP.Database.EditorOnly
 
             RegisterCallback<AttachToPanelEvent>(OnAttachToPanel);
             RegisterCallback<DetachFromPanelEvent>(OnDetachFromPanel);
+
+            // The view gets the focus when a cell is clicked, so it receives the keys that start an edit
+            focusable = true;
+            RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
         }
 
         /// <summary>
@@ -234,6 +238,7 @@ namespace SideXP.Database.EditorOnly
         /// <param name="evt">The emitted event.</param>
         private void OnDetachFromPanel(DetachFromPanelEvent evt)
         {
+            EndEdit(true, false);
             _changeTracker?.Stop();
         }
 
@@ -251,6 +256,8 @@ namespace SideXP.Database.EditorOnly
         /// <param name="table">The table to display.</param>
         public void SetTable(TableDefinition table)
         {
+            // Leaving a table confirms its edit, like clicking outside of the edited cell
+            EndEdit(true, false);
             _changeTracker?.Stop();
             _table = table;
             _activeCell = CellId.None;
@@ -280,6 +287,7 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         public void ClearTable()
         {
+            EndEdit(true, false);
             _changeTracker?.Stop();
             _changeTracker = null;
             _table = null;
@@ -351,7 +359,10 @@ namespace SideXP.Database.EditorOnly
 
                 // The asset of the active cell may have been deleted, or may not be in the table anymore
                 if (!_activeCell.IsNone && (_activeCell.Asset == null || !_pipeline.TryGetRow(_activeCell.Asset, out _)))
+                {
+                    EndEdit(false, false);
                     SetActiveCell(CellId.None);
+                }
 
                 _rows.Clear();
                 _rows.AddRange(_pipeline.VisibleRows);
@@ -522,6 +533,7 @@ namespace SideXP.Database.EditorOnly
             ((CellBinding)cell.userData).Row = row;
             UpdateActiveCellHighlight(cell);
             UpdateHoverMirror(cell);
+            EndEditIfRebound(cell, row);
 
             try
             {
@@ -550,6 +562,7 @@ namespace SideXP.Database.EditorOnly
             ((CellBinding)cell.userData).Row = null;
             UpdateActiveCellHighlight(cell);
             UpdateHoverMirror(cell);
+            EndEditIfRebound(cell, null);
         }
 
         #endregion
@@ -633,7 +646,7 @@ namespace SideXP.Database.EditorOnly
         #region Active cell
 
         /// <summary>
-        /// Called when a cell is clicked. Activates the cell.
+        /// Called when a cell is clicked. Activates the cell, and edits it on a double-click.
         /// </summary>
         /// <param name="evt">The emitted event.</param>
         private void OnCellPointerDown(PointerDownEvent evt)
@@ -641,8 +654,24 @@ namespace SideXP.Database.EditorOnly
             if (evt.button != (int)MouseButton.LeftMouse)
                 return;
 
-            if (evt.currentTarget is VisualElement cell && cell.userData is CellBinding binding && binding.Row != null)
-                SetActiveCell(new CellId(binding.Row.Asset, binding.Column.Id));
+            if (evt.currentTarget is not VisualElement cell || cell.userData is not CellBinding binding || binding.Row == null)
+                return;
+
+            // Clicks inside the edit field are handled by the field
+            if (_edit != null && _edit.CellElement == cell)
+                return;
+
+            // The view handles the focus itself. Otherwise, the focus controller gives it to the list view after this event, which
+            // would end the edit started by a double-click
+            cell.panel?.focusController?.IgnoreEvent(evt);
+
+            // Read before the focus changes: ending an edit in progress refreshes the rows, and can rebind this element to another row
+            CellId clickedCell = new CellId(binding.Row.Asset, binding.Column.Id);
+            Focus();
+            SetActiveCell(clickedCell);
+
+            if (evt.clickCount == 2 && _activeCellElement != null)
+                BeginEdit(_activeCellElement, '\0');
         }
 
         /// <summary>

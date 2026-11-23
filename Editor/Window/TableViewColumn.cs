@@ -60,6 +60,12 @@ namespace SideXP.Database.EditorOnly
         private FieldInfo _field = null;
 
         /// <summary>
+        /// The path of the serialized property that holds the values of the column, from the asset, or null if the values are not
+        /// stored in a serialized property (for example a built-in column).
+        /// </summary>
+        private string _propertyPath = null;
+
+        /// <summary>
         /// Displays the values of the column, and converts them to text.
         /// </summary>
         private CellHandler _handler = null;
@@ -88,7 +94,9 @@ namespace SideXP.Database.EditorOnly
         /// <param name="width"><inheritdoc cref="_width" path="/summary"/></param>
         /// <param name="accessor"><inheritdoc cref="_accessor" path="/summary"/></param>
         /// <param name="field"><inheritdoc cref="_field" path="/summary"/></param>
-        public TableViewColumn(string id, string name, string tooltip, float width, IValueAccessor accessor, FieldInfo field)
+        /// <param name="propertyPath"><inheritdoc cref="_propertyPath" path="/summary"/></param>
+        public TableViewColumn(string id, string name, string tooltip, float width, IValueAccessor accessor, FieldInfo field,
+            string propertyPath)
         {
             _id = id;
             _name = name;
@@ -96,6 +104,7 @@ namespace SideXP.Database.EditorOnly
             _width = width;
             _accessor = accessor;
             _field = field;
+            _propertyPath = propertyPath;
             _handler = CellHandlerRegistry.Default.GetHandler(field, accessor.ValueType);
 
             try
@@ -139,6 +148,14 @@ namespace SideXP.Database.EditorOnly
         /// <inheritdoc cref="_field"/>
         public FieldInfo Field => _field;
 
+        /// <inheritdoc cref="_propertyPath"/>
+        public string PropertyPath => _propertyPath;
+
+        /// <summary>
+        /// Checks if the values of the column are stored in a serialized property, which edits can write to.
+        /// </summary>
+        public bool HasProperty => !string.IsNullOrEmpty(_propertyPath);
+
         /// <inheritdoc cref="_handler"/>
         public CellHandler Handler => _handler;
 
@@ -164,7 +181,8 @@ namespace SideXP.Database.EditorOnly
                 ? column.Fields[column.Fields.Count - 1]
                 : null;
 
-            return new TableViewColumn(column.Id, column.Name, column.Tooltip, column.Width, ValueAccessors.Create(column), field);
+            return new TableViewColumn(column.Id, column.Name, column.Tooltip, column.Width, ValueAccessors.Create(column), field,
+                column.PropertyPath);
         }
 
         /// <summary>
@@ -173,7 +191,9 @@ namespace SideXP.Database.EditorOnly
         /// <returns>Returns the created column.</returns>
         public static TableViewColumn CreateAssetNameColumn()
         {
-            return new TableViewColumn(AssetNameId, AssetNameTitle, AssetNameTooltip, AssetNameWidth, AssetNameAccessor.Instance, null);
+            // Not a serialized property: renaming assets comes with the asset operations
+            return new TableViewColumn(AssetNameId, AssetNameTitle, AssetNameTooltip, AssetNameWidth, AssetNameAccessor.Instance, null,
+                null);
         }
 
         #endregion

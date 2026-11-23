@@ -1,13 +1,14 @@
 using System;
 
 using UnityEngine.UIElements;
+using UnityEditor;
 
 namespace SideXP.Database.EditorOnly
 {
 
     /// <summary>
-    /// Defines how the values of a column are handled by the Database window: how they are displayed, compared for sorting, and
-    /// converted to text and back. Register a handler with <see cref="CustomCellHandlerAttribute"/>.
+    /// Defines how the values of a column are handled by the Database window: how they are displayed, edited, compared for sorting,
+    /// and converted to text and back. Register a handler with <see cref="CustomCellHandlerAttribute"/>.
     /// </summary>
     /// <remarks>
     /// Each part has a default implementation, so a handler only overrides what it changes. A single instance of each handler is shared
@@ -24,6 +25,12 @@ namespace SideXP.Database.EditorOnly
         /// other cells.
         /// </summary>
         public const string DisplayLabelClass = "database-cell__label";
+
+        /// <summary>
+        /// The USS class of the default edit fields, which fill their cell. Use it on custom edit fields, so they fit in the cell like
+        /// the others.
+        /// </summary>
+        public const string EditFieldClass = "database-cell__edit-field";
 
         #endregion
 
@@ -52,6 +59,44 @@ namespace SideXP.Database.EditorOnly
         {
             if (element is Label label)
                 label.text = ToText(value);
+        }
+
+        #endregion
+
+
+        #region Edit
+
+        /// <summary>
+        /// Creates the field that edits a cell, in edit mode. Only the edited cell has a field, which replaces its display until the
+        /// edit ends.
+        /// </summary>
+        /// <remarks>
+        /// A field can either be left unbound, and give its value to <see cref="TryGetEditedValue"/> when the edit is confirmed, or be
+        /// bound to the property (<c>BindProperty()</c>) and write it itself. In both cases, the writes of an edit form a single Undo
+        /// step, and are reverted if the edit is cancelled.
+        /// </remarks>
+        /// <param name="property">The serialized property of the cell, valid until the edit ends.</param>
+        /// <param name="value">The current value of the cell, read from the value cache.</param>
+        /// <param name="context">Informations about the cell.</param>
+        /// <returns>Returns the created field, or null if the cell can't be edited. By default, a text field for strings, and a number
+        /// field for numbers.</returns>
+        public virtual VisualElement CreateEditField(SerializedProperty property, object value, CellContext context)
+        {
+            return EditFields.Create(context.ValueType, value);
+        }
+
+        /// <summary>
+        /// Gets the value to write when the edit of a cell is confirmed.
+        /// </summary>
+        /// <param name="field">The field created by <see cref="CreateEditField"/>.</param>
+        /// <param name="context">Informations about the cell.</param>
+        /// <param name="value">Outputs the value to write, of the type of the property.</param>
+        /// <returns>Returns true if there is a value to write. Returns false if the field writes the property itself (bound field), or if
+        /// the value is rejected: nothing is then written. By default, reads the default fields, and rejects the numbers that don't fit
+        /// in the type of the column.</returns>
+        public virtual bool TryGetEditedValue(VisualElement field, CellContext context, out object value)
+        {
+            return EditFields.TryGetValue(field, context.ValueType, out value);
         }
 
         #endregion
