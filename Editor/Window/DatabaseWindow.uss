@@ -8,8 +8,21 @@
     flex-grow: 1;
 }
 
+/* Holds the frozen list and the main list, side by side */
+.database-table-view__body {
+    flex-direction: row;
+    flex-grow: 1;
+}
+
 .database-table-view__list {
     flex-grow: 1;
+}
+
+/* The width is set by FrozenColumnLink. The border marks the edge of the frozen column, and works with both editor themes */
+.database-table-view__frozen-list {
+    flex-shrink: 0;
+    border-right-width: 1px;
+    border-right-color: rgba(0, 0, 0, 0.4);
 }
 
 /* The message takes the place of the list, so the status line stays at the bottom */

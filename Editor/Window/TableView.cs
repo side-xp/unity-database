@@ -16,6 +16,10 @@ namespace SideXP.Database.EditorOnly
     /// The view builds the pipeline of the table when the table is set: it loads the assets, validates the columns against the first
     /// asset, and creates an accessor per column. Rows are virtualized: only the visible ones have elements, which show the cached
     /// values of the pipeline.
+    /// <para>
+    /// The first column is frozen: it's displayed by its own list view, on the left of the list view of the other columns, and stays
+    /// visible when the table is scrolled horizontally (see <see cref="FrozenColumnLink"/>).
+    /// </para>
     /// </remarks>
     internal class TableView : VisualElement
     {
@@ -23,7 +27,9 @@ namespace SideXP.Database.EditorOnly
         #region Fields
 
         private const string ViewClass = "database-table-view";
+        private const string BodyClass = "database-table-view__body";
         private const string ListClass = "database-table-view__list";
+        private const string FrozenListClass = "database-table-view__frozen-list";
         private const string HeaderClass = "database-table-view__header";
         private const string CellClass = "database-table-view__cell";
         private const string StatusBarClass = "database-status-bar";
@@ -69,9 +75,24 @@ namespace SideXP.Database.EditorOnly
         private List<TableRow> _rows = new List<TableRow>();
 
         /// <summary>
-        /// The list that displays the rows. Rebuilt for each table, since its columns change.
+        /// The element that holds the list views, side by side.
+        /// </summary>
+        private VisualElement _body = null;
+
+        /// <summary>
+        /// The list that displays the rows, with all the columns except the frozen one. Rebuilt for each table, since its columns change.
         /// </summary>
         private MultiColumnListView _listView = null;
+
+        /// <summary>
+        /// The list that displays the frozen column, or null if the table has a single column. Rebuilt for each table.
+        /// </summary>
+        private MultiColumnListView _frozenListView = null;
+
+        /// <summary>
+        /// Keeps the frozen list aligned with the main list, or null if there is no frozen list.
+        /// </summary>
+        private FrozenColumnLink _frozenColumnLink = null;
 
         /// <summary>
         /// The message shown instead of the rows when the table has no asset.
@@ -92,6 +113,10 @@ namespace SideXP.Database.EditorOnly
         public TableView()
         {
             AddToClassList(ViewClass);
+
+            _body = new VisualElement();
+            _body.AddToClassList(BodyClass);
+            Add(_body);
 
             _messageLabel = new Label(NoAssetMessage);
             _messageLabel.AddToClassList(MessageClass);
@@ -132,7 +157,7 @@ namespace SideXP.Database.EditorOnly
 
             _pipeline = new TablePipeline(new PreloadedAssetSource(assets, source), accessors);
 
-            RebuildListView();
+            RebuildListViews();
             Refresh();
         }
 
@@ -149,10 +174,11 @@ namespace SideXP.Database.EditorOnly
                 _rows.Clear();
                 _rows.AddRange(_pipeline.VisibleRows);
                 _listView.RefreshItems();
+                _frozenListView?.RefreshItems();
             }
 
             bool hasAssets = _pipeline.Rows.Count > 0;
-            _listView.SetDisplayed(hasAssets);
+            _body.SetDisplayed(hasAssets);
             _messageLabel.SetDisplayed(!hasAssets);
             _statusLabel.text = _rows.Count == 1 ? "1 row" : $"{_rows.Count} rows";
         }
@@ -163,14 +189,58 @@ namespace SideXP.Database.EditorOnly
         #region UI
 
         /// <summary>
-        /// Creates the list view with the current columns, replacing the previous one.
+        /// Creates the list views with the current columns, replacing the previous ones: the frozen list with the first column, and the
+        /// main list with the other columns.
         /// </summary>
-        private void RebuildListView()
+        private void RebuildListViews()
         {
-            if (_listView != null)
-                _listView.RemoveFromHierarchy();
+            _body.Clear();
+            _frozenListView = null;
+            _frozenColumnLink = null;
 
-            _listView = new MultiColumnListView
+            // The first column is frozen only if there are other columns to scroll beside it
+            bool hasFrozenColumn = _columns.Count > 1;
+            if (hasFrozenColumn)
+            {
+                _frozenListView = CreateListView();
+                _frozenListView.AddToClassList(FrozenListClass);
+                // The width of the frozen list follows its column, so the column never grows to fill the list
+                _frozenListView.columns.stretchMode = Columns.StretchMode.Grow;
+                _body.Add(_frozenListView);
+            }
+
+            _listView = CreateListView();
+            _listView.AddToClassList(ListClass);
+            _listView.columns.stretchMode = Columns.StretchMode.GrowAndFill;
+            _body.Add(_listView);
+
+            int firstMainColumn = 0;
+            if (hasFrozenColumn)
+            {
+                // A flexible column has no width of its own, and can't share the width of the others in the frozen list
+                TableViewColumn frozenColumn = _columns[0];
+                float frozenColumnWidth = frozenColumn.IsFlexible ? FlexibleColumnWidth : frozenColumn.Width;
+
+                _frozenColumnLink = new FrozenColumnLink(_frozenListView, _listView, frozenColumnWidth);
+                _frozenListView.columns.Add(CreateListColumn(frozenColumn, 0, frozenColumnWidth, false, _frozenColumnLink));
+                firstMainColumn = 1;
+            }
+
+            for (int i = firstMainColumn; i < _columns.Count; i++)
+            {
+                TableViewColumn column = _columns[i];
+                float width = column.IsFlexible ? FlexibleColumnWidth : column.Width;
+                _listView.columns.Add(CreateListColumn(column, i, width, column.IsFlexible, null));
+            }
+        }
+
+        /// <summary>
+        /// Creates a list view that displays the rows, without columns.
+        /// </summary>
+        /// <returns>Returns the created list view.</returns>
+        private MultiColumnListView CreateListView()
+        {
+            return new MultiColumnListView
             {
                 itemsSource = _rows,
                 fixedItemHeight = RowHeight,
@@ -179,35 +249,36 @@ namespace SideXP.Database.EditorOnly
                 horizontalScrollingEnabled = true,
                 showAlternatingRowBackgrounds = AlternatingRowBackground.ContentOnly,
             };
-            _listView.AddToClassList(ListClass);
-            _listView.columns.stretchMode = Columns.StretchMode.GrowAndFill;
-
-            for (int i = 0; i < _columns.Count; i++)
-                _listView.columns.Add(CreateListColumn(_columns[i], i));
-
-            // Keep the list above the status line
-            Insert(IndexOf(_messageLabel), _listView);
         }
 
         /// <summary>
-        /// Creates the column of the list view that displays a column of the table.
+        /// Creates the column of a list view that displays a column of the table.
         /// </summary>
         /// <param name="column">The column of the table.</param>
         /// <param name="columnIndex">The index of the column in the pipeline.</param>
+        /// <param name="width">The initial width of the column, in pixels.</param>
+        /// <param name="isStretchable">If enabled, the column grows to fill the width left by the other columns.</param>
+        /// <param name="frozenColumnLink">The link that tracks the cells of the frozen column, or null if the column is not frozen.</param>
         /// <returns>Returns the created column.</returns>
-        private Column CreateListColumn(TableViewColumn column, int columnIndex)
+        private Column CreateListColumn(TableViewColumn column, int columnIndex, float width, bool isStretchable,
+            FrozenColumnLink frozenColumnLink)
         {
             return new Column
             {
                 name = column.Id,
                 title = column.Name,
-                width = column.IsFlexible ? FlexibleColumnWidth : column.Width,
+                width = width,
                 minWidth = MinColumnWidth,
-                stretchable = column.IsFlexible,
+                stretchable = isStretchable,
                 resizable = true,
                 sortable = false,
                 makeHeader = () => MakeHeader(column),
-                makeCell = () => MakeCell(column),
+                makeCell = () =>
+                {
+                    VisualElement cell = MakeCell(column);
+                    frozenColumnLink?.TrackCell(cell);
+                    return cell;
+                },
                 bindCell = (element, rowIndex) => BindCell(element, column, columnIndex, _rows[rowIndex]),
             };
         }
