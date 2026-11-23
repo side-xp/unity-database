@@ -1,0 +1,50 @@
+/* Styles of the Database window. Class names use the "database-" prefix, BEM style (block__element). */
+
+.database-page {
+    flex-grow: 1;
+}
+
+.database-page__content {
+    flex-grow: 1;
+}
+
+.database-toolbar__search {
+    flex-grow: 1;
+    width: auto;
+}
+
+.database-toolbar__title {
+    -unity-font-style: bold;
+    -unity-text-align: middle-left;
+    margin-left: 6px;
+}
+
+/* Muted, so the tag stays discreet next to the table name */
+.database-obsolete-tag {
+    -unity-font-style: italic;
+    -unity-text-align: middle-left;
+    opacity: 0.6;
+    margin-left: 6px;
+}
+
+.database-table-list {
+    flex-grow: 1;
+}
+
+.database-table-list__item {
+    flex-direction: row;
+    align-items: center;
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
+.database-table-list__name {
+    -unity-text-align: middle-left;
+}
+
+.database-message {
+    -unity-text-align: middle-center;
+    white-space: normal;
+    opacity: 0.6;
+    margin: 12px;
+}

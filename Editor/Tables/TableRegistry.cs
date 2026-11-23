@@ -19,11 +19,6 @@ namespace SideXP.Database.EditorOnly
         #region Fields
 
         /// <summary>
-        /// The prefix of the warnings logged by the registry.
-        /// </summary>
-        private const string LogPrefix = "[Database] ";
-
-        /// <summary>
         /// The definitions of all the tables, sorted by name. Null until they are built.
         /// </summary>
         private static List<TableDefinition> s_tables = null;
@@ -122,7 +117,7 @@ namespace SideXP.Database.EditorOnly
             // Log a single message, so the issues don't flood the console on every domain reload
             if (warnings.Count > 0)
             {
-                Debug.LogWarning($"{LogPrefix}{warnings.Count} issue(s) found in the declarations of the tables:\n- " +
+                Debug.LogWarning($"{DatabaseConstants.LogPrefix}{warnings.Count} issue(s) found in the declarations of the tables:\n- " +
                     string.Join("\n- ", warnings));
             }
         }
