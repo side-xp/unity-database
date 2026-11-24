@@ -20,6 +20,9 @@ namespace SideXP.Database.EditorOnly
     /// The first column is frozen: it's displayed by its own list view, on the left of the list view of the other columns, and stays
     /// visible when the table is scrolled horizontally (see <see cref="FrozenColumnLink"/>).
     /// </para>
+    /// <para>
+    /// The order of the columns, their widths and the sort are remembered for each table (see <see cref="ViewSettings"/>).
+    /// </para>
     /// </remarks>
     internal partial class TableView : VisualElement
     {
@@ -250,6 +253,7 @@ namespace SideXP.Database.EditorOnly
         private void OnDetachFromPanel(DetachFromPanelEvent evt)
         {
             EndEdit(true, false);
+            SaveColumnOrder();
             _changeTracker?.Stop();
         }
 
@@ -262,7 +266,8 @@ namespace SideXP.Database.EditorOnly
         public TableDefinition Table => _table;
 
         /// <summary>
-        /// Displays a table: loads its assets, and builds its columns and its pipeline.
+        /// Displays a table: loads its assets, and builds its columns and its pipeline, with the remembered order, widths and sort of
+        /// the table.
         /// </summary>
         /// <param name="table">The table to display.</param>
         /// <param name="search">The search that filters the rows (see <see cref="SetSearch(string)"/>), or null to show all the rows.
@@ -271,6 +276,7 @@ namespace SideXP.Database.EditorOnly
         {
             // Leaving a table confirms its edit, like clicking outside of the edited cell
             EndEdit(true, false);
+            SaveColumnOrder();
             _changeTracker?.Stop();
             _table = table;
             _activeCell = CellId.None;
@@ -281,15 +287,17 @@ namespace SideXP.Database.EditorOnly
             ProjectAssetSource source = new ProjectAssetSource(table.Type);
             IReadOnlyList<Object> assets = source.LoadAssets();
             _columns = CreateColumns(table, assets.Count > 0 ? assets[0] : null);
+            _viewSettings = UserViews.instance.GetDefaultView(table.Id);
 
             IValueAccessor[] accessors = new IValueAccessor[_columns.Count];
             for (int i = 0; i < _columns.Count; i++)
                 accessors[i] = _columns[i].Accessor;
 
             _pipeline = new TablePipeline(new PreloadedAssetSource(assets, source), accessors);
-            // Before the first update, so the rows are filtered once
+            // Before the first update, so the rows are filtered and sorted once
             StoreSearch(search);
             ApplySearchFilter();
+            ApplyRememberedSort();
 
             _changeTracker = new TableChangeTracker(table.Type, _pipeline);
             _changeTracker.Changed += ScheduleRefresh;
@@ -306,9 +314,11 @@ namespace SideXP.Database.EditorOnly
         public void ClearTable()
         {
             EndEdit(true, false);
+            SaveColumnOrder();
             _changeTracker?.Stop();
             _changeTracker = null;
             _table = null;
+            _viewSettings = null;
             _pipeline = null;
             _columns = new List<TableViewColumn>();
             _rows.Clear();
@@ -402,8 +412,8 @@ namespace SideXP.Database.EditorOnly
         #region UI
 
         /// <summary>
-        /// Creates the list views with the current columns, replacing the previous ones: the frozen list with the first column, and the
-        /// main list with the other columns.
+        /// Creates the list views with the current columns, in their remembered order, replacing the previous ones: the frozen list
+        /// with the first column, and the main list with the other columns. The remembered sort is shown in the headers.
         /// </summary>
         private void RebuildListViews()
         {
@@ -411,8 +421,9 @@ namespace SideXP.Database.EditorOnly
             _frozenListView = null;
             _frozenColumnLink = null;
 
+            List<int> displayedColumns = GetDisplayedColumns();
             // The first column is frozen only if there are other columns to scroll beside it
-            bool hasFrozenColumn = _columns.Count > 1;
+            bool hasFrozenColumn = displayedColumns.Count > 1;
             if (hasFrozenColumn)
             {
                 _frozenListView = CreateListView();
@@ -428,6 +439,8 @@ namespace SideXP.Database.EditorOnly
             _listView.AddToClassList(ListClass);
             _listView.columns.stretchMode = Columns.StretchMode.GrowAndFill;
             _listView.makeNoneElement = MakeNoMatchElement;
+            // Dragging a header to reorder the columns ends with a release
+            _listView.RegisterCallback<PointerUpEvent>(OnMainListPointerUp, TrickleDown.TrickleDown);
             _body.Add(_listView);
 
             // Scrolling moves the rows under the pointer: the mirrored hover is shown again when the pointer enters another cell
@@ -438,20 +451,23 @@ namespace SideXP.Database.EditorOnly
             if (hasFrozenColumn)
             {
                 // A flexible column has no width of its own, and can't share the width of the others in the frozen list
-                TableViewColumn frozenColumn = _columns[0];
-                float frozenColumnWidth = frozenColumn.IsFlexible ? FlexibleColumnWidth : frozenColumn.Width;
+                int frozenColumnIndex = displayedColumns[0];
+                TableViewColumn frozenColumn = _columns[frozenColumnIndex];
+                float frozenColumnWidth = GetInitialWidth(frozenColumn);
 
                 _frozenColumnLink = new FrozenColumnLink(_frozenListView, _listView, frozenColumnWidth);
-                _frozenListView.columns.Add(CreateListColumn(frozenColumn, 0, frozenColumnWidth, false, _frozenColumnLink));
+                _frozenListView.columns.Add(CreateListColumn(frozenColumn, frozenColumnIndex, frozenColumnWidth, false, _frozenColumnLink));
                 firstMainColumn = 1;
             }
 
-            for (int i = firstMainColumn; i < _columns.Count; i++)
+            for (int i = firstMainColumn; i < displayedColumns.Count; i++)
             {
-                TableViewColumn column = _columns[i];
-                float width = column.IsFlexible ? FlexibleColumnWidth : column.Width;
-                _listView.columns.Add(CreateListColumn(column, i, width, column.IsFlexible, null));
+                int columnIndex = displayedColumns[i];
+                TableViewColumn column = _columns[columnIndex];
+                _listView.columns.Add(CreateListColumn(column, columnIndex, GetInitialWidth(column), column.IsFlexible, null));
             }
+
+            ShowSortInHeader();
         }
 
         /// <summary>
@@ -475,7 +491,7 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Creates the column of a list view that displays a column of the table.
+        /// Creates the column of a list view that displays a column of the table. Its width is remembered when the user resizes it.
         /// </summary>
         /// <param name="column">The column of the table.</param>
         /// <param name="columnIndex">The index of the column in the pipeline.</param>
@@ -486,7 +502,7 @@ namespace SideXP.Database.EditorOnly
         private Column CreateListColumn(TableViewColumn column, int columnIndex, float width, bool isStretchable,
             FrozenColumnLink frozenColumnLink)
         {
-            return new Column
+            Column listColumn = new Column
             {
                 name = column.Id,
                 title = column.Name,
@@ -505,16 +521,23 @@ namespace SideXP.Database.EditorOnly
                 bindCell = (element, rowIndex) => BindCell(element, column, columnIndex, _rows[rowIndex]),
                 unbindCell = (element, rowIndex) => UnbindCell(element),
             };
+
+            // After the initial width is set, so only the widths chosen by the user are reported
+            TrackColumnWidth(column, listColumn);
+            return listColumn;
         }
 
         /// <summary>
         /// Creates the header of a column, with its tooltip.
         /// </summary>
+        /// <remarks>
+        /// The header holds its column, so the order of the columns can be read from the headers (see <see cref="SaveColumnOrder"/>).
+        /// </remarks>
         /// <param name="column">The column of which to create the header.</param>
         /// <returns>Returns the created header.</returns>
         private static VisualElement MakeHeader(TableViewColumn column)
         {
-            Label header = new Label(column.Name) { tooltip = column.Tooltip };
+            Label header = new Label(column.Name) { tooltip = column.Tooltip, userData = column };
             header.AddToClassList(HeaderClass);
             return header;
         }
@@ -759,22 +782,28 @@ namespace SideXP.Database.EditorOnly
 
                 int columnIndex = description != null ? GetColumnIndex(listView, description) : -1;
                 if (columnIndex >= 0)
-                {
-                    TableViewColumn column = _columns[columnIndex];
-                    bool isDescending = description.direction == SortDirection.Descending;
-                    _pipeline.SetSort(columnIndex, isDescending, (a, b) => Compare(column, a, b));
-                }
+                    SetPipelineSort(columnIndex, description.direction == SortDirection.Descending);
                 else
-                {
                     _pipeline.ClearSort();
-                }
             }
             finally
             {
                 _isUpdatingSort = false;
             }
 
+            SaveSort();
             Refresh();
+        }
+
+        /// <summary>
+        /// Sorts the rows of the pipeline by a column, through its handler.
+        /// </summary>
+        /// <param name="columnIndex">The index of the column in the pipeline.</param>
+        /// <param name="isDescending">If enabled, the rows are sorted in descending order.</param>
+        private void SetPipelineSort(int columnIndex, bool isDescending)
+        {
+            TableViewColumn column = _columns[columnIndex];
+            _pipeline.SetSort(columnIndex, isDescending, (a, b) => Compare(column, a, b));
         }
 
         /// <summary>
