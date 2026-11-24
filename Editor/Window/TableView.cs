@@ -75,6 +75,7 @@ namespace SideXP.Database.EditorOnly
         private const string StatusBarClass = "database-status-bar";
         private const string StatusLabelClass = "database-status-bar__label";
         private const string MessageClass = "database-message";
+        private const string EmptyClass = "database-table-view__empty";
 
         private const string NoAssetMessage = "There is no asset of this table in the project.";
 
@@ -174,9 +175,14 @@ namespace SideXP.Database.EditorOnly
         private bool _isHoverInFrozenList = false;
 
         /// <summary>
-        /// The message shown instead of the rows when the table has no asset.
+        /// The message shown instead of the rows when the table has no asset, with the button that creates one.
         /// </summary>
-        private Label _messageLabel = null;
+        private VisualElement _emptyMessage = null;
+
+        /// <summary>
+        /// The button of <see cref="_emptyMessage"/> that creates an asset, hidden if the table has no type that can be created.
+        /// </summary>
+        private Button _emptyCreateButton = null;
 
         /// <summary>
         /// The label of the status line.
@@ -197,10 +203,15 @@ namespace SideXP.Database.EditorOnly
             _body.AddToClassList(BodyClass);
             Add(_body);
 
-            _messageLabel = new Label(NoAssetMessage);
-            _messageLabel.AddToClassList(MessageClass);
-            _messageLabel.SetDisplayed(false);
-            Add(_messageLabel);
+            _emptyMessage = new VisualElement();
+            _emptyMessage.AddToClassList(EmptyClass);
+            _emptyMessage.SetDisplayed(false);
+            Label messageLabel = new Label(NoAssetMessage);
+            messageLabel.AddToClassList(MessageClass);
+            _emptyMessage.Add(messageLabel);
+            _emptyCreateButton = CreateEmptyCreateButton();
+            _emptyMessage.Add(_emptyCreateButton);
+            Add(_emptyMessage);
 
             VisualElement statusBar = new VisualElement();
             statusBar.AddToClassList(StatusBarClass);
@@ -262,6 +273,8 @@ namespace SideXP.Database.EditorOnly
             _table = table;
             _activeCell = CellId.None;
             _activeCellElement = null;
+            _creatableTypes = AssetOperations.GetCreatableTypes(table.Type);
+            UpdateCreateButton(_emptyCreateButton, CreateAssetText);
 
             ProjectAssetSource source = new ProjectAssetSource(table.Type);
             IReadOnlyList<Object> assets = source.LoadAssets();
@@ -297,6 +310,7 @@ namespace SideXP.Database.EditorOnly
             _activeCell = CellId.None;
             _activeCellElement = null;
             _hoveredRow = null;
+            _creatableTypes = new List<Type>();
 
             _body.Clear();
             _listView = null;
@@ -372,7 +386,7 @@ namespace SideXP.Database.EditorOnly
 
             bool hasAssets = _pipeline.Rows.Count > 0;
             _body.SetDisplayed(hasAssets);
-            _messageLabel.SetDisplayed(!hasAssets);
+            _emptyMessage.SetDisplayed(!hasAssets);
             _statusLabel.text = _rows.Count == 1 ? "1 row" : $"{_rows.Count} rows";
         }
 

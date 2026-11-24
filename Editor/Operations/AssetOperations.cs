@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 
+using UnityEngine;
 using UnityEditor;
 
 using Object = UnityEngine.Object;
@@ -21,10 +24,122 @@ namespace SideXP.Database.EditorOnly
 
         private const string NotAnAssetError = "The object is not saved in an asset file.";
 
+        /// <summary>
+        /// The extension of the files of the assets created by the tool, with its dot.
+        /// </summary>
+        public const string AssetExtension = ".asset";
+
         #endregion
 
 
         #region Public API
+
+        /// <summary>
+        /// Gets the types of the assets that can be created in a table: the table type itself if it's concrete, then its concrete
+        /// derived types, sorted by name.
+        /// </summary>
+        /// <param name="tableType">The type of the table.</param>
+        /// <returns>Returns the types that can be created, or an empty list if there is none (for example an abstract type without
+        /// concrete derived type).</returns>
+        /// <exception cref="ArgumentNullException">Thrown if the type is null.</exception>
+        public static List<Type> GetCreatableTypes(Type tableType)
+        {
+            if (tableType == null)
+                throw new ArgumentNullException(nameof(tableType));
+
+            List<Type> derivedTypes = new List<Type>();
+            foreach (Type type in TypeCache.GetTypesDerivedFrom(tableType))
+            {
+                if (IsCreatable(type))
+                    derivedTypes.Add(type);
+            }
+
+            derivedTypes.Sort((a, b) => EditorUtility.NaturalCompare(GetDisplayName(a), GetDisplayName(b)));
+
+            List<Type> types = new List<Type>(derivedTypes.Count + 1);
+            if (IsCreatable(tableType))
+                types.Add(tableType);
+
+            types.AddRange(derivedTypes);
+            return types;
+        }
+
+        /// <summary>
+        /// Checks if assets of a type can be created.
+        /// </summary>
+        /// <param name="type">The type to check.</param>
+        /// <returns>Returns true if the type is a concrete type of <see cref="ScriptableObject"/>.</returns>
+        public static bool IsCreatable(Type type)
+        {
+            return type != null
+                && typeof(ScriptableObject).IsAssignableFrom(type)
+                && !type.IsAbstract
+                && !type.ContainsGenericParameters;
+        }
+
+        /// <summary>
+        /// Gets the name of a type shown to the users, in the menus and the dialogs.
+        /// </summary>
+        /// <param name="type">The type of which to get the name.</param>
+        /// <returns>Returns the nicified name of the type.</returns>
+        public static string GetDisplayName(Type type)
+        {
+            return ObjectNames.NicifyVariableName(type.Name);
+        }
+
+        /// <summary>
+        /// Creates an asset of a type, as a main asset in its own file. It can't be undone, like a creation in the Project window.
+        /// </summary>
+        /// <remarks>
+        /// An existing file at the same path is replaced: confirm it with the user before (the save dialog of Unity does).
+        /// </remarks>
+        /// <param name="type">The type of the asset to create.</param>
+        /// <param name="path">The path of the new file, from the project folder (<c>Assets/Items/Sword.asset</c>), in an existing
+        /// folder, with the <see cref="AssetExtension"/> extension. The name of the file is the name of the asset.</param>
+        /// <param name="asset">Outputs the created asset, or null if it has not been created.</param>
+        /// <param name="error">Outputs the reason why the asset has not been created, or null if it has been created.</param>
+        /// <returns>Returns true if the asset has been created.</returns>
+        /// <exception cref="ArgumentNullException">Thrown if the type is null.</exception>
+        public static bool TryCreate(Type type, string path, out Object asset, out string error)
+        {
+            if (type == null)
+                throw new ArgumentNullException(nameof(type));
+
+            asset = null;
+            error = null;
+            if (!IsCreatable(type))
+            {
+                error = $"{type} is not a concrete type of {nameof(ScriptableObject)}.";
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(path) || !path.EndsWith(AssetExtension, StringComparison.OrdinalIgnoreCase))
+            {
+                error = $"The path of the asset must end with {AssetExtension}.";
+                return false;
+            }
+
+            string folder = Path.GetDirectoryName(path)?.Replace('\\', '/');
+            if (string.IsNullOrEmpty(folder) || !AssetDatabase.IsValidFolder(folder))
+            {
+                error = $"The folder of {path} is not a folder of the project.";
+                return false;
+            }
+
+            ScriptableObject instance = ScriptableObject.CreateInstance(type);
+            // Unity saves the script of an asset by its file, so a type declared in a file named after another type would be saved
+            // with a missing script
+            if (MonoScript.FromScriptableObject(instance) == null)
+            {
+                Object.DestroyImmediate(instance);
+                error = $"{type} has no script file named after it, so Unity can't save its assets.";
+                return false;
+            }
+
+            AssetDatabase.CreateAsset(instance, path);
+            asset = instance;
+            return true;
+        }
 
         /// <summary>
         /// Renames an asset. A main asset is renamed with its file (<see cref="AssetDatabase.RenameAsset(string, string)"/>), which

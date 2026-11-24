@@ -20,6 +20,21 @@ namespace SideXP.Database.Tests
     public class AssetOperationsTests
     {
 
+        #region Subclasses
+
+        /// <summary>
+        /// An abstract type without concrete derived type: none of its assets can be created.
+        /// </summary>
+        private abstract class NoConcreteTypeSO : ScriptableObject { }
+
+        /// <summary>
+        /// A concrete type without script file of its own, since it's nested: Unity can't save its assets.
+        /// </summary>
+        private class NestedConcreteSO : ScriptableObject { }
+
+        #endregion
+
+
         #region Fields
 
         /// <summary>
@@ -86,6 +101,115 @@ namespace SideXP.Database.Tests
         {
             if (AssetDatabase.IsValidFolder(TempFolder))
                 AssetDatabase.DeleteAsset(TempFolder);
+        }
+
+        #endregion
+
+
+        #region Create
+
+        /// <summary>
+        /// The types that can be created in the table of a concrete type are the table type first, then its concrete derived types,
+        /// sorted by name.
+        /// </summary>
+        [Test]
+        public void GetCreatableTypes_ConcreteTableType_TableTypeFirstThenDerivedTypes()
+        {
+            Type[] expected =
+            {
+                typeof(ItemSO),
+                typeof(BootsSO),
+                typeof(ChestArmorSO),
+                typeof(ConsumableSO),
+                typeof(EquipmentSO),
+                typeof(HelmetSO),
+                typeof(ShieldSO),
+                typeof(WeaponSO),
+            };
+            CollectionAssert.AreEqual(expected, AssetOperations.GetCreatableTypes(typeof(ItemSO)));
+        }
+
+        /// <summary>
+        /// The types that can be created in the table of an abstract type are its concrete derived types only.
+        /// </summary>
+        [Test]
+        public void GetCreatableTypes_AbstractTableType_ConcreteTypesOnly()
+        {
+            Type[] expected = { typeof(BootsSO), typeof(ChestArmorSO), typeof(HelmetSO) };
+            CollectionAssert.AreEqual(expected, AssetOperations.GetCreatableTypes(typeof(ArmorSO)));
+        }
+
+        /// <summary>
+        /// No type can be created in the table of an abstract type without concrete derived type.
+        /// </summary>
+        [Test]
+        public void GetCreatableTypes_NoConcreteType_Empty()
+        {
+            CollectionAssert.IsEmpty(AssetOperations.GetCreatableTypes(typeof(NoConcreteTypeSO)));
+        }
+
+        /// <summary>
+        /// Creating an asset creates a main asset in its own file, named after the file.
+        /// </summary>
+        [Test]
+        public void TryCreate_ConcreteType_CreatesMainAsset()
+        {
+            string path = $"{TempFolder}/New Weapon{AssetOperations.AssetExtension}";
+            Assert.IsTrue(AssetOperations.TryCreate(typeof(WeaponSO), path, out UnityEngine.Object asset, out string error));
+            Assert.IsNull(error);
+            Assert.IsInstanceOf<WeaponSO>(asset);
+            Assert.IsTrue(AssetDatabase.IsMainAsset(asset));
+            Assert.AreEqual(path, AssetDatabase.GetAssetPath(asset));
+            Assert.AreEqual("New Weapon", asset.name);
+        }
+
+        /// <summary>
+        /// The assets of an abstract type can't be created.
+        /// </summary>
+        [Test]
+        public void TryCreate_AbstractType_Refused()
+        {
+            string path = $"{TempFolder}/New Armor{AssetOperations.AssetExtension}";
+            Assert.IsFalse(AssetOperations.TryCreate(typeof(ArmorSO), path, out UnityEngine.Object asset, out string error));
+            Assert.IsNull(asset);
+            Assert.IsNotNull(error);
+        }
+
+        /// <summary>
+        /// The assets of a type without script file of its own can't be created, since Unity would save them with a missing script.
+        /// </summary>
+        [Test]
+        public void TryCreate_TypeWithoutScriptFile_Refused()
+        {
+            string path = $"{TempFolder}/New Nested{AssetOperations.AssetExtension}";
+            Assert.IsFalse(AssetOperations.TryCreate(typeof(NestedConcreteSO), path, out UnityEngine.Object asset, out string error));
+            Assert.IsNull(asset);
+            Assert.IsNotNull(error);
+            Assert.IsEmpty(AssetDatabase.AssetPathToGUID(path));
+        }
+
+        /// <summary>
+        /// A path without the extension of the assets, in a folder that doesn't exist, or missing, is refused.
+        /// </summary>
+        /// <param name="path">The refused path.</param>
+        [TestCase(TempFolder + "/New Weapon.txt")]
+        [TestCase(TempFolder + "/Missing Folder/New Weapon.asset")]
+        [TestCase("")]
+        [TestCase(null)]
+        public void TryCreate_InvalidPath_Refused(string path)
+        {
+            Assert.IsFalse(AssetOperations.TryCreate(typeof(WeaponSO), path, out UnityEngine.Object asset, out string error));
+            Assert.IsNull(asset);
+            Assert.IsNotNull(error);
+        }
+
+        /// <summary>
+        /// A null type is a programming error.
+        /// </summary>
+        [Test]
+        public void TryCreate_NullType_Throws()
+        {
+            Assert.Throws<ArgumentNullException>(() => AssetOperations.TryCreate(null, $"{TempFolder}/New.asset", out _, out _));
         }
 
         #endregion

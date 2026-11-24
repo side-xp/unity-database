@@ -25,9 +25,15 @@
     border-right-color: rgba(0, 0, 0, 0.4);
 }
 
-/* The message takes the place of the list, so the status line stays at the bottom */
-.database-table-view > .database-message {
+/* The message of an empty table and its Create Asset button take the place of the list, so the status line stays at the bottom */
+.database-table-view__empty {
     flex-grow: 1;
+    justify-content: center;
+    align-items: center;
+}
+
+.database-table-view__empty-create {
+    margin-top: 0;
 }
 
 .database-table-view__header {

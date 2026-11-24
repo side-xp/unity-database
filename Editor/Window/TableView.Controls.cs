@@ -108,8 +108,7 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Duplicates the asset of a row. The copy becomes the active cell, on its name if the <i>Asset Name</i> column is displayed, so
-        /// it can be renamed right away.
+        /// Duplicates the asset of a row. The copy becomes the active cell (see <see cref="ShowNewAsset(Object)"/>).
         /// </summary>
         /// <param name="row">The row of the asset.</param>
         private void DuplicateAsset(TableRow row)
@@ -120,6 +119,16 @@ namespace SideXP.Database.EditorOnly
                 return;
             }
 
+            ShowNewAsset(copy);
+        }
+
+        /// <summary>
+        /// Shows an asset just added to the table (duplicated or created): makes it the active cell, on its name if the <i>Asset
+        /// Name</i> column is displayed, scrolls to it, and focuses the view, so it can be renamed right away with F2 or by typing.
+        /// </summary>
+        /// <param name="asset">The new asset.</param>
+        private void ShowNewAsset(Object asset)
+        {
             // The change tracker also reports the new asset, but it must be in the table to become the active cell
             Reload();
 
@@ -127,8 +136,9 @@ namespace SideXP.Database.EditorOnly
                 ? TableViewColumn.AssetNameId
                 : TableViewColumn.ControlsId;
 
-            SetActiveCell(new CellId(copy, columnId));
-            ScrollToAsset(copy);
+            SetActiveCell(new CellId(asset, columnId));
+            ScrollToAsset(asset);
+            Focus();
         }
 
         /// <summary>

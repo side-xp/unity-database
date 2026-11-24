@@ -20,6 +20,7 @@ namespace SideXP.Database.EditorOnly
 
         private const string BackText = "Back";
         private const string BackTooltip = "Back to the table list.";
+        private const string CreateText = "Create";
         private const string RefreshText = "Refresh";
         private const string RefreshTooltip = "Loads the assets of the table again. Use it if a change made outside of the window " +
             "doesn't show up, such as a value written by a script without notifying Unity.";
@@ -38,6 +39,11 @@ namespace SideXP.Database.EditorOnly
         /// The mark shown in the toolbar if the table is obsolete.
         /// </summary>
         private VisualElement _obsoleteMark = null;
+
+        /// <summary>
+        /// The button that creates an asset of the table, hidden if the table has no type that can be created.
+        /// </summary>
+        private ToolbarButton _createButton = null;
 
         /// <summary>
         /// Displays the rows of the table.
@@ -77,6 +83,11 @@ namespace SideXP.Database.EditorOnly
             toolbar.Add(spacer);
 
             _tableView = new TableView();
+            // Its icon and tooltip depend on the types of the table: set when the table is set
+            _createButton = new ToolbarButton { text = CreateText };
+            _createButton.clicked += () => _tableView.StartCreateAsset(_createButton);
+            toolbar.Add(_createButton);
+
             ToolbarButton refreshButton = new ToolbarButton(_tableView.Reload) { tooltip = RefreshTooltip };
             DatabaseElements.SetIcon(refreshButton, DatabaseIcons.Refresh, RefreshText);
             toolbar.Add(refreshButton);
@@ -103,6 +114,7 @@ namespace SideXP.Database.EditorOnly
             _titleLabel.tooltip = table.Type.FullName;
             _obsoleteMark.SetDisplayed(table.IsObsolete);
             _tableView.SetTable(table);
+            _tableView.UpdateCreateButton(_createButton, CreateText);
         }
 
         /// <summary>

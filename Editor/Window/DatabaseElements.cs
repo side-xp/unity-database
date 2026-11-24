@@ -46,6 +46,25 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
+        /// Shows a built-in icon of Unity on a button, followed by a label. If the icon doesn't exist in this version of Unity, the
+        /// button shows its label alone.
+        /// </summary>
+        /// <remarks>
+        /// Can be called again on the same button to change its icon, unlike <see cref="SetIcon(Button, string, string)"/>.
+        /// </remarks>
+        /// <param name="button">The button on which to show the icon, toolbar buttons included.</param>
+        /// <param name="iconName">The name of the icon, one of the constants of <see cref="BuiltInIcons"/>.</param>
+        /// <param name="label">The text shown after the icon.</param>
+        public static void SetBuiltInIcon(Button button, string iconName, string label)
+        {
+            button.iconImage = BuiltInIcons.Get(iconName) is Texture2D icon
+                ? Background.FromTexture2D(icon)
+                : default;
+
+            button.text = label;
+        }
+
+        /// <summary>
         /// Shows a Tabler icon on a button, alone or followed by a label. Without label, the tooltip of the button says what it does.
         /// </summary>
         /// <remarks>
