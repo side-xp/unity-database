@@ -53,7 +53,7 @@ namespace SideXP.Database.EditorOnly
             public readonly TableViewColumn Column;
 
             /// <summary>
-            /// Informations about the edited cell, given to the handler.
+            /// Information about the edited cell, given to the handler.
             /// </summary>
             public readonly CellContext Context;
 
@@ -163,7 +163,7 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         /// <param name="row">The row of the cell.</param>
         /// <param name="column">The column of the cell.</param>
-        /// <param name="context">Informations about the cell.</param>
+        /// <param name="context">Information about the cell.</param>
         /// <param name="field">Outputs the field created by the handler of the column, or null if the cell can't be edited.</param>
         /// <param name="session">Outputs the write path of the edit, or null if the cell can't be edited.</param>
         /// <returns>Returns true if the cell can be edited.</returns>

@@ -8,7 +8,7 @@ namespace SideXP.Database.EditorOnly
     /// Describes a table: the type of asset it lists, its name, its options and its columns. Tables declared in code with
     /// <see cref="TableAttribute"/> and tables defined in the editor produce the same definition.
     /// </summary>
-    public class TableDefinition
+    internal class TableDefinition
     {
 
         #region Fields
@@ -64,7 +64,7 @@ namespace SideXP.Database.EditorOnly
         /// <param name="hideAssetName"><inheritdoc cref="TableAttribute.HideAssetName" path="/summary"/></param>
         /// <param name="allowRenameAsset"><inheritdoc cref="_allowRenameAsset" path="/summary"/></param>
         /// <param name="columns"><inheritdoc cref="_columns" path="/summary"/></param>
-        internal TableDefinition(
+        public TableDefinition(
             string id,
             Type type,
             string name,

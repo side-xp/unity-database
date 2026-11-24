@@ -16,8 +16,18 @@ namespace SideXP.Database.EditorOnly
     /// </summary>
     /// <remarks>
     /// The window shows either the list of the tables, or an open table. The open table, the search text of the list and the search
-    /// text of the open table are remembered across domain reloads and editor sessions.
+    /// text of the open table are remembered across domain reloads and editor sessions. Open it from
+    /// <c>Tools &gt; Sideways Experiments &gt; Database</c>, or from code.
     /// </remarks>
+    /// <example>
+    /// <code>
+    /// // Opens the window, or focuses the one already open
+    /// DatabaseWindow.Open();
+    ///
+    /// // Opens the window on the table of a type marked with [Table]
+    /// DatabaseWindow.Open(typeof(WeaponSO));
+    /// </code>
+    /// </example>
     public class DatabaseWindow : EditorWindow
     {
 

@@ -21,6 +21,21 @@ namespace SideXP.Database.EditorOnly
     /// which changes when the column is resized. The built-in handler of <see cref="RangeAttribute"/> hides its slider that way.
     /// </para>
     /// </remarks>
+    /// <example>
+    /// <code>
+    /// // Displays and converts the float fields marked with [Percent] as percentages (0.25 becomes "25 %")
+    /// [CustomCellHandler(typeof(PercentAttribute))]
+    /// public class PercentCellHandler : CellHandler
+    /// {
+    ///     public override string ToText(object value)
+    ///     {
+    ///         return value is float ratio
+    ///             ? $"{(ratio * 100).ToString("0.#", CultureInfo.InvariantCulture)} %"
+    ///             : base.ToText(value);
+    ///     }
+    /// }
+    /// </code>
+    /// </example>
     public abstract class CellHandler
     {
 
@@ -60,7 +75,7 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         /// <param name="element">The element created by <see cref="CreateDisplay"/>.</param>
         /// <param name="value">The value of the cell, read from the value cache.</param>
-        /// <param name="context">Informations about the cell.</param>
+        /// <param name="context">Information about the cell.</param>
         public virtual void BindDisplay(VisualElement element, object value, CellContext context)
         {
             if (element is Label label)
@@ -93,6 +108,10 @@ namespace SideXP.Database.EditorOnly
         /// Writes a value chosen with a live control to the asset of its cell, as a single Undo step. If the value can't be written, the
         /// cell shows its previous value again.
         /// </summary>
+        /// <remarks>
+        /// Call it from the value change callback of the control (made a live control with <see cref="SetLiveControl(VisualElement)"/>).
+        /// Does nothing if the control is not in a cell of the Database window.
+        /// </remarks>
         /// <param name="control">The live control, in the display of the cell.</param>
         /// <param name="value">The chosen value, of the type of the column.</param>
         protected static void SubmitValue(VisualElement control, object value)
@@ -134,7 +153,7 @@ namespace SideXP.Database.EditorOnly
         /// </remarks>
         /// <param name="property">The serialized property of the cell, valid until the edit ends.</param>
         /// <param name="value">The current value of the cell, read from the value cache.</param>
-        /// <param name="context">Informations about the cell.</param>
+        /// <param name="context">Information about the cell.</param>
         /// <returns>Returns the created field, or null if the cell can't be edited. By default, the UI Toolkit field that matches the type
         /// of the value (text, number, toggle, enum, object, color, vector, curve, ...). For the other types, a text field that goes
         /// through <see cref="ToText"/> and <see cref="TryParse(string, CellContext, out object)"/>, if the text of the current value
@@ -157,7 +176,7 @@ namespace SideXP.Database.EditorOnly
         /// Gets the value to write when the edit of a cell is confirmed.
         /// </summary>
         /// <param name="field">The field created by <see cref="CreateEditField"/>.</param>
-        /// <param name="context">Informations about the cell.</param>
+        /// <param name="context">Information about the cell.</param>
         /// <param name="value">Outputs the value to write, of the type of the property.</param>
         /// <returns>Returns true if there is a value to write. Returns false if the field writes the property itself (bound field), or if
         /// the value is rejected: nothing is then written. By default, reads the default fields, and rejects the values that don't fit
@@ -250,7 +269,7 @@ namespace SideXP.Database.EditorOnly
         /// limits of its attributes.
         /// </summary>
         /// <param name="text">The text to convert.</param>
-        /// <param name="context">Informations about the cell.</param>
+        /// <param name="context">Information about the cell.</param>
         /// <param name="value">Outputs the converted value.</param>
         /// <returns>Returns true if the text has been converted. By default, calls <see cref="TryParse(string, Type, out object)"/>
         /// with the type of the column.</returns>
@@ -273,7 +292,7 @@ namespace SideXP.Database.EditorOnly
         /// handler, the one of the first attribute of its field that has one.
         /// </remarks>
         /// <param name="value">The value to clamp, of the type of the column.</param>
-        /// <param name="context">Informations about the cell.</param>
+        /// <param name="context">Information about the cell.</param>
         /// <returns>Returns the clamped value, or the value itself if it's not a number or if the field declares no limit.</returns>
         protected static object ClampToFieldLimits(object value, CellContext context)
         {

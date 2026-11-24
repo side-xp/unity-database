@@ -12,7 +12,11 @@ namespace SideXP.Database
     /// the table type or any of its base types. Columns are ordered from the root base type down to the table type, then in declaration
     /// order within each type. If the field has a <see cref="UnityEngine.TooltipAttribute"/>, its text is shown when hovering the column
     /// header. A field displays a single column for now: extra <see cref="ColumnAttribute"/> on the same field are ignored, with a
-    /// warning. This attribute is stripped from player builds.
+    /// warning. The fields that Unity can't serialize are skipped when the table opens, with a warning.
+    /// <para>
+    /// The backing field of an auto-property can be a column too (<c>[field: SerializeField, Column]</c>): the column is named after
+    /// the property. This attribute is stripped from player builds.
+    /// </para>
     /// </remarks>
     /// <example>
     /// <code>

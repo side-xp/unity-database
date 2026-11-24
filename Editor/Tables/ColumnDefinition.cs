@@ -7,7 +7,7 @@ namespace SideXP.Database.EditorOnly
     /// <summary>
     /// Describes a column of a table: the source of its values, its header and its width.
     /// </summary>
-    public class ColumnDefinition
+    internal class ColumnDefinition
     {
 
         #region Fields
@@ -56,7 +56,7 @@ namespace SideXP.Database.EditorOnly
         /// <param name="name"><inheritdoc cref="_name" path="/summary"/></param>
         /// <param name="tooltip"><inheritdoc cref="_tooltip" path="/summary"/></param>
         /// <param name="width"><inheritdoc cref="_width" path="/summary"/></param>
-        internal ColumnDefinition(string id, string propertyPath, IReadOnlyList<FieldInfo> fields, string name, string tooltip, float width)
+        public ColumnDefinition(string id, string propertyPath, IReadOnlyList<FieldInfo> fields, string name, string tooltip, float width)
         {
             _id = id;
             _propertyPath = propertyPath;

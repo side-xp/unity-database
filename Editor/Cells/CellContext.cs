@@ -7,7 +7,7 @@ namespace SideXP.Database.EditorOnly
 {
 
     /// <summary>
-    /// Informations about the cell displayed by a <see cref="CellHandler"/>.
+    /// Information about the cell displayed by a <see cref="CellHandler"/>.
     /// </summary>
     public readonly struct CellContext
     {
@@ -39,7 +39,7 @@ namespace SideXP.Database.EditorOnly
         /// <param name="asset"><inheritdoc cref="Asset" path="/summary"/></param>
         /// <param name="field"><inheritdoc cref="Field" path="/summary"/></param>
         /// <param name="valueType"><inheritdoc cref="ValueType" path="/summary"/></param>
-        public CellContext(Object asset, FieldInfo field, Type valueType)
+        internal CellContext(Object asset, FieldInfo field, Type valueType)
         {
             Asset = asset;
             Field = field;
