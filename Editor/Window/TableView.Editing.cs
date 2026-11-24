@@ -359,7 +359,12 @@ namespace SideXP.Database.EditorOnly
 
             // The text element processes the character like a key typed by the user, so it replaces the selected text
             using (KeyDownEvent keyEvent = KeyDownEvent.GetPooled(typedCharacter, KeyCode.None, EventModifiers.None))
+            {
+                // SendEvent() doesn't set the target. A key event without one goes to the focused element, which is the text element
+                // here, but the target is set anyway so it doesn't depend on the focus
+                keyEvent.target = textElement;
                 textElement.SendEvent(keyEvent);
+            }
         }
 
         #endregion

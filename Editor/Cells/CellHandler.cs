@@ -98,7 +98,11 @@ namespace SideXP.Database.EditorOnly
         protected static void SubmitValue(VisualElement control, object value)
         {
             using (CellValueSubmitEvent evt = CellValueSubmitEvent.GetPooled(value))
+            {
+                // SendEvent() doesn't set the target: without one, the event has no propagation path and never reaches the cell
+                evt.target = control;
                 control.SendEvent(evt);
+            }
         }
 
         /// <summary>
