@@ -18,7 +18,7 @@ namespace SideXP.Database.EditorOnly
     /// <remarks>
     /// When the table has several types that can be created (an abstract table type with several concrete types, or a table type
     /// with derived types), a menu lists them, the table type first. Then a save dialog asks where to create the asset. The new asset
-    /// becomes the active cell (see <see cref="ShowNewAsset(Object)"/>).
+    /// becomes the active cell (see <see cref="ShowAsset(Object)"/>).
     /// </remarks>
     internal partial class TableView
     {

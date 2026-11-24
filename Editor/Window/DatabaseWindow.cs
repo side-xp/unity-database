@@ -6,6 +6,8 @@ using UnityEditor;
 
 using SideXP.Core.EditorOnly;
 
+using Object = UnityEngine.Object;
+
 namespace SideXP.Database.EditorOnly
 {
 
@@ -42,6 +44,12 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         [SerializeField]
         private string _rowSearch = string.Empty;
+
+        /// <summary>
+        /// The asset whose row must be shown once the open table is displayed, or null if there is none. Kept until the UI is built,
+        /// for a window that has just been created.
+        /// </summary>
+        private Object _assetToShow = null;
 
         /// <summary>
         /// The page that lists the tables. Null until the UI is built.
@@ -125,6 +133,29 @@ namespace SideXP.Database.EditorOnly
             return window;
         }
 
+        /// <summary>
+        /// Opens a Database window on a table, or focuses the one already open and opens the table in it, then shows the row of an
+        /// asset of the table: it becomes the active cell, and the table scrolls to it.
+        /// </summary>
+        /// <remarks>
+        /// Used by the <i>Open In Database</i> menu of the Project window (see <see cref="OpenInDatabaseMenu"/>). A warning is logged if
+        /// the asset has no row in the table.
+        /// </remarks>
+        /// <param name="table">The table to open.</param>
+        /// <param name="asset">The asset of which to show the row.</param>
+        /// <returns>Returns the opened window.</returns>
+        /// <exception cref="ArgumentNullException">Thrown if the table is null.</exception>
+        internal static DatabaseWindow Open(TableDefinition table, Object asset)
+        {
+            if (table == null)
+                throw new ArgumentNullException(nameof(table));
+
+            DatabaseWindow window = Open();
+            window._assetToShow = asset;
+            window.OpenTable(table);
+            return window;
+        }
+
         #endregion
 
 
@@ -179,6 +210,14 @@ namespace SideXP.Database.EditorOnly
 
             _tablePage.SetDisplayed(isTableOpen);
             _tableListPage.SetDisplayed(!isTableOpen);
+
+            Object assetToShow = _assetToShow;
+            _assetToShow = null;
+            if (isTableOpen && assetToShow != null && !_tablePage.ShowAsset(assetToShow))
+            {
+                Debug.LogWarning($"{DatabaseConstants.LogPrefix}The asset \"{assetToShow.name}\" has no row in the table " +
+                    $"\"{table.Name}\".", assetToShow);
+            }
         }
 
         #endregion

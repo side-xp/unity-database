@@ -3,6 +3,8 @@ using System;
 using UnityEngine.UIElements;
 using UnityEditor.UIElements;
 
+using Object = UnityEngine.Object;
+
 namespace SideXP.Database.EditorOnly
 {
 
@@ -138,6 +140,12 @@ namespace SideXP.Database.EditorOnly
             _searchField.SetValueWithoutNotify(search ?? string.Empty);
             _tableView.SetTable(table, search);
             _tableView.UpdateCreateButton(_createButton, CreateText);
+        }
+
+        /// <inheritdoc cref="TableView.ShowAsset(Object)"/>
+        public bool ShowAsset(Object asset)
+        {
+            return _tableView.ShowAsset(asset);
         }
 
         /// <summary>

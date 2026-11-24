@@ -82,6 +82,29 @@ namespace SideXP.Database.EditorOnly
             return false;
         }
 
+        /// <summary>
+        /// Gets the tables that list the assets of a given type: the table of the type itself, and the tables of its base types.
+        /// </summary>
+        /// <remarks>
+        /// A table lists the assets of its type and of all its derived types, so an asset may be a row of several tables. For example,
+        /// a weapon is listed by the tables of the weapons, of the equipment and of all the items.
+        /// </remarks>
+        /// <param name="assetType">The type of the asset.</param>
+        /// <returns>Returns the found tables, the nearest first (the table of the type itself, then the table of its base type, and so
+        /// on). Empty if no table lists the assets of the type, or if the type is null.</returns>
+        public static List<TableDefinition> GetTablesListing(Type assetType)
+        {
+            EnsureLoaded();
+            List<TableDefinition> tables = new List<TableDefinition>();
+            for (Type type = assetType; type != null; type = type.BaseType)
+            {
+                if (s_tablesByType.TryGetValue(type, out TableDefinition table))
+                    tables.Add(table);
+            }
+
+            return tables;
+        }
+
         #endregion
 
 

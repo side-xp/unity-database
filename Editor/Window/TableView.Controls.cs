@@ -108,7 +108,7 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Duplicates the asset of a row. The copy becomes the active cell (see <see cref="ShowNewAsset(Object)"/>).
+        /// Duplicates the asset of a row. The copy becomes the active cell (see <see cref="ShowAsset(Object)"/>).
         /// </summary>
         /// <param name="row">The row of the asset.</param>
         private void DuplicateAsset(TableRow row)
@@ -123,37 +123,15 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Shows an asset just added to the table (duplicated or created): clears the search if it hides the asset, makes it the active
-        /// cell (see <see cref="GetNewAssetColumnId"/>), scrolls to it, and focuses the view, so it can be renamed right away with F2
-        /// or by typing.
+        /// Shows an asset just added to the table (duplicated or created), so it can be renamed right away with F2 or by typing (see
+        /// <see cref="ShowAsset(Object)"/>).
         /// </summary>
         /// <param name="asset">The new asset.</param>
         private void ShowNewAsset(Object asset)
         {
             // The change tracker also reports the new asset, but it must be in the table to become the active cell
             Reload();
-            // A new asset whose name doesn't match the search would be hidden right away
-            ResetSearchIfHidden(asset);
-
-            SetActiveCell(new CellId(asset, GetNewAssetColumnId()));
-            ScrollToAsset(asset);
-            Focus();
-        }
-
-        /// <summary>
-        /// Gets the column of the active cell of a new asset: the <i>Asset Name</i> column if it's displayed, so the asset can be
-        /// renamed right away, then the <i>Controls</i> column, then the first displayed column.
-        /// </summary>
-        /// <returns>Returns the identifier of the column.</returns>
-        private string GetNewAssetColumnId()
-        {
-            if (IsColumnDisplayed(TableViewColumn.AssetNameId))
-                return TableViewColumn.AssetNameId;
-
-            if (IsColumnDisplayed(TableViewColumn.ControlsId))
-                return TableViewColumn.ControlsId;
-
-            return _displayedColumns.Count > 0 ? _columns[_displayedColumns[0]].Id : TableViewColumn.AssetNameId;
+            ShowAsset(asset);
         }
 
         /// <summary>
@@ -197,30 +175,6 @@ namespace SideXP.Database.EditorOnly
             };
 
             return $"Delete \"{asset.name}\"?\n\nThe file {path} is moved to the trash.{subAssetsText}";
-        }
-
-        /// <summary>
-        /// Scrolls the table so the row of an asset is visible. Does nothing if the asset has no visible row.
-        /// </summary>
-        /// <remarks>
-        /// Only the main list is scrolled: the frozen list follows it (see <see cref="FrozenColumnLink"/>).
-        /// </remarks>
-        /// <param name="asset">The asset of the row to show.</param>
-        private void ScrollToAsset(Object asset)
-        {
-            if (_pipeline == null || !_pipeline.TryGetRow(asset, out TableRow row))
-                return;
-
-            int index = _rows.IndexOf(row);
-            if (index < 0)
-                return;
-
-            // Deferred, since the list view hasn't laid out its refreshed rows yet
-            schedule.Execute(() =>
-            {
-                if (_listView != null && index < _rows.Count && _rows[index] == row)
-                    _listView.ScrollToItem(index);
-            });
         }
 
         #endregion

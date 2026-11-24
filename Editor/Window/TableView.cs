@@ -359,6 +359,30 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
+        /// Shows the row of an asset: clears the search if it hides the row, makes the asset the active cell (see
+        /// <see cref="GetShownAssetColumnId"/>), scrolls to its row, and focuses the view.
+        /// </summary>
+        /// <remarks>
+        /// The asset must already be in the table: call <see cref="Reload"/> first if it has just been created. Works on a table that
+        /// has just been set, whose list views are not laid out yet.
+        /// </remarks>
+        /// <param name="asset">The asset to show.</param>
+        /// <returns>Returns true if the asset has a row in the table, false if it doesn't (or if no table is displayed).</returns>
+        public bool ShowAsset(Object asset)
+        {
+            if (asset == null || _pipeline == null || !_pipeline.TryGetRow(asset, out _))
+                return false;
+
+            // The user just asked for that asset: it must not stay hidden by the search
+            ResetSearchIfHidden(asset);
+
+            SetActiveCell(new CellId(asset, GetShownAssetColumnId()));
+            ScrollToAsset(asset);
+            Focus();
+            return true;
+        }
+
+        /// <summary>
         /// Loads the assets of the table again, and reads all their values. Keeps the sort, the filter and the scroll position.
         /// </summary>
         /// <remarks>
@@ -775,6 +799,67 @@ namespace SideXP.Database.EditorOnly
                 _activeCellElement = cell;
             else if (_activeCellElement == cell)
                 _activeCellElement = null;
+        }
+
+        /// <summary>
+        /// Gets the column of the active cell of an asset shown with <see cref="ShowAsset(Object)"/>: the <i>Asset Name</i> column if
+        /// it's displayed, so the asset can be renamed right away, then the <i>Controls</i> column, then the first displayed column.
+        /// </summary>
+        /// <returns>Returns the identifier of the column.</returns>
+        private string GetShownAssetColumnId()
+        {
+            if (IsColumnDisplayed(TableViewColumn.AssetNameId))
+                return TableViewColumn.AssetNameId;
+
+            if (IsColumnDisplayed(TableViewColumn.ControlsId))
+                return TableViewColumn.ControlsId;
+
+            return _displayedColumns.Count > 0 ? _columns[_displayedColumns[0]].Id : TableViewColumn.AssetNameId;
+        }
+
+        /// <summary>
+        /// Scrolls the table so the row of an asset is visible. Does nothing if the asset has no visible row.
+        /// </summary>
+        /// <remarks>
+        /// Only the main list is scrolled: the frozen list follows it (see <see cref="FrozenColumnLink"/>).
+        /// </remarks>
+        /// <param name="asset">The asset of the row to show.</param>
+        private void ScrollToAsset(Object asset)
+        {
+            if (_pipeline == null || _listView == null || !_pipeline.TryGetRow(asset, out TableRow row))
+                return;
+
+            int index = _rows.IndexOf(row);
+            if (index < 0)
+                return;
+
+            MultiColumnListView listView = _listView;
+            Action scrollToRow = () =>
+            {
+                // The list may have been rebuilt, or the rows may have changed in the meantime
+                if (_listView == listView && index < _rows.Count && _rows[index] == row)
+                    _listView.ScrollToItem(index);
+            };
+
+            // A list view that has just been built has no size before its first layout, so it can't find the offset of the row: wait
+            // for its layout, like when its scroll position is restored
+            VisualElement content = listView.Q<ScrollView>().contentContainer;
+            float contentHeight = content.layout.height;
+            if (float.IsNaN(contentHeight) || contentHeight <= 0)
+            {
+                EventCallback<GeometryChangedEvent> callback = null;
+                callback = evt =>
+                {
+                    content.UnregisterCallback(callback);
+                    scrollToRow();
+                };
+                content.RegisterCallback(callback);
+            }
+            else
+            {
+                // Deferred, since the list view hasn't laid out its refreshed rows yet
+                schedule.Execute(scrollToRow);
+            }
         }
 
         #endregion
