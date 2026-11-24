@@ -15,6 +15,11 @@ namespace SideXP.Database.EditorOnly
     /// <remarks>
     /// Assets are ordered by path. Sub-assets come after their main asset, ordered by name, like in the Project window. Sub-assets
     /// hidden from the Project window (<see cref="HideFlags.HideInHierarchy"/>) are skipped.
+    /// <para>
+    /// The tables only use <see cref="ScriptableObject"/> types, but the source works with any type of asset (used by
+    /// <see cref="AssetDropdownAttribute"/>). For <see cref="GameObject"/>, only the main assets are provided (prefabs and models):
+    /// the other game objects of their files are the children of their hierarchy.
+    /// </para>
     /// </remarks>
     internal class ProjectAssetSource : IAssetSource
     {
@@ -38,11 +43,11 @@ namespace SideXP.Database.EditorOnly
 
         /// <inheritdoc cref="ProjectAssetSource"/>
         /// <param name="assetType"><inheritdoc cref="_assetType" path="/summary"/></param>
-        /// <exception cref="ArgumentException">Thrown if the type doesn't derive from <see cref="ScriptableObject"/>.</exception>
+        /// <exception cref="ArgumentException">Thrown if the type doesn't derive from <see cref="Object"/>.</exception>
         public ProjectAssetSource(Type assetType)
         {
-            if (assetType == null || !typeof(ScriptableObject).IsAssignableFrom(assetType))
-                throw new ArgumentException($"The type of a table must derive from {nameof(ScriptableObject)}.", nameof(assetType));
+            if (assetType == null || !typeof(Object).IsAssignableFrom(assetType))
+                throw new ArgumentException($"The type of the assets must derive from {typeof(Object).FullName}.", nameof(assetType));
 
             _assetType = assetType;
         }
@@ -68,6 +73,8 @@ namespace SideXP.Database.EditorOnly
             List<string> sortedPaths = new List<string>(paths);
             sortedPaths.Sort(StringComparer.OrdinalIgnoreCase);
 
+            // The other game objects of a prefab or a model are the children of its hierarchy, not assets of their own
+            bool hasSubAssets = _assetType != typeof(GameObject);
             List<Object> assets = new List<Object>();
             List<Object> subAssets = new List<Object>();
             foreach (string path in sortedPaths)
@@ -75,6 +82,9 @@ namespace SideXP.Database.EditorOnly
                 Object mainAsset = AssetDatabase.LoadMainAssetAtPath(path);
                 if (_assetType.IsInstanceOfType(mainAsset))
                     assets.Add(mainAsset);
+
+                if (!hasSubAssets)
+                    continue;
 
                 subAssets.Clear();
                 foreach (Object asset in AssetDatabase.LoadAllAssetsAtPath(path))
