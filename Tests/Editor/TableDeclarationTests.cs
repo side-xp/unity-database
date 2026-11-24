@@ -52,7 +52,7 @@ namespace SideXP.Database.Tests
             Assert.IsNotNull(table);
             Assert.AreEqual(typeof(ItemSO), table.Type);
             Assert.AreEqual("Tests/Items/All", table.Name);
-            Assert.IsTrue(table.AllowRenameAsset);
+            Assert.IsFalse(table.AllowRenameAsset);
             Assert.IsFalse(table.HideAssetName);
             Assert.IsEmpty(_warnings);
         }
@@ -77,7 +77,7 @@ namespace SideXP.Database.Tests
         {
             TableDefinition table = CodeTables.Build(typeof(ConsumableSO), _warnings);
 
-            Assert.IsTrue(table.AllowRenameAsset);
+            Assert.IsFalse(table.AllowRenameAsset);
             Assert.IsFalse(table.HideAssetName);
         }
 
@@ -91,7 +91,7 @@ namespace SideXP.Database.Tests
 
             Assert.IsNotNull(table);
             Assert.AreEqual("Tests/Items/Equipment", table.Name);
-            Assert.IsFalse(table.AllowRenameAsset);
+            Assert.IsTrue(table.AllowRenameAsset);
         }
 
         /// <summary>
@@ -121,6 +121,44 @@ namespace SideXP.Database.Tests
             Assert.IsTrue(candidates.Contains(typeof(ConsumableSO)));
             Assert.IsTrue(candidates.Contains(typeof(EquipmentSO)));
             Assert.IsTrue(candidates.Contains(typeof(ColumnsSO)));
+        }
+
+        #endregion
+
+
+        #region Rename permission
+
+        /// <summary>
+        /// The nearest declaration of an asset's type decides if it can be renamed: its own, an inherited one, or the declaration of a
+        /// table that is not inherited but lists the type.
+        /// </summary>
+        /// <param name="type">The type of the asset.</param>
+        /// <param name="isAllowed">The expected result.</param>
+        [TestCase(typeof(ItemSO), false)]
+        [TestCase(typeof(ConsumableSO), false)]
+        [TestCase(typeof(EquipmentSO), true)]
+        [TestCase(typeof(HelmetSO), true)]
+        public void IsRenameAllowed_NearestDeclarationDecides(Type type, bool isAllowed)
+        {
+            Assert.AreEqual(isAllowed, CodeTables.IsRenameAllowed(type));
+        }
+
+        /// <summary>
+        /// A type without declaration in its hierarchy uses the default of the option.
+        /// </summary>
+        [Test]
+        public void IsRenameAllowed_NoDeclaration_UsesDefault()
+        {
+            Assert.AreEqual(new TableAttribute().AllowRenameAsset, CodeTables.IsRenameAllowed(typeof(UnityEngine.ScriptableObject)));
+        }
+
+        /// <summary>
+        /// A null type is a programming error.
+        /// </summary>
+        [Test]
+        public void IsRenameAllowed_NullType_Throws()
+        {
+            Assert.Throws<ArgumentNullException>(() => CodeTables.IsRenameAllowed(null));
         }
 
         #endregion

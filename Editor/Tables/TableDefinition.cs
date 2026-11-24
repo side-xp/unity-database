@@ -40,7 +40,10 @@ namespace SideXP.Database.EditorOnly
         /// <inheritdoc cref="TableAttribute.HideAssetName"/>
         private bool _hideAssetName = false;
 
-        /// <inheritdoc cref="TableAttribute.AllowRenameAsset"/>
+        /// <summary>
+        /// Checks if the assets of the table type itself can be renamed (see <see cref="TableAttribute.AllowRenameAsset"/>). The assets
+        /// of its derived types may follow their own declaration.
+        /// </summary>
         private bool _allowRenameAsset = false;
 
         /// <summary>
@@ -59,7 +62,7 @@ namespace SideXP.Database.EditorOnly
         /// <param name="name"><inheritdoc cref="_name" path="/summary"/></param>
         /// <param name="isObsolete"><inheritdoc cref="_isObsolete" path="/summary"/></param>
         /// <param name="hideAssetName"><inheritdoc cref="TableAttribute.HideAssetName" path="/summary"/></param>
-        /// <param name="allowRenameAsset"><inheritdoc cref="TableAttribute.AllowRenameAsset" path="/summary"/></param>
+        /// <param name="allowRenameAsset"><inheritdoc cref="_allowRenameAsset" path="/summary"/></param>
         /// <param name="columns"><inheritdoc cref="_columns" path="/summary"/></param>
         internal TableDefinition(
             string id,
@@ -99,7 +102,7 @@ namespace SideXP.Database.EditorOnly
         /// <inheritdoc cref="TableAttribute.HideAssetName"/>
         public bool HideAssetName => _hideAssetName;
 
-        /// <inheritdoc cref="TableAttribute.AllowRenameAsset"/>
+        /// <inheritdoc cref="_allowRenameAsset"/>
         public bool AllowRenameAsset => _allowRenameAsset;
 
         /// <inheritdoc cref="_columns"/>

@@ -17,6 +17,9 @@ namespace SideXP.Database.EditorOnly
     /// in a toggle or an enum field.</item>
     /// <item>Escape cancels the edit, and reverts its writes.</item>
     /// </list>
+    /// Most edits write the serialized property of their column (see <see cref="CellEditSession"/>). The <i>Asset Name</i> column has
+    /// no property: when the type of the asset allows renaming (see <see cref="CodeTables.IsRenameAllowed(Type)"/>), its edit renames
+    /// the asset when it's confirmed (see <see cref="AssetOperations.TryRename(UnityEngine.Object, string, out string)"/>).
     /// </remarks>
     internal partial class TableView
     {
@@ -55,7 +58,7 @@ namespace SideXP.Database.EditorOnly
             public readonly CellContext Context;
 
             /// <summary>
-            /// The write path of the edit.
+            /// The write path of the edit, or null if the edit renames the asset instead of writing a property.
             /// </summary>
             public readonly CellEditSession Session;
 
@@ -105,11 +108,12 @@ namespace SideXP.Database.EditorOnly
         #region Edit mode
 
         /// <summary>
-        /// Edits a cell: replaces its display with the edit field of its handler, and focuses the field.
+        /// Edits a cell: replaces its display with its edit field, and focuses the field.
         /// </summary>
         /// <remarks>
         /// An edit already in progress is confirmed first. Nothing happens if the column doesn't store its values in a serialized
-        /// property (built-in columns), or if its handler has no edit field for the cell.
+        /// property (built-in columns), except the <i>Asset Name</i> of an asset whose type allows renaming, or if the handler of the
+        /// column has no edit field for the cell.
         /// </remarks>
         /// <param name="cell">The element created by <see cref="MakeCell(TableViewColumn, bool)"/>.</param>
         /// <param name="typedCharacter">The character typed to start the edit, which replaces the text of the field, or <c>'\0'</c> to
@@ -119,15 +123,54 @@ namespace SideXP.Database.EditorOnly
         {
             EndEdit(true, false);
 
-            if (cell?.userData is not CellBinding binding || binding.Row == null || !binding.Column.HasProperty)
+            if (cell?.userData is not CellBinding binding || binding.Row == null || binding.Row.Asset == null)
                 return false;
 
             TableRow row = binding.Row;
             TableViewColumn column = binding.Column;
-            if (row.Asset == null)
+            CellContext context = new CellContext(row.Asset, column.Field, column.Accessor.ValueType);
+            VisualElement field;
+            CellEditSession session = null;
+            if (column.HasProperty)
+            {
+                if (!TryCreatePropertyEdit(row, column, context, out field, out session))
+                    return false;
+            }
+            else if (column.IsAssetName && CodeTables.IsRenameAllowed(row.Asset.GetType()))
+            {
+                // The type of the asset decides, not the table, so an asset can be renamed in all the tables that list it, or in none.
+                // Edited without handler: the name of a main asset is the name of its file, which has its own rules
+                field = EditFields.Create(typeof(string), row.Asset.name);
+            }
+            else
+            {
                 return false;
+            }
 
-            CellEditSession session;
+            _edit = new EditState(cell, field, row, column, context, session);
+            cell[0].SetDisplayed(false);
+            cell.Add(field);
+            field.RegisterCallback<FocusOutEvent>(OnEditFieldFocusOut);
+            field.RegisterCallback<PointerDownEvent>(OnEditFieldPointerDown, TrickleDown.TrickleDown);
+            field.RegisterCallback<ChangeEvent<bool>>(OnEditFieldChoiceMade);
+            field.RegisterCallback<ChangeEvent<Enum>>(OnEditFieldChoiceMade);
+            FocusEditField(field, typedCharacter);
+            return true;
+        }
+
+        /// <summary>
+        /// Creates the write path and the edit field of a cell whose column stores its values in a serialized property.
+        /// </summary>
+        /// <param name="row">The row of the cell.</param>
+        /// <param name="column">The column of the cell.</param>
+        /// <param name="context">Informations about the cell.</param>
+        /// <param name="field">Outputs the field created by the handler of the column, or null if the cell can't be edited.</param>
+        /// <param name="session">Outputs the write path of the edit, or null if the cell can't be edited.</param>
+        /// <returns>Returns true if the cell can be edited.</returns>
+        private bool TryCreatePropertyEdit(TableRow row, TableViewColumn column, CellContext context, out VisualElement field,
+            out CellEditSession session)
+        {
+            field = null;
             try
             {
                 session = new CellEditSession(row.Asset, column.PropertyPath, $"Edit {column.Name}");
@@ -135,11 +178,10 @@ namespace SideXP.Database.EditorOnly
             catch (ArgumentException exception)
             {
                 Debug.LogWarning($"{DatabaseConstants.LogPrefix}The cell can't be edited: {exception.Message}");
+                session = null;
                 return false;
             }
 
-            CellContext context = new CellContext(row.Asset, column.Field, column.Accessor.ValueType);
-            VisualElement field = null;
             try
             {
                 field = column.Handler.CreateEditField(session.Property, row.GetValue(_columns.IndexOf(column)), context);
@@ -154,17 +196,10 @@ namespace SideXP.Database.EditorOnly
             if (field == null)
             {
                 session.Dispose();
+                session = null;
                 return false;
             }
 
-            _edit = new EditState(cell, field, row, column, context, session);
-            cell[0].SetDisplayed(false);
-            cell.Add(field);
-            field.RegisterCallback<FocusOutEvent>(OnEditFieldFocusOut);
-            field.RegisterCallback<PointerDownEvent>(OnEditFieldPointerDown, TrickleDown.TrickleDown);
-            field.RegisterCallback<ChangeEvent<bool>>(OnEditFieldChoiceMade);
-            field.RegisterCallback<ChangeEvent<Enum>>(OnEditFieldChoiceMade);
-            FocusEditField(field, typedCharacter);
             return true;
         }
 
@@ -187,7 +222,12 @@ namespace SideXP.Database.EditorOnly
             // The asset may have been deleted during the edit: there is nothing to write then
             bool isWritten = isConfirmed && edit.Row.Asset != null;
             if (isWritten)
-                WriteEditedValue(edit);
+            {
+                if (edit.Session != null)
+                    WriteEditedValue(edit);
+                else
+                    RenameEditedAsset(edit);
+            }
 
             if (shouldFocusView)
                 Focus();
@@ -197,12 +237,16 @@ namespace SideXP.Database.EditorOnly
             edit.Field.RemoveFromHierarchy();
             edit.CellElement[0].SetDisplayed(true);
 
-            if (isWritten)
-                edit.Session.Confirm();
-            else
-                edit.Session.Cancel();
+            // A rename has nothing to confirm or revert: it's applied only when the edit is confirmed
+            if (edit.Session != null)
+            {
+                if (isWritten)
+                    edit.Session.Confirm();
+                else
+                    edit.Session.Cancel();
 
-            edit.Session.Dispose();
+                edit.Session.Dispose();
+            }
 
             // The change is also reported by ObjectChangeEvents, but the cell must not show the previous value until then
             _pipeline?.InvalidateRow(edit.Row.Asset);
@@ -240,6 +284,27 @@ namespace SideXP.Database.EditorOnly
             {
                 Debug.LogWarning($"{DatabaseConstants.LogPrefix}The value {TextConversion.ToText(value)} can't be written to the " +
                     $"column \"{edit.Column.Name}\": {exception.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Renames the asset of the edited cell with the text of the edit field. Logs a warning if the name is refused.
+        /// </summary>
+        /// <remarks>
+        /// Renaming a main asset moves its file, which reloads the source of the table (see <see cref="TableChangeTracker"/>). The row
+        /// keeps its asset, so the active cell stays on it, even if the sort moves the row.
+        /// </remarks>
+        /// <param name="edit">The edit being confirmed.</param>
+        private static void RenameEditedAsset(EditState edit)
+        {
+            if (!EditFields.TryGetValue(edit.Field, typeof(string), out object value))
+                return;
+
+            string previousName = edit.Row.Asset.name;
+            if (!AssetOperations.TryRename(edit.Row.Asset, value as string, out string error) && error != null)
+            {
+                Debug.LogWarning($"{DatabaseConstants.LogPrefix}The asset \"{previousName}\" can't be renamed to \"{value}\": " +
+                    $"{error}");
             }
         }
 

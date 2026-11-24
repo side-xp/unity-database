@@ -66,9 +66,16 @@ namespace SideXP.Database
         public bool HideAssetName { get; set; } = false;
 
         /// <summary>
-        /// Makes the <i>Asset Name</i> built-in column editable, so assets can be renamed from the table.
+        /// Allows the assets of this type to be renamed from the <i>Asset Name</i> built-in column, in every table that lists them.
+        /// Enabled by default.
         /// </summary>
-        public bool AllowRenameAsset { get; set; } = false;
+        /// <remarks>
+        /// The option belongs to the type, not to the table: the nearest declaration of an asset's type or its base types decides, even
+        /// if it's not <see cref="Inherited"/>. For example, disabling it on the declaration of a <c>ShieldSO</c> type prevents renaming
+        /// the shields in its own table, and also in the table of its base type <c>EquipmentSO</c>, where the other equipment can still
+        /// be renamed.
+        /// </remarks>
+        public bool AllowRenameAsset { get; set; } = true;
 
         #endregion
 

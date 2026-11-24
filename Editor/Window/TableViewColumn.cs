@@ -162,6 +162,12 @@ namespace SideXP.Database.EditorOnly
         /// <inheritdoc cref="_isSortable"/>
         public bool IsSortable => _isSortable;
 
+        /// <summary>
+        /// Checks if the column is the <i>Asset Name</i> built-in column, whose edit renames the asset of the cell if its type allows
+        /// it (see <see cref="CodeTables.IsRenameAllowed(Type)"/>).
+        /// </summary>
+        public bool IsAssetName => _id == AssetNameId;
+
         /// <inheritdoc cref="_hasLoggedError"/>
         public bool HasLoggedError
         {
@@ -191,7 +197,7 @@ namespace SideXP.Database.EditorOnly
         /// <returns>Returns the created column.</returns>
         public static TableViewColumn CreateAssetNameColumn()
         {
-            // Not a serialized property: renaming assets comes with the asset operations
+            // Not a serialized property: the name of a main asset is the name of its file, so it's edited by renaming the asset
             return new TableViewColumn(AssetNameId, AssetNameTitle, AssetNameTooltip, AssetNameWidth, AssetNameAccessor.Instance, null,
                 null);
         }

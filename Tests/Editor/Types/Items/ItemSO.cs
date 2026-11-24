@@ -7,9 +7,10 @@ namespace SideXP.Database.Tests
 {
 
     /// <summary>
-    /// Root of the item hierarchy of the tests: a table passed on to its derived types.
+    /// Root of the item hierarchy of the tests: a table passed on to its derived types. Its options are not the defaults, so the tests
+    /// can tell if a derived type copies them or replaces them.
     /// </summary>
-    [Table("Tests/Items/All", Inherited = true, AllowRenameAsset = true)]
+    [Table("Tests/Items/All", Inherited = true, AllowRenameAsset = false)]
     public class ItemSO : ScriptableObject
     {
 

@@ -42,6 +42,11 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         private const string BackingFieldSuffix = ">k__BackingField";
 
+        /// <summary>
+        /// A declaration with the default options, used for the types that have no declaration.
+        /// </summary>
+        private static readonly TableAttribute DefaultDeclaration = new TableAttribute();
+
         #endregion
 
 
@@ -147,6 +152,33 @@ namespace SideXP.Database.EditorOnly
             declaringType = null;
             declaration = null;
             return false;
+        }
+
+        /// <summary>
+        /// Checks if the assets of a type can be renamed from the Database window, whatever the table that displays them.
+        /// </summary>
+        /// <remarks>
+        /// The nearest <see cref="TableAttribute"/> of the type or its base types decides, even if it's not
+        /// <see cref="TableAttribute.Inherited"/>: a type that is not a table itself, but is listed by the table of a base type, follows
+        /// the declaration of that table.
+        /// </remarks>
+        /// <param name="assetType">The concrete type of the asset.</param>
+        /// <returns>Returns the <see cref="TableAttribute.AllowRenameAsset"/> option of the nearest declaration, or the default of the
+        /// option if no type of the hierarchy declares a table.</returns>
+        /// <exception cref="ArgumentNullException">Thrown if the type is null.</exception>
+        public static bool IsRenameAllowed(Type assetType)
+        {
+            if (assetType == null)
+                throw new ArgumentNullException(nameof(assetType));
+
+            for (Type current = assetType; current != null; current = current.BaseType)
+            {
+                TableAttribute attribute = current.GetCustomAttribute<TableAttribute>(false);
+                if (attribute != null)
+                    return attribute.AllowRenameAsset;
+            }
+
+            return DefaultDeclaration.AllowRenameAsset;
         }
 
         /// <summary>
