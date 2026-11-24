@@ -239,6 +239,13 @@
     width: auto;
 }
 
+/* The search of the rows shares the toolbar with the title and the buttons of the table, so it shrinks in narrow windows */
+.database-toolbar__row-search {
+    width: 240px;
+    min-width: 80px;
+    flex-shrink: 1;
+}
+
 /* Pushes the next toolbar items to the right */
 .database-toolbar__spacer {
     flex-grow: 1;

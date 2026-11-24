@@ -13,8 +13,8 @@ namespace SideXP.Database.EditorOnly
     /// Editor window that displays assets as tables, and lets you view and edit their values like in a spreadsheet.
     /// </summary>
     /// <remarks>
-    /// The window shows either the list of the tables, or an open table. The open table and the search text of the list are
-    /// remembered across domain reloads and editor sessions.
+    /// The window shows either the list of the tables, or an open table. The open table, the search text of the list and the search
+    /// text of the open table are remembered across domain reloads and editor sessions.
     /// </remarks>
     public class DatabaseWindow : EditorWindow
     {
@@ -36,6 +36,12 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         [SerializeField]
         private string _tableSearch = string.Empty;
+
+        /// <summary>
+        /// The text of the search field of the open table, cleared when another table is opened.
+        /// </summary>
+        [SerializeField]
+        private string _rowSearch = string.Empty;
 
         /// <summary>
         /// The page that lists the tables. Null until the UI is built.
@@ -70,6 +76,7 @@ namespace SideXP.Database.EditorOnly
 
             _tablePage = new TablePage();
             _tablePage.BackClicked += ShowTableList;
+            _tablePage.SearchChanged += search => _rowSearch = search;
             rootVisualElement.Add(_tablePage);
 
             RefreshPage();
@@ -129,6 +136,10 @@ namespace SideXP.Database.EditorOnly
         /// <param name="table">The table to open.</param>
         private void OpenTable(TableDefinition table)
         {
+            // The search of a table means nothing for another one
+            if (table.Id != _openTableId)
+                _rowSearch = string.Empty;
+
             _openTableId = table.Id;
             RefreshPage();
         }
@@ -158,7 +169,7 @@ namespace SideXP.Database.EditorOnly
             bool isTableOpen = TableRegistry.TryGet(_openTableId, out TableDefinition table);
             if (isTableOpen)
             {
-                _tablePage.SetTable(table);
+                _tablePage.SetTable(table, _rowSearch);
             }
             else
             {

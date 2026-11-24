@@ -37,6 +37,12 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         private int _sourceIndex = 0;
 
+        /// <summary>
+        /// The text of the row compared with the search, built from the cached values by the owner of the pipeline, or null if it must
+        /// be built again. Cleared each time the values are read.
+        /// </summary>
+        private string _searchText = null;
+
         #endregion
 
 
@@ -67,6 +73,13 @@ namespace SideXP.Database.EditorOnly
         {
             get => _sourceIndex;
             internal set => _sourceIndex = value;
+        }
+
+        /// <inheritdoc cref="_searchText"/>
+        public string SearchText
+        {
+            get => _searchText;
+            set => _searchText = value;
         }
 
         /// <summary>
@@ -104,6 +117,8 @@ namespace SideXP.Database.EditorOnly
                     _values[i] = accessors[i].Read(context);
             }
 
+            // Built from the previous values
+            _searchText = null;
             _isValid = true;
         }
 

@@ -265,7 +265,9 @@ namespace SideXP.Database.EditorOnly
         /// Displays a table: loads its assets, and builds its columns and its pipeline.
         /// </summary>
         /// <param name="table">The table to display.</param>
-        public void SetTable(TableDefinition table)
+        /// <param name="search">The search that filters the rows (see <see cref="SetSearch(string)"/>), or null to show all the rows.
+        /// </param>
+        public void SetTable(TableDefinition table, string search = null)
         {
             // Leaving a table confirms its edit, like clicking outside of the edited cell
             EndEdit(true, false);
@@ -285,6 +287,9 @@ namespace SideXP.Database.EditorOnly
                 accessors[i] = _columns[i].Accessor;
 
             _pipeline = new TablePipeline(new PreloadedAssetSource(assets, source), accessors);
+            // Before the first update, so the rows are filtered once
+            StoreSearch(search);
+            ApplySearchFilter();
 
             _changeTracker = new TableChangeTracker(table.Type, _pipeline);
             _changeTracker.Changed += ScheduleRefresh;
@@ -370,16 +375,17 @@ namespace SideXP.Database.EditorOnly
             if (_pipeline.Update())
             {
                 _changeTracker.UpdateIndex();
+                _rows.Clear();
+                _rows.AddRange(_pipeline.VisibleRows);
 
-                // The asset of the active cell may have been deleted, or may not be in the table anymore
-                if (!_activeCell.IsNone && (_activeCell.Asset == null || !_pipeline.TryGetRow(_activeCell.Asset, out _)))
+                // The asset of the active cell may have been deleted, may not be in the table anymore, or may be hidden by the search
+                if (!_activeCell.IsNone && !IsAssetVisible(_activeCell.Asset))
                 {
-                    EndEdit(false, false);
+                    // A deleted asset has nothing to write
+                    EndEdit(_activeCell.Asset != null, false);
                     SetActiveCell(CellId.None);
                 }
 
-                _rows.Clear();
-                _rows.AddRange(_pipeline.VisibleRows);
                 _listView.RefreshItems();
                 _frozenListView?.RefreshItems();
             }
@@ -387,7 +393,7 @@ namespace SideXP.Database.EditorOnly
             bool hasAssets = _pipeline.Rows.Count > 0;
             _body.SetDisplayed(hasAssets);
             _emptyMessage.SetDisplayed(!hasAssets);
-            _statusLabel.text = _rows.Count == 1 ? "1 row" : $"{_rows.Count} rows";
+            _statusLabel.text = GetStatusText();
         }
 
         #endregion
@@ -413,12 +419,15 @@ namespace SideXP.Database.EditorOnly
                 _frozenListView.AddToClassList(FrozenListClass);
                 // The width of the frozen list follows its column, so the column never grows to fill the list
                 _frozenListView.columns.stretchMode = Columns.StretchMode.Grow;
+                // The message of the main list is enough, the narrow frozen pane would cut it
+                _frozenListView.makeNoneElement = () => new VisualElement();
                 _body.Add(_frozenListView);
             }
 
             _listView = CreateListView();
             _listView.AddToClassList(ListClass);
             _listView.columns.stretchMode = Columns.StretchMode.GrowAndFill;
+            _listView.makeNoneElement = MakeNoMatchElement;
             _body.Add(_listView);
 
             // Scrolling moves the rows under the pointer: the mirrored hover is shown again when the pointer enters another cell
@@ -821,6 +830,19 @@ namespace SideXP.Database.EditorOnly
 
 
         #region Private API
+
+        /// <summary>
+        /// Gets the text of the status line: the number of rows, and the number of visible rows when the search hides some.
+        /// </summary>
+        /// <returns>Returns the text of the status line.</returns>
+        private string GetStatusText()
+        {
+            int rowCount = _pipeline.Rows.Count;
+            string rowsText = rowCount == 1 ? "row" : "rows";
+            return _rows.Count == rowCount
+                ? $"{rowCount} {rowsText}"
+                : $"{_rows.Count} of {rowCount} {rowsText}";
+        }
 
         /// <summary>
         /// Refreshes the view on its next update. Several calls before that update only cause one refresh.

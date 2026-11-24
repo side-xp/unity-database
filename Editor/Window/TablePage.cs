@@ -17,6 +17,10 @@ namespace SideXP.Database.EditorOnly
         private const string PageClass = "database-page";
         private const string TitleClass = "database-toolbar__title";
         private const string SpacerClass = "database-toolbar__spacer";
+        private const string RowSearchClass = "database-toolbar__row-search";
+
+        private const string SearchTooltip = "Shows the rows that contain each word of the search, in their asset name or in their " +
+            "cells, ignoring case. Cells are searched as they are displayed: names for enums, paths for references.";
 
         private const string BackText = "Back";
         private const string BackTooltip = "Back to the table list.";
@@ -41,6 +45,11 @@ namespace SideXP.Database.EditorOnly
         private VisualElement _obsoleteMark = null;
 
         /// <summary>
+        /// The field that filters the rows of the table.
+        /// </summary>
+        private ToolbarSearchField _searchField = null;
+
+        /// <summary>
         /// The button that creates an asset of the table, hidden if the table has no type that can be created.
         /// </summary>
         private ToolbarButton _createButton = null;
@@ -54,6 +63,11 @@ namespace SideXP.Database.EditorOnly
         /// Called when the user asks to go back to the table list.
         /// </summary>
         public event Action BackClicked;
+
+        /// <summary>
+        /// Called when the search of the table changes, typed by the user or cleared by the table view.
+        /// </summary>
+        public event Action<string> SearchChanged;
 
         #endregion
 
@@ -83,6 +97,13 @@ namespace SideXP.Database.EditorOnly
             toolbar.Add(spacer);
 
             _tableView = new TableView();
+            _tableView.SearchReset += OnSearchReset;
+
+            _searchField = new ToolbarSearchField { tooltip = SearchTooltip };
+            _searchField.AddToClassList(RowSearchClass);
+            _searchField.RegisterValueChangedCallback(OnSearchFieldChanged);
+            toolbar.Add(_searchField);
+
             // Its icon and tooltip depend on the types of the table: set when the table is set
             _createButton = new ToolbarButton { text = CreateText };
             _createButton.clicked += () => _tableView.StartCreateAsset(_createButton);
@@ -107,13 +128,15 @@ namespace SideXP.Database.EditorOnly
         /// Sets the displayed table, and loads its assets.
         /// </summary>
         /// <param name="table">The table to display.</param>
-        public void SetTable(TableDefinition table)
+        /// <param name="search">The search that filters the rows, or null to show all the rows.</param>
+        public void SetTable(TableDefinition table, string search = null)
         {
             _table = table;
             _titleLabel.text = table.Name;
             _titleLabel.tooltip = table.Type.FullName;
             _obsoleteMark.SetDisplayed(table.IsObsolete);
-            _tableView.SetTable(table);
+            _searchField.SetValueWithoutNotify(search ?? string.Empty);
+            _tableView.SetTable(table, search);
             _tableView.UpdateCreateButton(_createButton, CreateText);
         }
 
@@ -124,6 +147,30 @@ namespace SideXP.Database.EditorOnly
         {
             _table = null;
             _tableView.ClearTable();
+        }
+
+        #endregion
+
+
+        #region Search
+
+        /// <summary>
+        /// Called when the user changes the text of the search field. Filters the rows of the table.
+        /// </summary>
+        /// <param name="evt">The emitted event.</param>
+        private void OnSearchFieldChanged(ChangeEvent<string> evt)
+        {
+            _tableView.SetSearch(evt.newValue);
+            SearchChanged?.Invoke(evt.newValue);
+        }
+
+        /// <summary>
+        /// Called when the table view clears the search itself, for example to show a new asset. Clears the search field.
+        /// </summary>
+        private void OnSearchReset()
+        {
+            _searchField.SetValueWithoutNotify(string.Empty);
+            SearchChanged?.Invoke(string.Empty);
         }
 
         #endregion

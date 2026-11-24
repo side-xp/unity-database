@@ -347,6 +347,25 @@ namespace SideXP.Database.Tests
             CollectionAssert.AreEqual(new[] { "A", "B", "C" }, GetVisibleNames());
         }
 
+        /// <summary>
+        /// The text of a row built for the search is cleared when its values are read again, and kept otherwise.
+        /// </summary>
+        [Test]
+        public void SearchText_RowRead_Cleared()
+        {
+            _pipeline.Update();
+            _pipeline.TryGetRow(_assets[0], out TableRow rowA);
+            _pipeline.TryGetRow(_assets[1], out TableRow rowB);
+            rowA.SearchText = "A";
+            rowB.SearchText = "B";
+
+            _pipeline.InvalidateRow(_assets[0]);
+            _pipeline.Update();
+
+            Assert.IsNull(rowA.SearchText);
+            Assert.AreEqual("B", rowB.SearchText);
+        }
+
         #endregion
 
 

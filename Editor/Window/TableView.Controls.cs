@@ -123,14 +123,17 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Shows an asset just added to the table (duplicated or created): makes it the active cell, on its name if the <i>Asset
-        /// Name</i> column is displayed, scrolls to it, and focuses the view, so it can be renamed right away with F2 or by typing.
+        /// Shows an asset just added to the table (duplicated or created): clears the search if it hides the asset, makes it the active
+        /// cell, on its name if the <i>Asset Name</i> column is displayed, scrolls to it, and focuses the view, so it can be renamed
+        /// right away with F2 or by typing.
         /// </summary>
         /// <param name="asset">The new asset.</param>
         private void ShowNewAsset(Object asset)
         {
             // The change tracker also reports the new asset, but it must be in the table to become the active cell
             Reload();
+            // A new asset whose name doesn't match the search would be hidden right away
+            ResetSearchIfHidden(asset);
 
             string columnId = _columns.Exists(column => column.IsAssetName)
                 ? TableViewColumn.AssetNameId
