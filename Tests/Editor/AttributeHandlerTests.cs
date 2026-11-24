@@ -31,6 +31,53 @@ namespace SideXP.Database.Tests
             Assert.IsInstanceOf<ColorUsageCellHandler>(GetHandler(nameof(AttributeHandlerTestFields.hdrColor)));
         }
 
+        /// <summary>
+        /// The fields marked with <see cref="AssetDropdownAttribute"/> use its handler, even if the dropdown doesn't support their type.
+        /// </summary>
+        [Test]
+        public void GetHandler_AssetDropdown_UsesAssetDropdownHandler()
+        {
+            Assert.IsInstanceOf<AssetDropdownCellHandler>(GetHandler(nameof(AttributeHandlerTestFields.assetDropdown)));
+            Assert.IsInstanceOf<AssetDropdownCellHandler>(GetHandler(nameof(AttributeHandlerTestFields.unsupportedAssetDropdown)));
+        }
+
+        #endregion
+
+
+        #region Asset dropdown handler
+
+        /// <summary>
+        /// A supported field is a live dropdown, without edit mode.
+        /// </summary>
+        [Test]
+        public void AssetDropdownHandler_SupportedField_LiveDropdownWithoutEditField()
+        {
+            AssetDropdownCellHandler handler = new AssetDropdownCellHandler();
+            CellContext context = CreateContext(nameof(AttributeHandlerTestFields.assetDropdown));
+            VisualElement display = handler.CreateDisplay();
+            handler.BindDisplay(display, null, context);
+
+            Assert.IsInstanceOf<AssetDropdownField>(display[0]);
+            Assert.AreEqual(typeof(ItemSO), ((AssetDropdownField)display[0]).AssetType);
+            Assert.IsFalse(display[0].focusable);
+            Assert.IsNull(handler.CreateEditField(null, null, context));
+        }
+
+        /// <summary>
+        /// A field of a type the dropdown doesn't support is displayed and edited like the other references.
+        /// </summary>
+        [Test]
+        public void AssetDropdownHandler_UnsupportedField_LikeOtherReferences()
+        {
+            AssetDropdownCellHandler handler = new AssetDropdownCellHandler();
+            CellContext context = CreateContext(nameof(AttributeHandlerTestFields.unsupportedAssetDropdown));
+            VisualElement display = handler.CreateDisplay();
+            handler.BindDisplay(display, null, context);
+
+            Assert.IsNotInstanceOf<AssetDropdownField>(display[0]);
+            Assert.IsInstanceOf<ObjectField>(handler.CreateEditField(null, null, context));
+        }
+
         #endregion
 
 

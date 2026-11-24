@@ -97,7 +97,9 @@ namespace SideXP.Database.EditorOnly
             arrow.AddToClassList(BasePopupField<string, string>.arrowUssClassName);
             _input.Add(arrow);
 
-            _input.RegisterCallback<PointerDownEvent>(OnInputPointerDown);
+            // On the field itself rather than the input, so the other callbacks of the field still get the event after it stops its
+            // propagation (for example the one of a live control in the Database window, see CellHandler.SetLiveControl())
+            RegisterCallback<PointerDownEvent>(OnPointerDown);
             RegisterCallback<NavigationSubmitEvent>(OnNavigationSubmit);
             UpdateDisplay();
         }
@@ -144,12 +146,17 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Called when the input is clicked. Opens the menu, like the popup fields of Unity, which open on the press of the button.
+        /// Called when the field is clicked. Opens the menu if the input is clicked, like the popup fields of Unity, which open on the
+        /// press of the button.
         /// </summary>
         /// <param name="evt">The emitted event.</param>
-        private void OnInputPointerDown(PointerDownEvent evt)
+        private void OnPointerDown(PointerDownEvent evt)
         {
             if (evt.button != (int)MouseButton.LeftMouse)
+                return;
+
+            // The label doesn't open the menu
+            if (evt.target is not VisualElement target || (target != _input && !_input.Contains(target)))
                 return;
 
             ShowMenu();

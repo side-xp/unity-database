@@ -37,6 +37,12 @@ namespace SideXP.Database.Tests
         [ColorUsage(false, true)]
         public Color hdrColor = Color.white;
 
+        [AssetDropdown]
+        public ItemSO assetDropdown = null;
+
+        [AssetDropdown]
+        public Transform unsupportedAssetDropdown = null;
+
         public float plainFloat = 0;
 
     }
