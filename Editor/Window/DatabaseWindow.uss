@@ -136,7 +136,7 @@
     overflow: hidden;
 }
 
-/* The buttons of the Controls column (TableView.Controls). Text buttons until the style pass, shrunk to fit the height of the rows */
+/* The icon buttons of the Controls column (TableView.Controls), shrunk to fit the height of the rows */
 .database-cell__controls {
     flex-direction: row;
     align-items: center;
@@ -146,15 +146,20 @@
 }
 
 .database-cell__control-button {
-    height: 16px;
+    height: 18px;
     margin-top: 0;
     margin-bottom: 0;
     margin-left: 0;
     margin-right: 2px;
     padding-top: 0;
     padding-bottom: 0;
-    padding-left: 4px;
-    padding-right: 4px;
+    padding-left: 2px;
+    padding-right: 2px;
+}
+
+/* Smaller than the default icon size, so the button keeps a margin inside the rows, which are smaller than the editor's lines */
+.database-cell__control-button > .sxp-icon {
+    --sxp-icon-size: 14;
 }
 
 .database-cell__swatch {
@@ -189,6 +194,21 @@
     width: 16px;
     height: 16px;
     flex-shrink: 0;
+}
+
+/* A button that shows a Tabler icon, alone or followed by a label (DatabaseElements.SetIcon()), toolbar buttons included */
+.database-icon-button {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+}
+
+.database-icon-button__label {
+    -unity-text-align: middle-left;
+    margin-left: 2px;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
 }
 
 /* A translucent border works with both the light and the dark editor themes */

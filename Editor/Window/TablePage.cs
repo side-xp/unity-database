@@ -61,7 +61,7 @@ namespace SideXP.Database.EditorOnly
 
             Toolbar toolbar = new Toolbar();
             ToolbarButton backButton = new ToolbarButton(() => BackClicked?.Invoke()) { tooltip = BackTooltip };
-            DatabaseElements.SetIcon(backButton, BuiltInIcons.Back, BackText);
+            DatabaseElements.SetIcon(backButton, DatabaseIcons.Back, BackText);
             toolbar.Add(backButton);
 
             _titleLabel = new Label();
@@ -77,7 +77,8 @@ namespace SideXP.Database.EditorOnly
             toolbar.Add(spacer);
 
             _tableView = new TableView();
-            ToolbarButton refreshButton = new ToolbarButton(_tableView.Reload) { text = RefreshText, tooltip = RefreshTooltip };
+            ToolbarButton refreshButton = new ToolbarButton(_tableView.Reload) { tooltip = RefreshTooltip };
+            DatabaseElements.SetIcon(refreshButton, DatabaseIcons.Refresh, RefreshText);
             toolbar.Add(refreshButton);
             Add(toolbar);
             Add(_tableView);

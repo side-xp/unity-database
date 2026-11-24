@@ -28,12 +28,9 @@ namespace SideXP.Database.EditorOnly
         private const string ControlsClass = "database-cell__controls";
         private const string ControlButtonClass = "database-cell__control-button";
 
-        private const string SelectText = "Select";
         private const string SelectTooltip = "Selects the asset, and shows it in the Project window.";
-        private const string DuplicateText = "Duplicate";
         private const string DuplicateTooltip = "Duplicates the asset: next to the original for a main asset, in the same file for a " +
             "sub-asset.";
-        private const string DeleteText = "Delete";
         private const string DeleteTooltip = "Deletes the asset, after a confirmation: a main asset is moved to the trash, a sub-asset " +
             "is removed from its file.";
 
@@ -55,9 +52,9 @@ namespace SideXP.Database.EditorOnly
         {
             VisualElement controls = new VisualElement();
             controls.AddToClassList(ControlsClass);
-            controls.Add(CreateControlButton(cell, SelectText, SelectTooltip, SelectAsset));
-            controls.Add(CreateControlButton(cell, DuplicateText, DuplicateTooltip, DuplicateAsset));
-            controls.Add(CreateControlButton(cell, DeleteText, DeleteTooltip, DeleteAsset));
+            controls.Add(CreateControlButton(cell, DatabaseIcons.Select, SelectTooltip, SelectAsset));
+            controls.Add(CreateControlButton(cell, DatabaseIcons.Duplicate, DuplicateTooltip, DuplicateAsset));
+            controls.Add(CreateControlButton(cell, DatabaseIcons.Delete, DeleteTooltip, DeleteAsset));
             return controls;
         }
 
@@ -65,14 +62,15 @@ namespace SideXP.Database.EditorOnly
         /// Creates a button of the <i>Controls</i> column.
         /// </summary>
         /// <param name="cell">The element of the cell of the button.</param>
-        /// <param name="text">The text of the button.</param>
-        /// <param name="tooltip">The tooltip of the button.</param>
+        /// <param name="iconName">The name of the icon of the button, one of the constants of <see cref="DatabaseIcons"/>.</param>
+        /// <param name="tooltip">The tooltip of the button, which says what it does.</param>
         /// <param name="operation">The operation to apply to the row of the cell when the button is clicked.</param>
         /// <returns>Returns the created button.</returns>
-        private Button CreateControlButton(VisualElement cell, string text, string tooltip, Action<TableRow> operation)
+        private Button CreateControlButton(VisualElement cell, string iconName, string tooltip, Action<TableRow> operation)
         {
-            Button button = new Button(() => OnControlClicked(cell, operation)) { text = text, tooltip = tooltip };
+            Button button = new Button(() => OnControlClicked(cell, operation)) { tooltip = tooltip };
             button.AddToClassList(ControlButtonClass);
+            DatabaseElements.SetIcon(button, iconName);
             CellHandler.SetLiveControl(button);
             return button;
         }

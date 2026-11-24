@@ -11,17 +11,13 @@ namespace SideXP.Database.EditorOnly
     /// </summary>
     /// <remarks>
     /// The names of the built-in icons are not documented, and can change between Unity versions, so they are all declared here. The
-    /// editor loads the dark version of an icon (<c>d_</c> prefix) when the dark theme is active.
+    /// editor loads the dark version of an icon (<c>d_</c> prefix) when the dark theme is active. The buttons use Tabler icons
+    /// instead (see <see cref="DatabaseIcons"/>).
     /// </remarks>
     internal static class BuiltInIcons
     {
 
         #region Fields
-
-        /// <summary>
-        /// A left arrow, for the button that goes back to the table list.
-        /// </summary>
-        public const string Back = "back";
 
         /// <summary>
         /// A small warning sign, for the mark of obsolete tables.

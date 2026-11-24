@@ -37,9 +37,9 @@ namespace SideXP.Database.EditorOnly
         private const float AssetNameWidth = 180;
 
         /// <summary>
-        /// The default width of the <i>Controls</i> column, in pixels: enough for the text of its buttons, until they get icons.
+        /// The default width of the <i>Controls</i> column, in pixels: enough for its three icon buttons, with the padding of the cell.
         /// </summary>
-        private const float ControlsWidth = 180;
+        private const float ControlsWidth = 80;
 
         /// <summary>
         /// The stable identifier of the column in its table.
