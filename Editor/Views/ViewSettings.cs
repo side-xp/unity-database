@@ -7,7 +7,7 @@ namespace SideXP.Database.EditorOnly
 {
 
     /// <summary>
-    /// The display settings of a table, remembered for the user: column order, widths and sort.
+    /// The display settings of a table, remembered for the user: column order, widths, hidden columns and sort.
     /// </summary>
     /// <remarks>
     /// The tool stores one per table, as the user's default view of the table (see <see cref="UserViews"/>), so it becomes a regular
@@ -81,16 +81,18 @@ namespace SideXP.Database.EditorOnly
         public bool IsSortDescending => HasSort && _isSortDescending;
 
         /// <summary>
-        /// Gets the display order of the columns of the table.
+        /// Gets the display order of the columns of the table, hidden columns included.
         /// </summary>
         /// <remarks>
         /// The columns that have no settings yet get settings, right after the column that precedes them in the default order (or
         /// first if they are first), so a field added to a type appears next to its neighbors.
         /// </remarks>
         /// <param name="columnIds">The identifiers of the columns of the table, in their default order.</param>
+        /// <param name="isHiddenByDefault">Checks if a column that has no settings yet is hidden, or null if all the columns are visible
+        /// by default.</param>
         /// <returns>Returns the identifiers of the columns of the table, in their display order. Columns that are not in the given list are
         /// not included.</returns>
-        public List<string> GetColumnOrder(IReadOnlyList<string> columnIds)
+        public List<string> GetColumnOrder(IReadOnlyList<string> columnIds, Predicate<string> isHiddenByDefault = null)
         {
             for (int i = 0; i < columnIds.Count; i++)
             {
@@ -99,7 +101,8 @@ namespace SideXP.Database.EditorOnly
 
                 // The previous column has settings at this point, since the columns are processed in order
                 int insertIndex = i > 0 ? IndexOf(columnIds[i - 1]) + 1 : 0;
-                _columns.Insert(insertIndex, new ColumnSettings(columnIds[i]));
+                bool isHidden = isHiddenByDefault != null && isHiddenByDefault(columnIds[i]);
+                _columns.Insert(insertIndex, new ColumnSettings(columnIds[i], isHidden));
             }
 
             HashSet<string> remainingIds = new HashSet<string>(columnIds);
@@ -173,18 +176,52 @@ namespace SideXP.Database.EditorOnly
         public bool SetWidth(string columnId, float width)
         {
             width = Mathf.Max(0, width);
-            int index = IndexOf(columnId);
-            if (index < 0)
-            {
-                _columns.Add(new ColumnSettings(columnId));
-                index = _columns.Count - 1;
-            }
-
-            if (Mathf.Approximately(_columns[index].Width, width))
+            ColumnSettings column = GetOrAddColumn(columnId);
+            if (Mathf.Approximately(column.Width, width))
                 return false;
 
-            _columns[index].Width = width;
+            column.Width = width;
             return true;
+        }
+
+        /// <summary>
+        /// Checks if a column is hidden.
+        /// </summary>
+        /// <param name="columnId">The identifier of the column.</param>
+        /// <returns>Returns true if the column is hidden, or false if it's visible or has no settings.</returns>
+        public bool IsHidden(string columnId)
+        {
+            int index = IndexOf(columnId);
+            return index >= 0 && _columns[index].IsHidden;
+        }
+
+        /// <summary>
+        /// Hides or shows a column.
+        /// </summary>
+        /// <param name="columnId">The identifier of the column. If it has no settings yet, they are added after the other columns.</param>
+        /// <param name="isHidden">If enabled, the column is hidden.</param>
+        /// <returns>Returns true if the visibility of the column has changed.</returns>
+        public bool SetHidden(string columnId, bool isHidden)
+        {
+            ColumnSettings column = GetOrAddColumn(columnId);
+            if (column.IsHidden == isHidden)
+                return false;
+
+            column.IsHidden = isHidden;
+            return true;
+        }
+
+        /// <summary>
+        /// Removes all the settings, so the columns get their default order, widths and visibility, and the rows the order of the
+        /// source.
+        /// </summary>
+        /// <returns>Returns true if there were settings to remove.</returns>
+        public bool Reset()
+        {
+            bool hasChanged = _columns.Count > 0 || HasSort;
+            _columns.Clear();
+            ClearSort();
+            return hasChanged;
         }
 
         /// <summary>
@@ -233,6 +270,22 @@ namespace SideXP.Database.EditorOnly
         private int IndexOf(string columnId)
         {
             return _columns.FindIndex(column => column != null && column.Id == columnId);
+        }
+
+        /// <summary>
+        /// Gets the settings of a column, and adds them after the other columns if it has none yet, visible.
+        /// </summary>
+        /// <param name="columnId">The identifier of the column.</param>
+        /// <returns>Returns the settings of the column.</returns>
+        private ColumnSettings GetOrAddColumn(string columnId)
+        {
+            int index = IndexOf(columnId);
+            if (index >= 0)
+                return _columns[index];
+
+            ColumnSettings column = new ColumnSettings(columnId, false);
+            _columns.Add(column);
+            return column;
         }
 
         #endregion

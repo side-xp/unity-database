@@ -26,6 +26,12 @@ namespace SideXP.Database.EditorOnly
         [SerializeField]
         private float _width = 0;
 
+        /// <summary>
+        /// Checks if the column is hidden.
+        /// </summary>
+        [SerializeField]
+        private bool _isHidden = false;
+
         #endregion
 
 
@@ -33,9 +39,11 @@ namespace SideXP.Database.EditorOnly
 
         /// <inheritdoc cref="ColumnSettings"/>
         /// <param name="id"><inheritdoc cref="_id" path="/summary"/></param>
-        public ColumnSettings(string id)
+        /// <param name="isHidden"><inheritdoc cref="_isHidden" path="/summary"/></param>
+        public ColumnSettings(string id, bool isHidden)
         {
             _id = id;
+            _isHidden = isHidden;
         }
 
         #endregion
@@ -51,6 +59,13 @@ namespace SideXP.Database.EditorOnly
         {
             get => _width;
             set => _width = value;
+        }
+
+        /// <inheritdoc cref="_isHidden"/>
+        public bool IsHidden
+        {
+            get => _isHidden;
+            set => _isHidden = value;
         }
 
         #endregion

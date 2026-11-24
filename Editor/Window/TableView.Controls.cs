@@ -124,8 +124,8 @@ namespace SideXP.Database.EditorOnly
 
         /// <summary>
         /// Shows an asset just added to the table (duplicated or created): clears the search if it hides the asset, makes it the active
-        /// cell, on its name if the <i>Asset Name</i> column is displayed, scrolls to it, and focuses the view, so it can be renamed
-        /// right away with F2 or by typing.
+        /// cell (see <see cref="GetNewAssetColumnId"/>), scrolls to it, and focuses the view, so it can be renamed right away with F2
+        /// or by typing.
         /// </summary>
         /// <param name="asset">The new asset.</param>
         private void ShowNewAsset(Object asset)
@@ -135,13 +135,25 @@ namespace SideXP.Database.EditorOnly
             // A new asset whose name doesn't match the search would be hidden right away
             ResetSearchIfHidden(asset);
 
-            string columnId = _columns.Exists(column => column.IsAssetName)
-                ? TableViewColumn.AssetNameId
-                : TableViewColumn.ControlsId;
-
-            SetActiveCell(new CellId(asset, columnId));
+            SetActiveCell(new CellId(asset, GetNewAssetColumnId()));
             ScrollToAsset(asset);
             Focus();
+        }
+
+        /// <summary>
+        /// Gets the column of the active cell of a new asset: the <i>Asset Name</i> column if it's displayed, so the asset can be
+        /// renamed right away, then the <i>Controls</i> column, then the first displayed column.
+        /// </summary>
+        /// <returns>Returns the identifier of the column.</returns>
+        private string GetNewAssetColumnId()
+        {
+            if (IsColumnDisplayed(TableViewColumn.AssetNameId))
+                return TableViewColumn.AssetNameId;
+
+            if (IsColumnDisplayed(TableViewColumn.ControlsId))
+                return TableViewColumn.ControlsId;
+
+            return _displayedColumns.Count > 0 ? _columns[_displayedColumns[0]].Id : TableViewColumn.AssetNameId;
         }
 
         /// <summary>

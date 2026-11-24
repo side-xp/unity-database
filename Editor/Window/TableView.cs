@@ -266,8 +266,8 @@ namespace SideXP.Database.EditorOnly
         public TableDefinition Table => _table;
 
         /// <summary>
-        /// Displays a table: loads its assets, and builds its columns and its pipeline, with the remembered order, widths and sort of
-        /// the table.
+        /// Displays a table: loads its assets, and builds its columns and its pipeline, with the remembered order, widths, hidden
+        /// columns and sort of the table.
         /// </summary>
         /// <param name="table">The table to display.</param>
         /// <param name="search">The search that filters the rows (see <see cref="SetSearch(string)"/>), or null to show all the rows.
@@ -294,7 +294,8 @@ namespace SideXP.Database.EditorOnly
                 accessors[i] = _columns[i].Accessor;
 
             _pipeline = new TablePipeline(new PreloadedAssetSource(assets, source), accessors);
-            // Before the first update, so the rows are filtered and sorted once
+            // Before the first update, so the rows are filtered and sorted once, on the displayed columns
+            UpdateDisplayedColumns();
             StoreSearch(search);
             ApplySearchFilter();
             ApplyRememberedSort();
@@ -321,6 +322,8 @@ namespace SideXP.Database.EditorOnly
             _viewSettings = null;
             _pipeline = null;
             _columns = new List<TableViewColumn>();
+            _displayedColumns = new List<int>();
+            _isColumnDisplayed = Array.Empty<bool>();
             _rows.Clear();
             _activeCell = CellId.None;
             _activeCellElement = null;
@@ -412,16 +415,20 @@ namespace SideXP.Database.EditorOnly
         #region UI
 
         /// <summary>
-        /// Creates the list views with the current columns, in their remembered order, replacing the previous ones: the frozen list
-        /// with the first column, and the main list with the other columns. The remembered sort is shown in the headers.
+        /// Creates the list views with the displayed columns (see <see cref="UpdateDisplayedColumns"/>), replacing the previous ones:
+        /// the frozen list with the first column, and the main list with the other columns. The sort of the pipeline is shown in the
+        /// headers.
         /// </summary>
-        private void RebuildListViews()
+        /// <param name="shouldKeepScroll">If enabled, the new main list is scrolled like the previous one, for example when a column
+        /// is hidden. Otherwise, it starts at the top.</param>
+        private void RebuildListViews(bool shouldKeepScroll = false)
         {
+            Vector2 scrollOffset = shouldKeepScroll && _listView != null ? _listView.Q<ScrollView>().scrollOffset : Vector2.zero;
             _body.Clear();
             _frozenListView = null;
             _frozenColumnLink = null;
 
-            List<int> displayedColumns = GetDisplayedColumns();
+            List<int> displayedColumns = _displayedColumns;
             // The first column is frozen only if there are other columns to scroll beside it
             bool hasFrozenColumn = displayedColumns.Count > 1;
             if (hasFrozenColumn)
@@ -468,6 +475,30 @@ namespace SideXP.Database.EditorOnly
             }
 
             ShowSortInHeader();
+            if (scrollOffset != Vector2.zero)
+                RestoreScrollOffset(_listView, scrollOffset);
+        }
+
+        /// <summary>
+        /// Scrolls a new list view to an offset, once it has laid out its content.
+        /// </summary>
+        /// <remarks>
+        /// The offset is clamped by the scroll view if the content is smaller, for example when a hidden column makes the table
+        /// narrower. Only the main list is scrolled: the frozen list follows it (see <see cref="FrozenColumnLink"/>).
+        /// </remarks>
+        /// <param name="listView">The new list view.</param>
+        /// <param name="scrollOffset">The offset to restore.</param>
+        private static void RestoreScrollOffset(MultiColumnListView listView, Vector2 scrollOffset)
+        {
+            ScrollView scrollView = listView.Q<ScrollView>();
+            // The content has no size before its first layout, so an offset set earlier would be clamped to the top
+            EventCallback<GeometryChangedEvent> callback = null;
+            callback = evt =>
+            {
+                scrollView.contentContainer.UnregisterCallback(callback);
+                scrollView.scrollOffset = scrollOffset;
+            };
+            scrollView.contentContainer.RegisterCallback(callback);
         }
 
         /// <summary>
@@ -487,6 +518,7 @@ namespace SideXP.Database.EditorOnly
                 showAlternatingRowBackgrounds = AlternatingRowBackground.ContentOnly,
             };
             listView.columnSortingChanged += () => OnColumnSortingChanged(listView);
+            listView.headerContextMenuPopulateEvent += OnHeaderContextMenuPopulate;
             return listView;
         }
 
@@ -897,9 +929,13 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Creates the columns displayed for a table: the <i>Asset Name</i> column (unless the table hides it), the columns of the
-        /// definition that are valid, then the <i>Controls</i> column.
+        /// Creates the columns of a table: the <i>Asset Name</i> column, the columns of the definition that are valid, then the
+        /// <i>Controls</i> column.
         /// </summary>
+        /// <remarks>
+        /// The <i>Asset Name</i> column is created even if the table hides it (<see cref="TableDefinition.HideAssetName"/>): it's only
+        /// hidden by default, so the user can show it (see <see cref="IsHiddenByDefault(string)"/>).
+        /// </remarks>
         /// <param name="table">The table of which to create the columns.</param>
         /// <param name="firstAsset">An asset of the table, used to validate the columns, or null if the table has no asset. In that case,
         /// all the columns of the definition are kept.</param>
@@ -918,10 +954,8 @@ namespace SideXP.Database.EditorOnly
                 }
             }
 
-            List<TableViewColumn> columns = new List<TableViewColumn>(definitionColumns.Count + 1);
-            if (!table.HideAssetName)
-                columns.Add(TableViewColumn.CreateAssetNameColumn());
-
+            List<TableViewColumn> columns = new List<TableViewColumn>(definitionColumns.Count + 2);
+            columns.Add(TableViewColumn.CreateAssetNameColumn());
             foreach (ColumnDefinition column in definitionColumns)
                 columns.Add(TableViewColumn.FromDefinition(column));
 

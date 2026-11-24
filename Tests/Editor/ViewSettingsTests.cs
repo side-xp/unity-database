@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 using NUnit.Framework;
 
 using UnityEngine;
@@ -8,7 +10,7 @@ namespace SideXP.Database.Tests
 {
 
     /// <summary>
-    /// Tests for the remembered settings of the tables (<see cref="ViewSettings"/>): column order, widths and sort.
+    /// Tests for the remembered settings of the tables (<see cref="ViewSettings"/>): column order, widths, visibility and sort.
     /// </summary>
     public class ViewSettingsTests
     {
@@ -161,6 +163,92 @@ namespace SideXP.Database.Tests
         #endregion
 
 
+        #region Visibility
+
+        /// <summary>
+        /// The columns are visible by default, unless the default visibility given for a new column hides it.
+        /// </summary>
+        [Test]
+        public void GetColumnOrder_HiddenByDefault_Hidden()
+        {
+            ViewSettings settings = new ViewSettings(TableId);
+            List<string> order = settings.GetColumnOrder(new[] { "A", "B" }, columnId => columnId == "A");
+
+            CollectionAssert.AreEqual(new[] { "A", "B" }, order);
+            Assert.IsTrue(settings.IsHidden("A"));
+            Assert.IsFalse(settings.IsHidden("B"));
+            Assert.IsFalse(settings.IsHidden("Unknown"));
+        }
+
+        /// <summary>
+        /// The default visibility only applies to the columns that have no settings yet.
+        /// </summary>
+        [Test]
+        public void GetColumnOrder_HiddenByDefaultShownByUser_Visible()
+        {
+            ViewSettings settings = new ViewSettings(TableId);
+            settings.GetColumnOrder(new[] { "A" }, columnId => true);
+            settings.SetHidden("A", false);
+
+            settings.GetColumnOrder(new[] { "A" }, columnId => true);
+            Assert.IsFalse(settings.IsHidden("A"));
+        }
+
+        /// <summary>
+        /// Hiding a column is remembered, and hiding it again changes nothing. A hidden column keeps its place in the order.
+        /// </summary>
+        [Test]
+        public void SetHidden_Column_RememberedAtItsPlace()
+        {
+            ViewSettings settings = new ViewSettings(TableId);
+            settings.GetColumnOrder(new[] { "A", "B", "C" });
+
+            Assert.IsTrue(settings.SetHidden("B", true));
+            Assert.IsFalse(settings.SetHidden("B", true));
+            Assert.IsTrue(settings.IsHidden("B"));
+
+            // The visible columns are reordered without the hidden one, which keeps its place
+            settings.SetColumnOrder(new[] { "C", "A" });
+            CollectionAssert.AreEqual(new[] { "C", "B", "A" }, settings.GetColumnOrder(new[] { "A", "B", "C" }));
+        }
+
+        #endregion
+
+
+        #region Reset
+
+        /// <summary>
+        /// Resetting removes the order, the widths, the visibility and the sort.
+        /// </summary>
+        [Test]
+        public void Reset_Customized_DefaultSettings()
+        {
+            ViewSettings settings = new ViewSettings(TableId);
+            settings.GetColumnOrder(new[] { "A", "B" });
+            settings.SetColumnOrder(new[] { "B", "A" });
+            settings.SetWidth("A", ResizedWidth);
+            settings.SetHidden("B", true);
+            settings.SetSort("A", true);
+
+            Assert.IsTrue(settings.Reset());
+            CollectionAssert.AreEqual(new[] { "A", "B" }, settings.GetColumnOrder(new[] { "A", "B" }));
+            Assert.AreEqual(0, settings.GetWidth("A"));
+            Assert.IsFalse(settings.IsHidden("B"));
+            Assert.IsFalse(settings.HasSort);
+        }
+
+        /// <summary>
+        /// Resetting settings that have nothing changes nothing.
+        /// </summary>
+        [Test]
+        public void Reset_Empty_False()
+        {
+            Assert.IsFalse(new ViewSettings(TableId).Reset());
+        }
+
+        #endregion
+
+
         #region Sort
 
         /// <summary>
@@ -211,6 +299,7 @@ namespace SideXP.Database.Tests
             settings.GetColumnOrder(new[] { "A", "B", "C" });
             settings.SetColumnOrder(new[] { "C", "B" });
             settings.SetWidth("B", ResizedWidth);
+            settings.SetHidden("A", true);
             settings.SetSort("C", true);
 
             ViewSettings copy = new ViewSettings(string.Empty);
@@ -219,6 +308,7 @@ namespace SideXP.Database.Tests
             Assert.AreEqual(TableId, copy.TableId);
             CollectionAssert.AreEqual(new[] { "A", "C", "B" }, copy.GetColumnOrder(new[] { "A", "B", "C" }));
             Assert.AreEqual(ResizedWidth, copy.GetWidth("B"));
+            Assert.IsTrue(copy.IsHidden("A"));
             Assert.AreEqual("C", copy.SortColumnId);
             Assert.IsTrue(copy.IsSortDescending);
         }

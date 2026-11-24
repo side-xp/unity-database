@@ -61,7 +61,8 @@ namespace SideXP.Database
         public bool Inherited { get; set; } = false;
 
         /// <summary>
-        /// Hides the <i>Asset Name</i> built-in column by default.
+        /// Hides the <i>Asset Name</i> built-in column by default. The user can still show it from the context menu of the column
+        /// headers, and the asset names are still searched.
         /// </summary>
         public bool HideAssetName { get; set; } = false;
 

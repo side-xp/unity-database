@@ -15,7 +15,7 @@ namespace SideXP.Database.EditorOnly
     /// <remarks>
     /// The text of a cell comes from the text conversion of its handler (<see cref="CellHandler.ToText(object)"/>), so the search finds
     /// what the cells display: names of enums, paths of references, numbers in the invariant culture. The <i>Controls</i> column has
-    /// no text. The asset name is always searched, even if its column is not displayed.
+    /// no text. The hidden columns are not searched, except the asset name, which is always searched.
     /// </remarks>
     internal partial class TableView
     {
@@ -112,6 +112,10 @@ namespace SideXP.Database.EditorOnly
         /// <summary>
         /// Gets the text of a row compared with the search, and builds it if the values of the row have been read since.
         /// </summary>
+        /// <remarks>
+        /// The text contains the displayed columns only, so every match can be seen on screen, and the asset name, which is searched
+        /// even if its column is hidden. It must be built again when the displayed columns change (see <see cref="ClearSearchTexts"/>).
+        /// </remarks>
         /// <param name="row">The row of which to get the text.</param>
         /// <returns>Returns the text of the row.</returns>
         private string GetSearchText(TableRow row)
@@ -120,22 +124,26 @@ namespace SideXP.Database.EditorOnly
                 return row.SearchText;
 
             _cellTexts.Clear();
-            bool hasAssetNameColumn = false;
             for (int i = 0; i < _columns.Count; i++)
             {
                 TableViewColumn column = _columns[i];
-                if (column.IsControls)
+                if (column.IsControls || (!column.IsAssetName && !IsColumnDisplayed(i)))
                     continue;
 
-                hasAssetNameColumn |= column.IsAssetName;
                 _cellTexts.Add(ToSearchText(column, row.GetValue(i)));
             }
 
-            if (!hasAssetNameColumn && row.Asset != null)
-                _cellTexts.Add(row.Asset.name);
-
             row.SearchText = RowSearch.BuildText(_cellTexts);
             return row.SearchText;
+        }
+
+        /// <summary>
+        /// Clears the text of all the rows compared with the search, so they are built again with the displayed columns.
+        /// </summary>
+        private void ClearSearchTexts()
+        {
+            foreach (TableRow row in _pipeline.Rows)
+                row.SearchText = null;
         }
 
         /// <summary>
