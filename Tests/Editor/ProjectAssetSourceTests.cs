@@ -133,27 +133,7 @@ namespace SideXP.Database.Tests
         }
 
         /// <summary>
-        /// A source of game objects provides the prefabs, without the children of their hierarchy.
-        /// </summary>
-        [Test]
-        public void LoadAssets_GameObject_SkipsChildrenOfPrefabs()
-        {
-            GameObject root = new GameObject("Prefab");
-            new GameObject("Child").transform.SetParent(root.transform);
-            try
-            {
-                PrefabUtility.SaveAsPrefabAsset(root, $"{TempFolder}/Prefab.prefab");
-            }
-            finally
-            {
-                Object.DestroyImmediate(root);
-            }
-
-            CollectionAssert.AreEqual(new[] { "Prefab" }, LoadNames(typeof(GameObject)));
-        }
-
-        /// <summary>
-        /// A source can only be created for a type of Unity object.
+        /// A source can only be created for a <see cref="ScriptableObject"/> type.
         /// </summary>
         [Test]
         public void Constructor_InvalidType_Throws()

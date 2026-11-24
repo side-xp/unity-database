@@ -1,5 +1,7 @@
 using UnityEngine;
 
+using SideXP.Core;
+
 // The fields of the test types are only read by reflection
 #pragma warning disable CS0414
 

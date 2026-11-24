@@ -6,6 +6,8 @@ using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEditor.UIElements;
 
+using SideXP.Core;
+using SideXP.Core.EditorOnly;
 using SideXP.Database.EditorOnly;
 
 namespace SideXP.Database.Tests

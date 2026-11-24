@@ -3,19 +3,23 @@ using System;
 using UnityEngine.UIElements;
 using UnityEditor;
 
+using SideXP.Core;
+using SideXP.Core.EditorOnly;
+
 using Object = UnityEngine.Object;
 
 namespace SideXP.Database.EditorOnly
 {
 
     /// <summary>
-    /// Displays the fields marked with <see cref="AssetDropdownAttribute"/> as live dropdowns, like in the Inspector: picking an option
-    /// changes the value, without selecting the cell.
+    /// Displays the fields marked with <see cref="AssetDropdownAttribute"/> (from the core lib) as live dropdowns, like in the
+    /// Inspector: picking an option changes the value, without selecting the cell.
     /// </summary>
     /// <remarks>
-    /// The sort and the text conversion are the ones of the other references (see <see cref="ObjectReferenceCellHandler"/>). The
-    /// display doesn't know the type of its column when it's created, so the dropdown is created when the first value is bound. A
-    /// field of a type the dropdown doesn't support is displayed and edited like the other references.
+    /// The dropdown is the <see cref="AssetDropdownField"/> of the core lib. The sort and the text conversion are the ones of the other
+    /// references (see <see cref="ObjectReferenceCellHandler"/>). The display doesn't know the type of its column when it's created, so
+    /// the dropdown is created when the first value is bound. A field of a type the dropdown doesn't support is displayed and edited
+    /// like the other references.
     /// </remarks>
     [CustomCellHandler(typeof(AssetDropdownAttribute))]
     internal class AssetDropdownCellHandler : ObjectReferenceCellHandler

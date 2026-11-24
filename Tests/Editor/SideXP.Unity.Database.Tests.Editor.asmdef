@@ -5,7 +5,9 @@
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner",
     "SideXP.Unity.Database",
-    "SideXP.Unity.Database.Editor"
+    "SideXP.Unity.Database.Editor",
+    "SideXP.Unity.Core",
+    "SideXP.Unity.Core.Editor"
   ],
   "includePlatforms": [
     "Editor"
