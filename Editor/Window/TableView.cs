@@ -497,7 +497,8 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Creates the element of a cell: a container, which holds the display created by the handler of the column.
+        /// Creates the element of a cell: a container, which holds the display created by the handler of the column, or the buttons of
+        /// the <i>Controls</i> column.
         /// </summary>
         /// <remarks>
         /// The container knows its column and its current row (see <see cref="CellBinding"/>), and activates its cell when it's
@@ -511,7 +512,7 @@ namespace SideXP.Database.EditorOnly
         {
             VisualElement cell = new VisualElement { userData = new CellBinding(column, isFrozen) };
             cell.AddToClassList(CellClass);
-            cell.Add(column.Handler.CreateDisplay());
+            cell.Add(column.IsControls ? CreateControls(cell) : column.Handler.CreateDisplay());
             cell.RegisterCallback<PointerDownEvent>(OnCellPointerDown);
             cell.RegisterCallback<PointerEnterEvent>(OnCellPointerEnter);
             cell.RegisterCallback<PointerLeaveEvent>(OnCellPointerLeave);
@@ -535,6 +536,10 @@ namespace SideXP.Database.EditorOnly
             UpdateActiveCellHighlight(cell);
             UpdateHoverMirror(cell);
             EndEditIfRebound(cell, row);
+
+            // The buttons of the controls read the row of their cell when they are clicked: there is no value to display
+            if (column.IsControls)
+                return;
 
             try
             {
@@ -827,8 +832,8 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Creates the columns displayed for a table: the <i>Asset Name</i> column (unless the table hides it), then the columns of the
-        /// definition that are valid.
+        /// Creates the columns displayed for a table: the <i>Asset Name</i> column (unless the table hides it), the columns of the
+        /// definition that are valid, then the <i>Controls</i> column.
         /// </summary>
         /// <param name="table">The table of which to create the columns.</param>
         /// <param name="firstAsset">An asset of the table, used to validate the columns, or null if the table has no asset. In that case,
@@ -855,6 +860,8 @@ namespace SideXP.Database.EditorOnly
             foreach (ColumnDefinition column in definitionColumns)
                 columns.Add(TableViewColumn.FromDefinition(column));
 
+            // Last, since the first column is frozen and must show what identifies the rows
+            columns.Add(TableViewColumn.CreateControlsColumn());
             return columns;
         }
 

@@ -20,14 +20,26 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         public const string AssetNameId = "$AssetName";
 
+        /// <summary>
+        /// The identifier of the <i>Controls</i> built-in column (see <see cref="AssetNameId"/> for the <c>$</c> prefix).
+        /// </summary>
+        public const string ControlsId = "$Controls";
+
         private const string AssetNameTitle = "Asset Name";
         private const string AssetNameTooltip = "The name of the asset.";
+        private const string ControlsTitle = "Controls";
+        private const string ControlsTooltip = "Select the asset in the Project window, duplicate it or delete it.";
 
         /// <summary>
         /// The default width of the <i>Asset Name</i> column, in pixels. Fixed, so the name doesn't take the space of the other columns
         /// in a wide window.
         /// </summary>
         private const float AssetNameWidth = 180;
+
+        /// <summary>
+        /// The default width of the <i>Controls</i> column, in pixels: enough for the text of its buttons, until they get icons.
+        /// </summary>
+        private const float ControlsWidth = 180;
 
         /// <summary>
         /// The stable identifier of the column in its table.
@@ -168,6 +180,12 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         public bool IsAssetName => _id == AssetNameId;
 
+        /// <summary>
+        /// Checks if the column is the <i>Controls</i> built-in column, whose cells display the buttons of the asset operations
+        /// instead of a value.
+        /// </summary>
+        public bool IsControls => _id == ControlsId;
+
         /// <inheritdoc cref="_hasLoggedError"/>
         public bool HasLoggedError
         {
@@ -200,6 +218,19 @@ namespace SideXP.Database.EditorOnly
             // Not a serialized property: the name of a main asset is the name of its file, so it's edited by renaming the asset
             return new TableViewColumn(AssetNameId, AssetNameTitle, AssetNameTooltip, AssetNameWidth, AssetNameAccessor.Instance, null,
                 null);
+        }
+
+        /// <summary>
+        /// Creates the <i>Controls</i> built-in column.
+        /// </summary>
+        /// <returns>Returns the created column.</returns>
+        public static TableViewColumn CreateControlsColumn()
+        {
+            TableViewColumn column = new TableViewColumn(ControlsId, ControlsTitle, ControlsTooltip, ControlsWidth,
+                EmptyAccessor.Instance, null, null);
+            // It has no value to sort, whatever handler a project registers for the type of its empty values
+            column._isSortable = false;
+            return column;
         }
 
         #endregion

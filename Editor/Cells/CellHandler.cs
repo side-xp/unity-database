@@ -82,7 +82,7 @@ namespace SideXP.Database.EditorOnly
         /// null).
         /// </remarks>
         /// <param name="control">The element that changes the value.</param>
-        protected static void SetLiveControl(VisualElement control)
+        protected internal static void SetLiveControl(VisualElement control)
         {
             // Not focusable, so the keys keep going to the table, and a reused element never keeps the focus of another row
             control.focusable = false;

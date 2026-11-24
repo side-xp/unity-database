@@ -136,6 +136,27 @@
     overflow: hidden;
 }
 
+/* The buttons of the Controls column (TableView.Controls). Text buttons until the style pass, shrunk to fit the height of the rows */
+.database-cell__controls {
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+
+.database-cell__control-button {
+    height: 16px;
+    margin-top: 0;
+    margin-bottom: 0;
+    margin-left: 0;
+    margin-right: 2px;
+    padding-top: 0;
+    padding-bottom: 0;
+    padding-left: 4px;
+    padding-right: 4px;
+}
+
 .database-cell__swatch {
     flex-grow: 1;
     height: 14px;
