@@ -1,0 +1,20 @@
+{
+  "name": "SideXP.Unity.Database.Editor",
+  "rootNamespace": "SideXP.Database.EditorOnly",
+  "references": [
+    "SideXP.Unity.Database",
+    "SideXP.Unity.Core",
+    "SideXP.Unity.Core.Editor"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

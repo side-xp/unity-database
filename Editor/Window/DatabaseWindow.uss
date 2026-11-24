@@ -1,0 +1,285 @@
+/* Styles of the Database window. Class names use the "database-" prefix, BEM style (block__element). */
+
+.database-page {
+    flex-grow: 1;
+}
+
+.database-table-view {
+    flex-grow: 1;
+}
+
+/* Holds the frozen list and the main list, side by side */
+.database-table-view__body {
+    flex-direction: row;
+    flex-grow: 1;
+}
+
+.database-table-view__list {
+    flex-grow: 1;
+}
+
+/* The width is set by FrozenColumnLink. The border marks the edge of the frozen column, and works with both editor themes */
+.database-table-view__frozen-list {
+    flex-shrink: 0;
+    border-right-width: 1px;
+    border-right-color: rgba(0, 0, 0, 0.4);
+}
+
+/* The message of an empty table and its Create Asset button take the place of the list, so the status line stays at the bottom */
+.database-table-view__empty {
+    flex-grow: 1;
+    justify-content: center;
+    align-items: center;
+}
+
+.database-table-view__empty-create {
+    margin-top: 0;
+}
+
+.database-table-view__header {
+    -unity-text-align: middle-left;
+    padding-left: 4px;
+    padding-right: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-grow: 1;
+}
+
+/* The container of the display created by the cell handler */
+.database-table-view__cell {
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
+    padding-left: 4px;
+    padding-right: 4px;
+    overflow: hidden;
+}
+
+/* The row of the other list when the pointer is over a row of the frozen list or of the main list, which are separate list views. Same
+   color as the hover of Unity's list views, and two classes so it wins over the alternating row background */
+.unity-collection-view__item.database-table-view__row--hover-mirror {
+    background-color: var(--unity-colors-list_view_item-background-hover);
+}
+
+/* The padding is reduced by the width of the border, so the content of the active cell doesn't move. Temporary look, until the style
+   pass */
+.database-table-view__cell--active {
+    padding-left: 3px;
+    padding-right: 3px;
+    border-width: 1px;
+    border-color: rgb(58, 121, 187);
+    background-color: rgba(58, 121, 187, 0.25);
+}
+
+/* Public class: CellHandler.EditFieldClass, also used by the custom handlers. The field fills the cell, which already has a padding */
+.database-cell__edit-field {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin-left: 0;
+    margin-right: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+/* The edit field of [Range] (RangeCellHandler): a slider and a number field, or the number field alone in narrow cells. Two classes
+   per selector, so they win over the class of the edit fields */
+.database-cell__range {
+    flex-direction: row;
+    align-items: center;
+}
+
+.database-cell__range > .database-cell__range-slider {
+    flex-grow: 1;
+    flex-shrink: 1;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.database-cell__range > .database-cell__range-number {
+    flex-grow: 0;
+    flex-shrink: 0;
+    width: 56px;
+    margin-left: 4px;
+}
+
+.database-cell__range--compact > .database-cell__range-slider {
+    display: none;
+}
+
+.database-cell__range--compact > .database-cell__range-number {
+    flex-grow: 1;
+    flex-shrink: 1;
+    width: auto;
+    margin-left: 0;
+}
+
+/* Public class: CellHandler.DisplayLabelClass, also used by the custom handlers */
+.database-cell__label {
+    -unity-text-align: middle-left;
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-left: 0;
+    padding-right: 0;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.database-cell__toggle {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+/* Holds the live dropdown of an enum, created when the first value is bound */
+.database-cell__dropdown {
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+
+/* The icon buttons of the Controls column (TableView.Controls), shrunk to fit the height of the rows */
+.database-cell__controls {
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+
+.database-cell__control-button {
+    height: 18px;
+    margin-top: 0;
+    margin-bottom: 0;
+    margin-left: 0;
+    margin-right: 2px;
+    padding-top: 0;
+    padding-bottom: 0;
+    padding-left: 2px;
+    padding-right: 2px;
+}
+
+/* Smaller than the default icon size, so the button keeps a margin inside the rows, which are smaller than the editor's lines */
+.database-cell__control-button > .sxp-icon {
+    --sxp-icon-size: 14;
+}
+
+.database-cell__swatch {
+    flex-grow: 1;
+    height: 14px;
+    justify-content: flex-end;
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0.4);
+}
+
+.database-cell__swatch-alpha {
+    height: 2px;
+    background-color: white;
+}
+
+.database-cell__reference {
+    flex-direction: row;
+    align-items: center;
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+
+.database-cell__reference-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    margin-right: 2px;
+}
+
+.database-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+/* A button that shows a Tabler icon, alone or followed by a label (DatabaseElements.SetIcon()), toolbar buttons included */
+.database-icon-button {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+}
+
+.database-icon-button__label {
+    -unity-text-align: middle-left;
+    margin-left: 2px;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+/* A translucent border works with both the light and the dark editor themes */
+.database-status-bar {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    height: 20px;
+    padding-left: 6px;
+    padding-right: 6px;
+    border-top-width: 1px;
+    border-top-color: rgba(0, 0, 0, 0.3);
+}
+
+.database-status-bar__label {
+    -unity-text-align: middle-left;
+    opacity: 0.8;
+}
+
+.database-toolbar__search {
+    flex-grow: 1;
+    width: auto;
+}
+
+/* The search of the rows shares the toolbar with the title and the buttons of the table, so it shrinks in narrow windows */
+.database-toolbar__row-search {
+    width: 240px;
+    min-width: 80px;
+    flex-shrink: 1;
+}
+
+/* Pushes the next toolbar items to the right */
+.database-toolbar__spacer {
+    flex-grow: 1;
+}
+
+.database-toolbar__title {
+    -unity-font-style: bold;
+    -unity-text-align: middle-left;
+    margin-left: 6px;
+}
+
+.database-obsolete-mark {
+    -unity-text-align: middle-left;
+    margin-left: 4px;
+}
+
+.database-table-list {
+    flex-grow: 1;
+}
+
+.database-table-list__item {
+    flex-direction: row;
+    align-items: center;
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
+.database-table-list__name {
+    -unity-text-align: middle-left;
+}
+
+.database-message {
+    -unity-text-align: middle-center;
+    white-space: normal;
+    opacity: 0.6;
+    margin: 12px;
+}

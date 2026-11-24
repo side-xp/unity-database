@@ -1,5 +1,7 @@
 # Installation
 
+This package requires *Unity 6.3* or newer, and depends on the [*SideXP - Core*](https://github.com/side-xp/unity-core) package (`com.side-xp.core`). If your project doesn't have it, install it first, the same way.
+
 ## Option 1: Using the Package Manager
 
 1. In your *Unity* project, go to `Window > Package Management > Package Manager` (or `Window > Package Manager` for *Unity 6.0-*)

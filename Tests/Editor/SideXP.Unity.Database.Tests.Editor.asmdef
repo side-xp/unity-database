@@ -1,0 +1,27 @@
+{
+  "name": "SideXP.Unity.Database.Tests.Editor",
+  "rootNamespace": "SideXP.Database.Tests",
+  "references": [
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner",
+    "SideXP.Unity.Database",
+    "SideXP.Unity.Database.Editor",
+    "SideXP.Unity.Core",
+    "SideXP.Unity.Core.Editor"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
