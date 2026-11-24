@@ -254,6 +254,20 @@ namespace SideXP.Database.Tests
         }
 
         /// <summary>
+        /// Undoing the rename of a sub-asset saves its file again, so the file on disk has the former name.
+        /// </summary>
+        [Test]
+        public void TryRename_SubAssetUndone_FileSaved()
+        {
+            AssetOperations.TryRename(_blade, "Long Blade", out _);
+            Undo.PerformUndo();
+
+            string fileText = File.ReadAllText(AssetDatabase.GetAssetPath(_bundle));
+            StringAssert.Contains("m_Name: Blade", fileText);
+            StringAssert.DoesNotContain("Long Blade", fileText);
+        }
+
+        /// <summary>
         /// The new name is trimmed.
         /// </summary>
         [Test]
@@ -386,7 +400,7 @@ namespace SideXP.Database.Tests
         }
 
         /// <summary>
-        /// Duplicating a sub-asset is a single Undo step, which destroys the copy.
+        /// Duplicating a sub-asset is a single Undo step, which destroys the copy and removes it from its file.
         /// </summary>
         [Test]
         public void TryDuplicate_SubAsset_CanBeUndone()
@@ -395,6 +409,7 @@ namespace SideXP.Database.Tests
             Undo.PerformUndo();
             Assert.IsTrue(copy == null);
             Assert.IsTrue(_blade != null);
+            Assert.AreEqual(1, AssetOperations.CountSubAssets(_bundle));
         }
 
         /// <summary>
@@ -459,6 +474,20 @@ namespace SideXP.Database.Tests
             UnityEngine.Object[] subAssets = AssetDatabase.LoadAllAssetRepresentationsAtPath(AssetDatabase.GetAssetPath(_bundle));
             Assert.AreEqual(1, subAssets.Length);
             Assert.AreEqual("Blade", subAssets[0].name);
+        }
+
+        /// <summary>
+        /// Redoing the deletion of a sub-asset removes it from its file again.
+        /// </summary>
+        [Test]
+        public void TryDelete_SubAsset_CanBeRedone()
+        {
+            AssetOperations.TryDelete(_blade, out _);
+            Undo.PerformUndo();
+            Undo.PerformRedo();
+
+            Assert.AreEqual(0, AssetOperations.CountSubAssets(_bundle));
+            StringAssert.DoesNotContain("m_Name: Blade", File.ReadAllText(AssetDatabase.GetAssetPath(_bundle)));
         }
 
         /// <summary>

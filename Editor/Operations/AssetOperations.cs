@@ -29,6 +29,17 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         public const string AssetExtension = ".asset";
 
+        /// <summary>
+        /// The files of the sub-assets changed by the operations, by the Undo group of the operation, so they are saved again when
+        /// the operation is undone or redone (see <see cref="StartSubAssetUndoGroup(string, string)"/>).
+        /// </summary>
+        private static Dictionary<int, string> s_subAssetFilesByUndoGroup = new Dictionary<int, string>();
+
+        /// <summary>
+        /// Checks if <see cref="Undo.undoRedoEvent"/> is listened to. Static events are cleared by domain reloads, like this flag.
+        /// </summary>
+        private static bool s_isListeningToUndo = false;
+
         #endregion
 
 
@@ -182,11 +193,11 @@ namespace SideXP.Database.EditorOnly
 
             if (AssetDatabase.IsSubAsset(asset))
             {
-                StartUndoGroup(RenameUndoName);
+                StartSubAssetUndoGroup(RenameUndoName, path);
                 Undo.RecordObject(asset, RenameUndoName);
                 asset.name = trimmedName;
                 EditorUtility.SetDirty(asset);
-                AssetDatabase.SaveAssetIfDirty(AssetDatabase.GUIDFromAssetPath(path));
+                SaveFile(path);
                 return true;
             }
 
@@ -235,10 +246,10 @@ namespace SideXP.Database.EditorOnly
                 copy = Object.Instantiate(asset);
                 copy.name = ObjectNames.GetUniqueName(GetObjectNames(path), asset.name);
 
-                StartUndoGroup(DuplicateUndoName);
+                StartSubAssetUndoGroup(DuplicateUndoName, path);
                 AssetDatabase.AddObjectToAsset(copy, path);
                 Undo.RegisterCreatedObjectUndo(copy, DuplicateUndoName);
-                AssetDatabase.SaveAssetIfDirty(AssetDatabase.GUIDFromAssetPath(path));
+                SaveFile(path);
                 return true;
             }
 
@@ -278,14 +289,9 @@ namespace SideXP.Database.EditorOnly
             if (AssetDatabase.IsSubAsset(asset))
             {
                 // Undo recreates the object in its file, unlike AssetDatabase.RemoveObjectFromAsset()
-                StartUndoGroup(DeleteUndoName);
+                StartSubAssetUndoGroup(DeleteUndoName, path);
                 Undo.DestroyObjectImmediate(asset);
-
-                Object mainAsset = AssetDatabase.LoadMainAssetAtPath(path);
-                if (mainAsset != null)
-                    EditorUtility.SetDirty(mainAsset);
-
-                AssetDatabase.SaveAssetIfDirty(AssetDatabase.GUIDFromAssetPath(path));
+                SaveFile(path);
                 return true;
             }
 
@@ -317,13 +323,55 @@ namespace SideXP.Database.EditorOnly
         #region Private API
 
         /// <summary>
-        /// Starts a new Undo group, so the next recorded changes form their own Undo step, never merged with a change made just before.
+        /// Starts a new Undo group for an operation on a sub-asset, so the next recorded changes form their own Undo step, never merged
+        /// with a change made just before. The file of the sub-asset is saved again when the step is undone or redone.
         /// </summary>
+        /// <remarks>
+        /// The operations save the file right away, but an Undo or a Redo only changes the objects in memory. Without a save, the file
+        /// on disk keeps the state of the operation: the Project window doesn't list a restored sub-asset, and a reimport of the file
+        /// reports an inconsistent result. The groups are known until the next domain reload: after it, undoing an earlier operation
+        /// leaves the file to save with the project.
+        /// </remarks>
         /// <param name="undoName">The name of the Undo step, shown in the Edit menu.</param>
-        private static void StartUndoGroup(string undoName)
+        /// <param name="path">The path of the file of the sub-asset.</param>
+        private static void StartSubAssetUndoGroup(string undoName, string path)
         {
             Undo.IncrementCurrentGroup();
             Undo.SetCurrentGroupName(undoName);
+            s_subAssetFilesByUndoGroup[Undo.GetCurrentGroup()] = path;
+
+            if (!s_isListeningToUndo)
+            {
+                Undo.undoRedoEvent += OnUndoRedo;
+                s_isListeningToUndo = true;
+            }
+        }
+
+        /// <summary>
+        /// Called after any Undo or Redo. Saves the file of a sub-asset if the step comes from an operation on it.
+        /// </summary>
+        /// <param name="undo">The undone or redone step.</param>
+        private static void OnUndoRedo(in UndoRedoInfo undo)
+        {
+            if (s_subAssetFilesByUndoGroup.TryGetValue(undo.undoGroup, out string path))
+                SaveFile(path);
+        }
+
+        /// <summary>
+        /// Writes a file with the objects it holds in memory, and imports it, so the Project window lists its sub-assets as they are.
+        /// </summary>
+        /// <remarks>
+        /// The main asset is marked dirty, since adding, removing or restoring a sub-asset doesn't mark anything dirty.
+        /// </remarks>
+        /// <param name="path">The path of the file. Does nothing if the file doesn't exist anymore.</param>
+        private static void SaveFile(string path)
+        {
+            Object mainAsset = AssetDatabase.LoadMainAssetAtPath(path);
+            if (mainAsset == null)
+                return;
+
+            EditorUtility.SetDirty(mainAsset);
+            AssetDatabase.SaveAssetIfDirty(AssetDatabase.GUIDFromAssetPath(path));
         }
 
         /// <summary>
