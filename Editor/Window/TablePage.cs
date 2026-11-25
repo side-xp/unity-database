@@ -39,7 +39,7 @@ namespace SideXP.Database.EditorOnly
             "Disabled by default, since it changes the selection of the whole editor, which other windows react to.";
         private const string ViewPanelText = "View";
         private const string ViewPanelTooltip = "Shows or hides the panel of the view, on the right of the table, where the filters " +
-            "are edited.";
+            "and the folders of the table are edited.";
 
         /// <summary>
         /// The displayed table, or null if none has been set.

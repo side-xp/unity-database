@@ -117,6 +117,40 @@ namespace SideXP.Database.EditorOnly
             return folder.Trim().Replace('\\', Separator).TrimEnd(Separator);
         }
 
+        /// <summary>
+        /// Gets the path relative to the project of a folder given as an absolute path, for example by the folder dialog of the system.
+        /// </summary>
+        /// <remarks>
+        /// Only checks that the folder is inside the project folder: check that the asset database knows it (for example with
+        /// <c>AssetDatabase.IsValidFolder()</c>), since the project folder also contains folders that aren't assets (<c>Library</c>,
+        /// <c>Temp</c>).
+        /// </remarks>
+        /// <example>
+        /// With the project in <c>D:/Game</c>, <c>D:\Game\Assets\Items</c> gives <c>Assets/Items</c>.
+        /// </example>
+        /// <param name="absolutePath">The absolute path of the folder.</param>
+        /// <param name="projectPath">The absolute path of the project folder, which contains <c>Assets</c>.</param>
+        /// <param name="folder">Outputs the path of the folder relative to the project, or null if it's not in the project.</param>
+        /// <returns>Returns true if the folder is in the project folder (not the project folder itself).</returns>
+        public static bool TryGetProjectFolder(string absolutePath, string projectPath, out string folder)
+        {
+            folder = null;
+            string path = NormalizeFolder(absolutePath);
+            string root = NormalizeFolder(projectPath);
+            if (path.Length == 0 || root.Length == 0)
+                return false;
+
+            bool isInProject = path.Length > root.Length
+                && path[root.Length] == Separator
+                && path.StartsWith(root, StringComparison.OrdinalIgnoreCase);
+
+            if (!isInProject)
+                return false;
+
+            folder = path.Substring(root.Length + 1);
+            return true;
+        }
+
         /// <inheritdoc/>
         public override string ToString()
         {

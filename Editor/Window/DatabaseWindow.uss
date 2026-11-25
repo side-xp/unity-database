@@ -180,6 +180,52 @@
     margin-right: 0;
 }
 
+/* The folders of the scope (FolderScopeEditor), which is also the target of the folders dropped from the Project window. The border
+   shows while folders are dragged over it */
+.database-folder-scope {
+    padding-top: 2px;
+    padding-bottom: 2px;
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0);
+}
+
+.database-folder-scope--drag-over {
+    border-color: rgb(58, 121, 187);
+    background-color: rgba(58, 121, 187, 0.1);
+}
+
+.database-folder-scope__folder {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 1px;
+    margin-bottom: 1px;
+}
+
+/* Grows, so the remove button is on the right. The hand cursor says that a click pings the folder */
+.database-folder-scope__path {
+    flex-grow: 1;
+    flex-shrink: 1;
+    -unity-text-align: middle-left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: link;
+}
+
+/* A folder that doesn't exist, ignored by the scope. Orange like the missing columns of the filters */
+.database-folder-scope__path--missing {
+    color: rgb(230, 150, 40);
+    cursor: arrow;
+}
+
+.database-folder-scope__hint {
+    -unity-font-style: italic;
+    white-space: normal;
+    opacity: 0.6;
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+
 .database-filter-editor__remove {
     flex-shrink: 0;
     padding-left: 1px;

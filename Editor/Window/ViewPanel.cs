@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 using UnityEngine.UIElements;
 
 namespace SideXP.Database.EditorOnly
@@ -5,14 +7,14 @@ namespace SideXP.Database.EditorOnly
 
     /// <summary>
     /// The panel of the view, on the right of the table: the settings of the view that don't fit in the headers, by section. For now,
-    /// the filters (see <see cref="FilterEditor"/>).
+    /// the folder scope (see <see cref="FolderScopeEditor"/>), then the filters (see <see cref="FilterEditor"/>).
     /// </summary>
     /// <remarks>
     /// The panel stays open while the user edits and sees the result, unlike a popup, which would close when another window takes the
     /// focus (for example Unity's object picker). Each change is applied to the table right away, and remembered with the settings of
-    /// the table (see <see cref="TableView.SetRowFilter(FilterNode)"/>).
+    /// the table (see <see cref="TableView.SetRowFilter(FilterNode)"/> and <see cref="TableView.SetFolderScope"/>).
     /// <para>
-    /// @todo 21b3: the section of the folder scope. Step 23: the section of the views.
+    /// @todo Step 23: the section of the views.
     /// </para>
     /// </remarks>
     internal class ViewPanel : VisualElement
@@ -30,6 +32,12 @@ namespace SideXP.Database.EditorOnly
         private const string FiltersTitle = "Filters";
         private const string ClearFiltersText = "Clear";
         private const string ClearFiltersTooltip = "Removes all the conditions, so the filters show all the rows again.";
+        private const string FoldersTitle = "Folders";
+        private const string AddFolderText = "Add";
+        private const string AddFolderTooltip = "Picks a folder of the project to add to the scope. The table only shows the assets of " +
+            "the folders of the scope and of their subfolders, and doesn't load the others.";
+        private const string ClearFoldersText = "Clear";
+        private const string ClearFoldersTooltip = "Removes all the folders, so the table shows the assets of the whole project again.";
 
         /// <summary>
         /// The table view whose settings the panel edits.
@@ -46,6 +54,16 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         private Button _clearFiltersButton = null;
 
+        /// <summary>
+        /// Edits the folder scope of the table.
+        /// </summary>
+        private FolderScopeEditor _folderScopeEditor = null;
+
+        /// <summary>
+        /// The button that clears the folder scope, disabled when the scope is the whole project.
+        /// </summary>
+        private Button _clearFoldersButton = null;
+
         #endregion
 
 
@@ -61,6 +79,17 @@ namespace SideXP.Database.EditorOnly
             ScrollView content = new ScrollView(ScrollViewMode.Vertical);
             content.AddToClassList(ContentClass);
             Add(content);
+
+            // The folders first: they limit the assets of the table, which the filters then filter
+            _folderScopeEditor = new FolderScopeEditor();
+            _folderScopeEditor.Changed += OnFolderScopeChanged;
+
+            Button addFolderButton = new Button(_folderScopeEditor.AddFolderFromDialog) { tooltip = AddFolderTooltip };
+            DatabaseElements.SetIcon(addFolderButton, DatabaseIcons.AddFolder, AddFolderText);
+            _clearFoldersButton = new Button(_folderScopeEditor.ClearFolders) { tooltip = ClearFoldersTooltip };
+            DatabaseElements.SetIcon(_clearFoldersButton, DatabaseIcons.ClearFolders, ClearFoldersText);
+            VisualElement foldersSection = CreateSection(content, FoldersTitle, addFolderButton, _clearFoldersButton);
+            foldersSection.Add(_folderScopeEditor);
 
             _clearFiltersButton = new Button(ClearFilters) { tooltip = ClearFiltersTooltip };
             DatabaseElements.SetIcon(_clearFiltersButton, DatabaseIcons.ClearFilters, ClearFiltersText);
@@ -89,6 +118,9 @@ namespace SideXP.Database.EditorOnly
 
             _filterEditor.SetFilter(root, _tableView.GetFilterableColumns(), columnId => !_tableView.IsColumnDisplayed(columnId));
             UpdateClearFiltersButton();
+
+            _folderScopeEditor.SetFolders(_tableView.FolderScope.Folders);
+            UpdateClearFoldersButton();
         }
 
         /// <summary>
@@ -157,6 +189,25 @@ namespace SideXP.Database.EditorOnly
         private void UpdateClearFiltersButton()
         {
             _clearFiltersButton.SetEnabled(_filterEditor.Root.Nodes.Count > 0);
+        }
+
+        /// <summary>
+        /// Called after each change of the folder scope editor. Applies the scope to the table, which loads its assets again and
+        /// remembers the scope.
+        /// </summary>
+        /// <param name="folders">The new folders of the scope.</param>
+        private void OnFolderScopeChanged(IReadOnlyList<string> folders)
+        {
+            _tableView.SetFolderScope(folders);
+            UpdateClearFoldersButton();
+        }
+
+        /// <summary>
+        /// Enables the button that clears the folder scope only if the scope has folders.
+        /// </summary>
+        private void UpdateClearFoldersButton()
+        {
+            _clearFoldersButton.SetEnabled(_folderScopeEditor.Folders.Count > 0);
         }
 
         #endregion

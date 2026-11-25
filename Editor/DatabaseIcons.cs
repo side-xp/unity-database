@@ -84,6 +84,16 @@ namespace SideXP.Database.EditorOnly
         public const string AddGroup = "circles";
 
         /// <summary>
+        /// A folder with a plus sign, for the button that adds a folder to the folder scope.
+        /// </summary>
+        public const string AddFolder = "folder-plus";
+
+        /// <summary>
+        /// A folder with a bar across it, for the button that clears the folder scope.
+        /// </summary>
+        public const string ClearFolders = "folder-off";
+
+        /// <summary>
         /// A cross, for the buttons that remove an item from a list, such as a condition from a filter.
         /// </summary>
         public const string Remove = "x";

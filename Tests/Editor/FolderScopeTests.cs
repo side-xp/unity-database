@@ -123,6 +123,34 @@ namespace SideXP.Database.Tests
         }
 
         /// <summary>
+        /// An absolute path in the project folder gives its path relative to the project, whatever its slashes and its case.
+        /// </summary>
+        [Test]
+        public void TryGetProjectFolder_InProject_RelativePath()
+        {
+            Assert.IsTrue(FolderScope.TryGetProjectFolder(@"D:\Game\Assets\Items", "D:/Game", out string folder));
+            Assert.AreEqual("Assets/Items", folder);
+
+            Assert.IsTrue(FolderScope.TryGetProjectFolder("d:/game/Packages/com.side-xp.items/", @"D:\Game\", out folder));
+            Assert.AreEqual("Packages/com.side-xp.items", folder);
+        }
+
+        /// <summary>
+        /// A path outside of the project folder, the project folder itself, a folder whose name starts like the project folder, and
+        /// blank paths are refused.
+        /// </summary>
+        [Test]
+        public void TryGetProjectFolder_OutsideProject_False()
+        {
+            Assert.IsFalse(FolderScope.TryGetProjectFolder("D:/Other/Assets", "D:/Game", out string folder));
+            Assert.IsNull(folder);
+            Assert.IsFalse(FolderScope.TryGetProjectFolder("D:/Game", "D:/Game", out _));
+            Assert.IsFalse(FolderScope.TryGetProjectFolder("D:/GameOld/Assets", "D:/Game", out _));
+            Assert.IsFalse(FolderScope.TryGetProjectFolder(null, "D:/Game", out _));
+            Assert.IsFalse(FolderScope.TryGetProjectFolder("D:/Game/Assets", "  ", out _));
+        }
+
+        /// <summary>
         /// Normalizing a folder keeps its case, and gives an empty text for a blank path.
         /// </summary>
         [Test]
