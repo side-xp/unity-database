@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
+using UnityEngine;
 using UnityEngine.UIElements;
 
 using Object = UnityEngine.Object;
@@ -31,6 +32,39 @@ namespace SideXP.Database.EditorOnly
     /// </remarks>
     internal partial class TableView
     {
+
+        #region Subclasses
+
+        /// <summary>
+        /// What a drag started on a cell or a row handle selects.
+        /// </summary>
+        private enum DragSelectionMode
+        {
+
+            /// <summary>
+            /// No drag is in progress.
+            /// </summary>
+            None,
+
+            /// <summary>
+            /// The range of cells between the cell where the drag started and the cell under the pointer.
+            /// </summary>
+            Cells,
+
+            /// <summary>
+            /// The whole rows between the row where the drag started and the row under the pointer.
+            /// </summary>
+            Rows,
+
+            /// <summary>
+            /// The whole columns between the column whose header was pressed and the column under the pointer (header or cell).
+            /// </summary>
+            Columns,
+
+        }
+
+        #endregion
+
 
         #region Fields
 
@@ -73,6 +107,38 @@ namespace SideXP.Database.EditorOnly
         /// The width of the row handles, in pixels, so the largest row number fits (see <see cref="UpdateRowHandleWidth"/>).
         /// </summary>
         private float _rowHandleWidth = (MinRowNumberDigits * RowNumberDigitWidth) + RowHandlePadding;
+
+        /// <summary>
+        /// What the drag in progress selects, or <see cref="DragSelectionMode.None"/> if the button is not held after a press on a cell or
+        /// a row handle.
+        /// </summary>
+        private DragSelectionMode _dragMode = DragSelectionMode.None;
+
+        /// <summary>
+        /// The cell where the range of the drag starts: the pressed cell, or the active cell if the press used Shift. For a drag of
+        /// rows, only its asset is used. For a drag of columns, only its column is used.
+        /// </summary>
+        private CellId _dragAnchor = CellId.None;
+
+        /// <summary>
+        /// The cell under the pointer when the range of the drag was last selected, so the moves inside the same cell are ignored.
+        /// </summary>
+        private CellId _dragLastCell = CellId.None;
+
+        /// <summary>
+        /// Checks if the range of the drag is added to the selection (Ctrl held when the drag started), instead of replacing it.
+        /// </summary>
+        private bool _isDragAdding = false;
+
+        /// <summary>
+        /// The assets of the visible rows when the drag started, so the range isn't computed from all the rows on each move.
+        /// </summary>
+        private List<Object> _dragRowAssets = null;
+
+        /// <summary>
+        /// The identifiers of the columns in their display order when the drag started, hidden ones included.
+        /// </summary>
+        private List<string> _dragColumnIds = null;
 
         #endregion
 
@@ -156,6 +222,7 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         private void ClearSelection()
         {
+            EndDragSelection();
             _selection.Clear();
             _selectionBeforeClick = null;
             _activeCell = CellId.None;
@@ -209,6 +276,202 @@ namespace SideXP.Database.EditorOnly
             // The user may have dragged a header since the order was last read
             SaveColumnOrder();
             return GetColumnOrder().ConvertAll(columnIndex => _columns[columnIndex].Id);
+        }
+
+        #endregion
+
+
+        #region Drag selection
+
+        /// <summary>
+        /// Starts a drag selection after a press on a cell or a row handle: while the button is held, moving the pointer over another
+        /// cell selects the range from the anchor of the drag.
+        /// </summary>
+        /// <remarks>
+        /// The moves are followed on the view itself (see <see cref="OnPointerMoveTrickleDown"/>), and the cell under the pointer is
+        /// found with <see cref="IPanel.Pick(Vector2)"/>: the enter events of the cells don't work for this, since the other cells get
+        /// none during the drag (the list views probably capture the pointer when a row is pressed).
+        /// </remarks>
+        /// <param name="mode">What the drag selects.</param>
+        /// <param name="anchor">The cell where the range starts.</param>
+        /// <param name="isAdding">If enabled (Ctrl held), the range is added to the cells selected before the press.</param>
+        private void StartDragSelection(DragSelectionMode mode, CellId anchor, bool isAdding)
+        {
+            if (anchor.IsNone)
+                return;
+
+            _dragMode = mode;
+            _dragAnchor = anchor;
+            _dragLastCell = anchor;
+            _isDragAdding = isAdding;
+            _dragRowAssets = GetRowAssets();
+            _dragColumnIds = GetColumnIdsInOrder();
+        }
+
+        /// <summary>
+        /// Called when the pointer moves during a drag selection. Selects the range of the drag up to the cell under the pointer, or
+        /// ends the drag if the button has been released elsewhere (for example outside of the window).
+        /// </summary>
+        /// <param name="position">The position of the pointer, in the coordinates of the panel.</param>
+        /// <param name="pressedButtons">The buttons pressed during the event, as a bit mask (<see cref="IPointerEvent.pressedButtons"/>).
+        /// </param>
+        private void UpdateDragSelection(Vector2 position, int pressedButtons)
+        {
+            if (_dragMode == DragSelectionMode.None)
+                return;
+
+            // The first bit is the left button
+            if ((pressedButtons & 1) == 0)
+            {
+                EndDragSelection();
+                return;
+            }
+
+            if (panel == null)
+                return;
+
+            VisualElement element = panel.Pick(position);
+            if (_dragMode == DragSelectionMode.Columns)
+            {
+                if (TryFindColumnId(element, out string columnId))
+                    ExtendColumnDragSelection(columnId);
+
+                return;
+            }
+
+            if (TryFindCellBinding(element, out CellBinding binding, out bool isRowHandle))
+                ExtendDragSelection(binding.Row, isRowHandle ? null : binding.Column.Id);
+        }
+
+        /// <summary>
+        /// Finds the column of an element of the view: a column header, a cell, one of its children, or a row handle.
+        /// </summary>
+        /// <param name="element">The element, for example the one under the pointer.</param>
+        /// <param name="columnId">Outputs the identifier of the found column.</param>
+        /// <returns>Returns true if a column is found.</returns>
+        private bool TryFindColumnId(VisualElement element, out string columnId)
+        {
+            for (VisualElement current = element; current != null && current != this; current = current.parent)
+            {
+                // The headers hold their column (see MakeHeader())
+                if (current.userData is TableViewColumn column)
+                {
+                    columnId = column.Id;
+                    return true;
+                }
+            }
+
+            if (TryFindCellBinding(element, out CellBinding binding, out _))
+            {
+                columnId = binding.Column.Id;
+                return true;
+            }
+
+            columnId = null;
+            return false;
+        }
+
+        /// <summary>
+        /// Selects the whole columns of the drag in progress, from the column of its anchor to a column, in the visible rows.
+        /// </summary>
+        /// <param name="columnId">The identifier of the column under the pointer.</param>
+        private void ExtendColumnDragSelection(string columnId)
+        {
+            if (_dragRowAssets.Count == 0 || _dragColumnIds.Count == 0)
+                return;
+
+            // The pointer moves several times over the same column
+            CellId target = new CellId(_dragAnchor.Asset, columnId);
+            if (target.Equals(_dragLastCell))
+                return;
+
+            _dragLastCell = target;
+            CellId from = new CellId(_dragRowAssets[0], _dragAnchor.ColumnId);
+            CellId to = new CellId(_dragRowAssets[_dragRowAssets.Count - 1], columnId);
+            _selection.SelectRange(CellSelection.GetRange(_dragRowAssets, _dragColumnIds, from, to), _isDragAdding);
+            OnSelectionChanged();
+        }
+
+        /// <summary>
+        /// Finds the cell of an element of the view: the element of a cell, one of its children, or a row handle.
+        /// </summary>
+        /// <param name="element">The element, for example the one under the pointer.</param>
+        /// <param name="binding">Outputs what the found cell displays.</param>
+        /// <param name="isRowHandle">Outputs true if the element is in a row handle, or in the container of a row handle.</param>
+        /// <returns>Returns true if a cell is found.</returns>
+        private bool TryFindCellBinding(VisualElement element, out CellBinding binding, out bool isRowHandle)
+        {
+            for (VisualElement current = element; current != null && current != this; current = current.parent)
+            {
+                if (current.userData is CellBinding cellBinding)
+                {
+                    binding = cellBinding;
+                    isRowHandle = false;
+                    return true;
+                }
+
+                // The row handles and their containers hold the element of their cell
+                if (current.userData is VisualElement cell && cell.userData is CellBinding handleBinding)
+                {
+                    binding = handleBinding;
+                    isRowHandle = current.ClassListContains(RowHandleClass);
+                    return true;
+                }
+            }
+
+            binding = null;
+            isRowHandle = false;
+            return false;
+        }
+
+        /// <summary>
+        /// Selects the range of the drag in progress, from its anchor to a cell.
+        /// </summary>
+        /// <param name="row">The row under the pointer, or null if the element under it is not bound.</param>
+        /// <param name="columnId">The identifier of the column under the pointer, or null for a row handle.</param>
+        private void ExtendDragSelection(TableRow row, string columnId)
+        {
+            if (row == null || _dragColumnIds.Count == 0)
+                return;
+
+            // The pointer moves several times over the same cell
+            CellId target = new CellId(row.Asset, columnId ?? _dragAnchor.ColumnId);
+            if (target.Equals(_dragLastCell))
+                return;
+
+            _dragLastCell = target;
+            CellId from = _dragAnchor;
+            CellId to = target;
+            if (_dragMode == DragSelectionMode.Rows)
+            {
+                from = new CellId(_dragAnchor.Asset, _dragColumnIds[0]);
+                to = new CellId(row.Asset, _dragColumnIds[_dragColumnIds.Count - 1]);
+            }
+
+            _selection.SelectRange(CellSelection.GetRange(_dragRowAssets, _dragColumnIds, from, to), _isDragAdding);
+            OnSelectionChanged();
+        }
+
+        /// <summary>
+        /// Ends the drag selection in progress, if any. The selection stays as it is.
+        /// </summary>
+        private void EndDragSelection()
+        {
+            _dragMode = DragSelectionMode.None;
+            _dragAnchor = CellId.None;
+            _dragLastCell = CellId.None;
+            _dragRowAssets = null;
+            _dragColumnIds = null;
+        }
+
+        /// <summary>
+        /// Called when a button is released over the view. Ends the drag selection.
+        /// </summary>
+        /// <param name="evt">The emitted event.</param>
+        private void OnPointerUpTrickleDown(PointerUpEvent evt)
+        {
+            if (evt.button == (int)MouseButton.LeftMouse)
+                EndDragSelection();
         }
 
         #endregion
@@ -303,6 +566,10 @@ namespace SideXP.Database.EditorOnly
             EndEdit(true, false);
             Focus();
             ClickRow(asset, evt.actionKey, evt.shiftKey);
+
+            // Dragging over the other rows selects the rows in between, from the row of the active cell with Shift, like a click
+            Object anchorAsset = evt.shiftKey && !_activeCell.IsNone ? _activeCell.Asset : asset;
+            StartDragSelection(DragSelectionMode.Rows, new CellId(anchorAsset, string.Empty), evt.actionKey);
         }
 
         /// <summary>
@@ -387,6 +654,11 @@ namespace SideXP.Database.EditorOnly
                 ToggleColumnInSelection(column.Id);
             else
                 SelectColumn(column.Id);
+
+            // Dragging over the other headers or columns selects the columns in between, added to the selection with Ctrl. Without
+            // rows, the columns have no cell to select
+            if (_rows.Count > 0)
+                StartDragSelection(DragSelectionMode.Columns, new CellId(_rows[0].Asset, column.Id), evt.actionKey);
         }
 
         /// <summary>

@@ -260,13 +260,14 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Called when the pointer moves over the view. Follows the state of Alt, which can change while the view doesn't have the
-        /// focus.
+        /// Called when the pointer moves over the view, even if an element of the view captures the pointer. Follows the state of Alt,
+        /// which can change while the view doesn't have the focus, and the drag selection in progress.
         /// </summary>
         /// <param name="evt">The emitted event.</param>
         private void OnPointerMoveTrickleDown(PointerMoveEvent evt)
         {
             SetAltHeld(evt.altKey);
+            UpdateDragSelection(evt.position, evt.pressedButtons);
         }
 
         /// <summary>

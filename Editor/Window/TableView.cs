@@ -237,6 +237,8 @@ namespace SideXP.Database.EditorOnly
             // Alt changes the cells an edit applies to, which are outlined while it's held
             RegisterCallback<KeyUpEvent>(OnKeyUp, TrickleDown.TrickleDown);
             RegisterCallback<PointerMoveEvent>(OnPointerMoveTrickleDown, TrickleDown.TrickleDown);
+            // Ends the drag selections started on a cell or a row handle
+            RegisterCallback<PointerUpEvent>(OnPointerUpTrickleDown, TrickleDown.TrickleDown);
         }
 
         /// <summary>
@@ -858,6 +860,10 @@ namespace SideXP.Database.EditorOnly
 
             // Ctrl on Windows and Linux, Command on macOS
             ClickCell(clickedCell, evt.actionKey, evt.shiftKey);
+
+            // Dragging over other cells selects the range from the pressed cell, or from the active cell with Shift, like a click
+            CellId anchor = evt.shiftKey && !_activeCell.IsNone ? _activeCell : clickedCell;
+            StartDragSelection(DragSelectionMode.Cells, anchor, evt.actionKey);
         }
 
         /// <summary>
