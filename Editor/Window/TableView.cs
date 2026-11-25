@@ -76,6 +76,7 @@ namespace SideXP.Database.EditorOnly
         private const string HeaderClass = "database-table-view__header";
         private const string HeaderLabelClass = "database-table-view__header-label";
         private const string HeaderSortIconClass = "database-table-view__header-sort-icon";
+        private const string HeaderSortPriorityClass = "database-table-view__header-sort-priority";
         private const string CellClass = "database-table-view__cell";
         private const string ActiveCellClass = "database-table-view__cell--active";
         private const string SelectedCellClass = "database-table-view__cell--selected";
@@ -516,7 +517,7 @@ namespace SideXP.Database.EditorOnly
                     null));
             }
 
-            ShowSortInHeader();
+            ShowSortInHeaders();
             if (scrollOffset != Vector2.zero)
                 RestoreScrollOffset(_listView, scrollOffset);
         }
@@ -610,13 +611,15 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Creates the header of a column, with its tooltip: the icon of the sort, shown if the column is sorted, then the name.
+        /// Creates the header of a column, with its tooltip: the priority of the column in the sort and the icon of the sort, shown if
+        /// the column is sorted, then the name.
         /// </summary>
         /// <remarks>
         /// The header holds its column, so the order of the columns can be read from the headers (see <see cref="SaveColumnOrder"/>).
         /// The sort indicator of the list views is hidden by the style sheet, and replaced by the icon (see
-        /// <see cref="UpdateSortIcons"/>). Ctrl-clicking the header selects the column instead of sorting it (see
-        /// <see cref="OnHeaderPointerDown(PointerDownEvent)"/>).
+        /// <see cref="UpdateSortIcons"/>). Shift-clicking and Ctrl-clicking the header selects the column instead of sorting it (see
+        /// <see cref="OnHeaderPointerDown(PointerDownEvent)"/>), and Alt-clicking it adds the column to the sort (see
+        /// <see cref="OnHeaderSortPointerDown(PointerDownEvent)"/>).
         /// </remarks>
         /// <param name="column">The column of which to create the header.</param>
         /// <returns>Returns the created header.</returns>
@@ -626,6 +629,10 @@ namespace SideXP.Database.EditorOnly
             header.AddToClassList(HeaderClass);
 
             // The header is the target of the tooltip, not its content
+            Label sortPriorityLabel = new Label { pickingMode = PickingMode.Ignore };
+            sortPriorityLabel.AddToClassList(HeaderSortPriorityClass);
+            header.Add(sortPriorityLabel);
+
             Icon sortIcon = new Icon { pickingMode = PickingMode.Ignore };
             sortIcon.AddToClassList(HeaderSortIconClass);
             header.Add(sortIcon);
@@ -635,37 +642,10 @@ namespace SideXP.Database.EditorOnly
             header.Add(label);
 
             header.RegisterCallback<PointerDownEvent>(OnHeaderPointerDown);
+            header.RegisterCallback<PointerDownEvent>(OnHeaderSortPointerDown);
             header.RegisterCallback<MouseDownEvent>(OnHeaderMouseDown);
             UpdateSortIcon(header);
             return header;
-        }
-
-        /// <summary>
-        /// Shows the sort of the pipeline on the headers of both list views.
-        /// </summary>
-        private void UpdateSortIcons()
-        {
-            _listView?.Query(className: HeaderClass).ForEach(UpdateSortIcon);
-            _frozenListView?.Query(className: HeaderClass).ForEach(UpdateSortIcon);
-        }
-
-        /// <summary>
-        /// Shows the icon of the sort on the header of a column if the pipeline is sorted by that column, or hides it otherwise.
-        /// </summary>
-        /// <param name="header">The header of the column, created by <see cref="MakeHeader"/>.</param>
-        private void UpdateSortIcon(VisualElement header)
-        {
-            Icon sortIcon = header.Q<Icon>(className: HeaderSortIconClass);
-            if (sortIcon == null)
-                return;
-
-            bool isSorted = _pipeline != null
-                && _pipeline.SortColumnIndex >= 0
-                && header.userData == _columns[_pipeline.SortColumnIndex];
-
-            sortIcon.SetDisplayed(isSorted);
-            if (isSorted)
-                sortIcon.IconName = _pipeline.IsSortDescending ? DatabaseIcons.SortDescending : DatabaseIcons.SortAscending;
         }
 
         /// <summary>
@@ -952,117 +932,6 @@ namespace SideXP.Database.EditorOnly
             {
                 // Deferred, since the list view hasn't laid out its refreshed rows yet
                 schedule.Execute(scrollToRow);
-            }
-        }
-
-        #endregion
-
-
-        #region Sorting
-
-        /// <summary>
-        /// Called when the user clicks the header of a sortable column, in the frozen list or in the main list. Sorts the rows by that
-        /// column.
-        /// </summary>
-        /// <remarks>
-        /// The table is sorted by a single column until multi-column sorting (Next milestone). The headers can describe several sorted
-        /// columns (Shift-click), so only the last sorted column is kept, and the header of the other list is cleared.
-        /// </remarks>
-        /// <param name="listView">The list view whose header has been clicked.</param>
-        private void OnColumnSortingChanged(MultiColumnListView listView)
-        {
-            // Changing the sort descriptions below raises this event again
-            if (_isUpdatingSort || _pipeline == null)
-                return;
-
-            _isUpdatingSort = true;
-            try
-            {
-                SortColumnDescriptions descriptions = listView.sortColumnDescriptions;
-                SortColumnDescription description = descriptions.Count > 0 ? descriptions[descriptions.Count - 1] : null;
-                if (descriptions.Count > 1)
-                {
-                    descriptions.Clear();
-                    descriptions.Add(description);
-                }
-
-                MultiColumnListView otherListView = listView == _listView ? _frozenListView : _listView;
-                if (description != null && otherListView != null && otherListView.sortColumnDescriptions.Count > 0)
-                    otherListView.sortColumnDescriptions.Clear();
-
-                int columnIndex = description != null ? GetColumnIndex(listView, description) : -1;
-                if (columnIndex >= 0)
-                    SetPipelineSort(columnIndex, description.direction == SortDirection.Descending);
-                else
-                    _pipeline.ClearSort();
-            }
-            finally
-            {
-                _isUpdatingSort = false;
-            }
-
-            UpdateSortIcons();
-            SaveSort();
-            Refresh();
-        }
-
-        /// <summary>
-        /// Sorts the rows of the pipeline by a column, through its handler.
-        /// </summary>
-        /// <param name="columnIndex">The index of the column in the pipeline.</param>
-        /// <param name="isDescending">If enabled, the rows are sorted in descending order.</param>
-        private void SetPipelineSort(int columnIndex, bool isDescending)
-        {
-            TableViewColumn column = _columns[columnIndex];
-            _pipeline.SetSort(columnIndex, isDescending, (a, b) => Compare(column, a, b));
-        }
-
-        /// <summary>
-        /// Gets the index of the column of the table described by a sort description of a list view.
-        /// </summary>
-        /// <param name="listView">The list view that owns the description.</param>
-        /// <param name="description">The sort description.</param>
-        /// <returns>Returns the index of the column in the pipeline, or -1 if it's not found.</returns>
-        private int GetColumnIndex(MultiColumnListView listView, SortColumnDescription description)
-        {
-            // The columns of the list views are named after the identifiers of the columns of the table
-            string columnId = description.column?.name;
-            if (string.IsNullOrEmpty(columnId))
-                columnId = description.columnName;
-
-            if (string.IsNullOrEmpty(columnId) && description.columnIndex >= 0 && description.columnIndex < listView.columns.Count)
-                columnId = listView.columns[description.columnIndex].name;
-
-            return _columns.FindIndex(column => column.Id == columnId);
-        }
-
-        /// <summary>
-        /// Compares two values of a column through its handler.
-        /// </summary>
-        /// <remarks>
-        /// An error of the handler is logged once per column, and the values are then considered equal, so a broken custom handler
-        /// doesn't prevent the table from being displayed.
-        /// </remarks>
-        /// <param name="column">The column of the values.</param>
-        /// <param name="a">The first value.</param>
-        /// <param name="b">The second value.</param>
-        /// <returns>Returns the result of the handler, or 0 if it fails.</returns>
-        private static int Compare(TableViewColumn column, object a, object b)
-        {
-            try
-            {
-                return column.Handler.Compare(a, b);
-            }
-            catch (Exception exception)
-            {
-                if (!column.HasLoggedError)
-                {
-                    column.HasLoggedError = true;
-                    Debug.LogError($"{DatabaseConstants.LogPrefix}The cell handler {column.Handler.GetType()} failed to compare " +
-                        $"values of the column \"{column.Name}\". The next errors of this column are not logged.");
-                    Debug.LogException(exception);
-                }
-                return 0;
             }
         }
 

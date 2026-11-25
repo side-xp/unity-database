@@ -15,7 +15,7 @@ namespace SideXP.Database.Tests
 {
 
     /// <summary>
-    /// Tests for the <see cref="TablePipeline"/>: value cache, invalidation per stage, filter and stable sort.
+    /// Tests for the <see cref="TablePipeline"/>: value cache, invalidation per stage, filter and stable sort on one or several columns.
     /// </summary>
     /// <remarks>
     /// The pipeline reads in-memory assets from a list, through accessors that count their reads, so the tests can check which stages
@@ -452,6 +452,98 @@ namespace SideXP.Database.Tests
             Assert.Throws<ArgumentOutOfRangeException>(() => _pipeline.SetSort(-1, false, Compare));
             Assert.Throws<ArgumentOutOfRangeException>(() => _pipeline.SetSort(_pipeline.ColumnCount, false, Compare));
             Assert.Throws<ArgumentNullException>(() => _pipeline.SetSort(NumberColumn, false, null));
+        }
+
+        #endregion
+
+
+        #region Sort on several columns
+
+        /// <summary>
+        /// The rows of equal values in the first column are sorted by the second column.
+        /// </summary>
+        [Test]
+        public void SetSort_SeveralColumns_EqualValuesSortedByNextColumn()
+        {
+            _pipeline.SetSort(new[] { new SortKey(NumberColumn, false, Compare), new SortKey(NameColumn, true, Compare) });
+            _pipeline.Update();
+
+            CollectionAssert.AreEqual(new[] { "B", "D", "C", "A" }, GetVisibleNames());
+        }
+
+        /// <summary>
+        /// Each column has its own direction.
+        /// </summary>
+        [Test]
+        public void SetSort_SeveralColumns_OwnDirections()
+        {
+            _pipeline.SetSort(new[] { new SortKey(NumberColumn, true, Compare), new SortKey(NameColumn, true, Compare) });
+            _pipeline.Update();
+
+            CollectionAssert.AreEqual(new[] { "C", "A", "D", "B" }, GetVisibleNames());
+        }
+
+        /// <summary>
+        /// The rows equal in all the sorted columns keep the order of the source.
+        /// </summary>
+        [Test]
+        public void SetSort_SeveralColumnsAllEqual_KeepSourceOrder()
+        {
+            _pipeline.SetSort(new[] { new SortKey(NumberColumn, false, Compare), new SortKey(NameColumn, true, (a, b) => 0) });
+            _pipeline.Update();
+
+            CollectionAssert.AreEqual(new[] { "B", "D", "A", "C" }, GetVisibleNames());
+        }
+
+        /// <summary>
+        /// The sort keys of the pipeline are the given ones, in their order.
+        /// </summary>
+        [Test]
+        public void SortKeys_SeveralColumns_InOrder()
+        {
+            _pipeline.SetSort(new[] { new SortKey(NameColumn, true, Compare), new SortKey(NumberColumn, false, Compare) });
+
+            Assert.AreEqual(2, _pipeline.SortKeys.Count);
+            Assert.AreEqual(NameColumn, _pipeline.SortKeys[0].ColumnIndex);
+            Assert.IsTrue(_pipeline.SortKeys[0].IsDescending);
+            Assert.AreEqual(NumberColumn, _pipeline.SortKeys[1].ColumnIndex);
+            Assert.IsFalse(_pipeline.SortKeys[1].IsDescending);
+        }
+
+        /// <summary>
+        /// Sorting by an empty list of columns restores the order of the source.
+        /// </summary>
+        [Test]
+        public void SetSort_NoColumn_RestoresSourceOrder()
+        {
+            _pipeline.SetSort(NumberColumn, false, Compare);
+            _pipeline.Update();
+
+            _pipeline.SetSort(new SortKey[0]);
+            _pipeline.Update();
+
+            CollectionAssert.AreEqual(new[] { "A", "B", "C", "D" }, GetVisibleNames());
+            Assert.AreEqual(0, _pipeline.SortKeys.Count);
+        }
+
+        /// <summary>
+        /// A list of keys with an invalid key, or with the same column twice, is refused, and the current sort is kept.
+        /// </summary>
+        [Test]
+        public void SetSort_InvalidKeys_Throws()
+        {
+            _pipeline.SetSort(NumberColumn, false, Compare);
+
+            Assert.Throws<ArgumentNullException>(() => _pipeline.SetSort(null));
+            Assert.Throws<ArgumentOutOfRangeException>(() =>
+                _pipeline.SetSort(new[] { new SortKey(NumberColumn, false, Compare), new SortKey(-1, false, Compare) }));
+            Assert.Throws<ArgumentNullException>(() =>
+                _pipeline.SetSort(new[] { new SortKey(NumberColumn, false, Compare), new SortKey(NameColumn, false, null) }));
+            Assert.Throws<ArgumentException>(() =>
+                _pipeline.SetSort(new[] { new SortKey(NumberColumn, false, Compare), new SortKey(NumberColumn, true, Compare) }));
+
+            Assert.AreEqual(1, _pipeline.SortKeys.Count);
+            Assert.AreEqual(NumberColumn, _pipeline.SortKeys[0].ColumnIndex);
         }
 
         #endregion

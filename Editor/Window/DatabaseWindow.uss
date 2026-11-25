@@ -36,7 +36,7 @@
     margin-top: 0;
 }
 
-/* The header of a column: the icon of the sort, then the name (TableView.MakeHeader()) */
+/* The header of a column: the priority of the column in the sort, the icon of the sort, then the name (TableView.MakeHeader()) */
 .database-table-view__header {
     flex-direction: row;
     justify-content: center;
@@ -65,6 +65,18 @@
 
 .database-table-view__header-sort-icon {
     margin-right: 4px;
+}
+
+/* Shown only when several columns are sorted. Close to the icon it belongs to, smaller and fainter than the name */
+.database-table-view__header-sort-priority {
+    font-size: 10px;
+    -unity-font-style: bold;
+    opacity: 0.7;
+    -unity-text-align: middle-left;
+    padding-left: 0;
+    padding-right: 0;
+    margin-left: 0;
+    margin-right: 1px;
 }
 
 /* Replaced by the icon of the header, which shows the sort beside the name instead of above it */

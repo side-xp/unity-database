@@ -7,7 +7,8 @@ namespace SideXP.Database.EditorOnly
 {
 
     /// <summary>
-    /// The display settings of a table, remembered for the user: column order, widths, hidden columns and sort.
+    /// The display settings of a table, remembered for the user: column order, widths, hidden columns and the sort on one or several
+    /// columns.
     /// </summary>
     /// <remarks>
     /// The tool stores one per table, as the user's default view of the table (see <see cref="UserViews"/>), so it becomes a regular
@@ -16,9 +17,12 @@ namespace SideXP.Database.EditorOnly
     /// Columns are identified by their id. The settings of columns that don't exist anymore are kept but ignored, so they apply again
     /// if the column comes back. The columns that have no settings yet are added at their default position.
     /// </para>
+    /// <para>
+    /// The sort is a list of columns, by priority. It's replaced as a whole when the user changes it.
+    /// </para>
     /// </remarks>
     [Serializable]
-    internal class ViewSettings
+    internal class ViewSettings : ISerializationCallbackReceiver
     {
 
         #region Fields
@@ -36,13 +40,21 @@ namespace SideXP.Database.EditorOnly
         private List<ColumnSettings> _columns = new List<ColumnSettings>();
 
         /// <summary>
-        /// The identifier of the column used to sort the rows, or an empty string to keep the order of the source.
+        /// The columns used to sort the rows, by priority, or an empty list to keep the order of the source. May contain columns that
+        /// don't exist anymore.
+        /// </summary>
+        [SerializeField]
+        private List<ColumnSort> _sort = new List<ColumnSort>();
+
+        /// <summary>
+        /// The identifier of the column of the single sort remembered before the sort on several columns, or an empty string. Only read,
+        /// to move it to <see cref="_sort"/> (see <see cref="OnAfterDeserialize"/>).
         /// </summary>
         [SerializeField]
         private string _sortColumnId = string.Empty;
 
         /// <summary>
-        /// Checks if the rows are sorted in descending order.
+        /// The direction of the sort of <see cref="_sortColumnId"/>. Only read, like the column.
         /// </summary>
         [SerializeField]
         private bool _isSortDescending = false;
@@ -68,17 +80,9 @@ namespace SideXP.Database.EditorOnly
         public string TableId => _tableId;
 
         /// <summary>
-        /// Checks if the rows are sorted by a column.
+        /// Checks if the rows are sorted by at least one column.
         /// </summary>
-        public bool HasSort => !string.IsNullOrEmpty(_sortColumnId);
-
-        /// <summary>
-        /// The identifier of the column used to sort the rows, or null if the rows are not sorted.
-        /// </summary>
-        public string SortColumnId => HasSort ? _sortColumnId : null;
-
-        /// <inheritdoc cref="_isSortDescending"/>
-        public bool IsSortDescending => HasSort && _isSortDescending;
+        public bool HasSort => _sort.Exists(sort => !string.IsNullOrEmpty(sort.ColumnId));
 
         /// <summary>
         /// Gets the display order of the columns of the table, hidden columns included.
@@ -218,29 +222,64 @@ namespace SideXP.Database.EditorOnly
         /// <returns>Returns true if there were settings to remove.</returns>
         public bool Reset()
         {
-            bool hasChanged = _columns.Count > 0 || HasSort;
+            bool hasChanged = _columns.Count > 0 || _sort.Count > 0;
             _columns.Clear();
             ClearSort();
             return hasChanged;
         }
 
         /// <summary>
-        /// Sorts the rows by a column.
+        /// Gets the columns used to sort the rows, by priority.
+        /// </summary>
+        /// <param name="canSort">Checks if a column can be sorted, for example if it exists and is displayed, or null to get all the
+        /// remembered columns. The columns that can't be sorted are skipped, and the next ones take their priority.</param>
+        /// <returns>Returns the sorted columns, by priority. Entries without column and the duplicates of a column (from a file edited
+        /// by hand) are skipped.</returns>
+        public List<ColumnSort> GetSort(Predicate<string> canSort = null)
+        {
+            HashSet<string> columnIds = new HashSet<string>();
+            List<ColumnSort> sort = new List<ColumnSort>(_sort.Count);
+            foreach (ColumnSort columnSort in _sort)
+            {
+                if (string.IsNullOrEmpty(columnSort.ColumnId) || !columnIds.Add(columnSort.ColumnId))
+                    continue;
+
+                if (canSort == null || canSort(columnSort.ColumnId))
+                    sort.Add(columnSort);
+            }
+
+            return sort;
+        }
+
+        /// <summary>
+        /// Sorts the rows by several columns, replacing the current sort.
+        /// </summary>
+        /// <param name="sort">The columns used to sort the rows, by priority. If empty, the sort is removed.</param>
+        /// <returns>Returns true if the sort has changed.</returns>
+        public bool SetSort(IReadOnlyList<ColumnSort> sort)
+        {
+            bool isSame = sort.Count == _sort.Count;
+            for (int i = 0; isSame && i < sort.Count; i++)
+                isSame = sort[i].Equals(_sort[i]);
+
+            if (isSame)
+                return false;
+
+            _sort = new List<ColumnSort>(sort);
+            return true;
+        }
+
+        /// <summary>
+        /// Sorts the rows by a single column, replacing the current sort.
         /// </summary>
         /// <param name="columnId">The identifier of the column used to sort the rows. If null or empty, the sort is removed.</param>
-        /// <param name="isDescending"><inheritdoc cref="_isSortDescending" path="/summary"/></param>
+        /// <param name="isDescending">If enabled, the rows are sorted in descending order.</param>
         /// <returns>Returns true if the sort has changed.</returns>
         public bool SetSort(string columnId, bool isDescending)
         {
-            if (string.IsNullOrEmpty(columnId))
-                return ClearSort();
-
-            if (_sortColumnId == columnId && _isSortDescending == isDescending)
-                return false;
-
-            _sortColumnId = columnId;
-            _isSortDescending = isDescending;
-            return true;
+            return string.IsNullOrEmpty(columnId)
+                ? ClearSort()
+                : SetSort(new[] { new ColumnSort(columnId, isDescending) });
         }
 
         /// <summary>
@@ -249,12 +288,40 @@ namespace SideXP.Database.EditorOnly
         /// <returns>Returns true if the rows were sorted.</returns>
         public bool ClearSort()
         {
-            if (!HasSort)
+            if (_sort.Count == 0)
                 return false;
+
+            _sort.Clear();
+            return true;
+        }
+
+        #endregion
+
+
+        #region Serialization
+
+        /// <summary>
+        /// Called before the settings are saved. Nothing to prepare: the single sort of <see cref="_sortColumnId"/> is moved to the list
+        /// when the settings are loaded.
+        /// </summary>
+        public void OnBeforeSerialize()
+        {
+        }
+
+        /// <summary>
+        /// Called after the settings are loaded. Reads the single sort remembered before the sort on several columns as a list of one
+        /// column, if the settings have no list yet.
+        /// </summary>
+        public void OnAfterDeserialize()
+        {
+            if (string.IsNullOrEmpty(_sortColumnId))
+                return;
+
+            if (_sort.Count == 0)
+                _sort.Add(new ColumnSort(_sortColumnId, _isSortDescending));
 
             _sortColumnId = string.Empty;
             _isSortDescending = false;
-            return true;
         }
 
         #endregion

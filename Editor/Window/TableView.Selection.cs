@@ -667,13 +667,17 @@ namespace SideXP.Database.EditorOnly
 
         /// <summary>
         /// Called when the header of a column receives the mouse event sent after its pointer event, for compatibility. Stops it on the
-        /// clicks that select the column, like the pointer event (see <see cref="OnHeaderPointerDown(PointerDownEvent)"/>), since the
-        /// manipulators of the list view also listen to mouse events.
+        /// clicks that select the column and the Alt-clicks that change the sort, like the pointer event (see
+        /// <see cref="OnHeaderPointerDown(PointerDownEvent)"/> and <see cref="OnHeaderSortPointerDown(PointerDownEvent)"/>), since
+        /// the manipulators of the list view also listen to mouse events.
         /// </summary>
         /// <param name="evt">The emitted event.</param>
         private void OnHeaderMouseDown(MouseDownEvent evt)
         {
-            if (evt.button == (int)MouseButton.LeftMouse && IsColumnSelectionClick(evt.actionKey, evt.shiftKey))
+            if (evt.button != (int)MouseButton.LeftMouse)
+                return;
+
+            if (IsColumnSelectionClick(evt.actionKey, evt.shiftKey) || IsSortCycleClick(evt.altKey, evt.actionKey, evt.shiftKey))
                 evt.StopPropagation();
         }
 

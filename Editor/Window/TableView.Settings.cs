@@ -54,8 +54,8 @@ namespace SideXP.Database.EditorOnly
 
         /// <summary>
         /// Called when the header of a list view is right-clicked. Replaces the items of Unity with the item that adds the clicked
-        /// column to the selection (see <see cref="AppendColumnSelectionItem"/>), and the items that show and hide the columns of the
-        /// table.
+        /// column to the selection (see <see cref="AppendColumnSelectionItem"/>), the items of the sort (see
+        /// <see cref="AppendSortItems"/>), and the items that show and hide the columns of the table.
         /// </summary>
         /// <remarks>
         /// The items of Unity only know the columns of their own list view, and hiding a column directly in a list view would ignore
@@ -70,6 +70,9 @@ namespace SideXP.Database.EditorOnly
                 return;
 
             if (AppendColumnSelectionItem(evt.menu, clickedColumn))
+                evt.menu.AppendSeparator();
+
+            if (AppendSortItems(evt.menu, clickedColumn))
                 evt.menu.AppendSeparator();
 
             // The hidden columns are listed at their place, so the menu shows the whole order of the table
@@ -149,11 +152,10 @@ namespace SideXP.Database.EditorOnly
             // The active cell gets its new element when it's bound again
             _activeCellElement = null;
 
-            // A sort without its column in the headers can't be seen nor changed
-            if (_viewSettings.HasSort && !IsColumnDisplayed(_viewSettings.SortColumnId))
-                _viewSettings.ClearSort();
-
+            // A sorted column without header can't show its sort nor be changed: it leaves the sort, and the next columns take its
+            // priority
             ApplyRememberedSort();
+            SaveSort();
             // The texts of the rows contain the displayed columns only
             ClearSearchTexts();
             if (IsSearching)
@@ -247,53 +249,20 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Sorts the pipeline with the remembered sort, if its column is displayed and can be sorted.
+        /// Sorts the pipeline with the remembered sort. The columns that are missing, hidden or can't be sorted are skipped, and the
+        /// next ones take their priority.
         /// </summary>
         private void ApplyRememberedSort()
         {
-            int columnIndex = _columns.FindIndex(column => column.Id == _viewSettings.SortColumnId);
-            if (IsColumnDisplayed(columnIndex) && _columns[columnIndex].IsSortable)
-                SetPipelineSort(columnIndex, _viewSettings.IsSortDescending);
-            else
-                _pipeline.ClearSort();
+            SetPipelineSort(_viewSettings.GetSort(CanSortColumn));
         }
 
         /// <summary>
-        /// Shows the sort of the pipeline in the header of the list view that displays its column.
-        /// </summary>
-        private void ShowSortInHeader()
-        {
-            if (_pipeline.SortColumnIndex < 0)
-                return;
-
-            string columnId = _columns[_pipeline.SortColumnIndex].Id;
-            MultiColumnListView listView = _frozenListView != null && _frozenListView.columns.Contains(columnId)
-                ? _frozenListView
-                : _listView;
-
-            if (!listView.columns.Contains(columnId))
-                return;
-
-            // Changing the sort descriptions raises the event of a sort chosen by the user
-            _isUpdatingSort = true;
-            try
-            {
-                SortDirection direction = _pipeline.IsSortDescending ? SortDirection.Descending : SortDirection.Ascending;
-                listView.sortColumnDescriptions.Add(new SortColumnDescription(columnId, direction));
-            }
-            finally
-            {
-                _isUpdatingSort = false;
-            }
-        }
-
-        /// <summary>
-        /// Remembers the sort of the pipeline.
+        /// Remembers the sort of the pipeline, replacing the remembered sort.
         /// </summary>
         private void SaveSort()
         {
-            string columnId = _pipeline.SortColumnIndex >= 0 ? _columns[_pipeline.SortColumnIndex].Id : null;
-            if (_viewSettings.SetSort(columnId, _pipeline.IsSortDescending))
+            if (_viewSettings.SetSort(GetSort()))
                 UserViews.instance.ScheduleSave();
         }
 

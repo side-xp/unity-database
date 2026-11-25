@@ -50,19 +50,10 @@ namespace SideXP.Database.EditorOnly
         private Predicate<TableRow> _filter = null;
 
         /// <summary>
-        /// The index of the column used to sort the rows, or -1 to keep the order of the source.
+        /// The columns used to sort the rows, by priority: the rows are sorted by the first column, then the rows of equal values by
+        /// the second column, and so on. Empty to keep the order of the source.
         /// </summary>
-        private int _sortColumnIndex = -1;
-
-        /// <summary>
-        /// Checks if the rows are sorted in descending order.
-        /// </summary>
-        private bool _isSortDescending = false;
-
-        /// <summary>
-        /// Compares two values of the sorted column.
-        /// </summary>
-        private Comparison<object> _sortComparison = null;
+        private List<SortKey> _sortKeys = new List<SortKey>();
 
         /// <summary>
         /// The number of times the source has been loaded, so the users of the pipeline can tell when its rows have been replaced.
@@ -122,11 +113,8 @@ namespace SideXP.Database.EditorOnly
         /// <inheritdoc cref="_sourceVersion"/>
         public int SourceVersion => _sourceVersion;
 
-        /// <inheritdoc cref="_sortColumnIndex"/>
-        public int SortColumnIndex => _sortColumnIndex;
-
-        /// <inheritdoc cref="_isSortDescending"/>
-        public bool IsSortDescending => _isSortDescending;
+        /// <inheritdoc cref="_sortKeys"/>
+        public IReadOnlyList<SortKey> SortKeys => _sortKeys;
 
         /// <summary>
         /// The condition a row must meet to be visible, or null to show all the rows. Setting it invalidates the filter.
@@ -142,7 +130,7 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Sorts the rows by a column. Rows with equal values keep the order of the source, in both directions.
+        /// Sorts the rows by a single column. Rows with equal values keep the order of the source, in both directions.
         /// </summary>
         /// <param name="columnIndex">The index of the column used to sort the rows.</param>
         /// <param name="isDescending">If enabled, the rows are sorted in descending order.</param>
@@ -151,12 +139,36 @@ namespace SideXP.Database.EditorOnly
         /// <exception cref="ArgumentNullException">Thrown if the comparison is null.</exception>
         public void SetSort(int columnIndex, bool isDescending, Comparison<object> comparison)
         {
-            if (columnIndex < 0 || columnIndex >= _accessors.Count)
-                throw new ArgumentOutOfRangeException(nameof(columnIndex));
+            SetSort(new[] { new SortKey(columnIndex, isDescending, comparison) });
+        }
 
-            _sortColumnIndex = columnIndex;
-            _isSortDescending = isDescending;
-            _sortComparison = comparison ?? throw new ArgumentNullException(nameof(comparison));
+        /// <summary>
+        /// Sorts the rows by several columns, by priority: the rows are sorted by the first key, then the rows of equal values by the
+        /// second key, and so on. Each key has its own direction. Rows equal for all the keys keep the order of the source.
+        /// </summary>
+        /// <param name="keys">The columns used to sort the rows, by priority. If empty, the rows are in the order of the source.</param>
+        /// <exception cref="ArgumentNullException">Thrown if the list of keys, or the comparison of a key, is null.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if the column index of a key is out of range.</exception>
+        /// <exception cref="ArgumentException">Thrown if several keys sort the same column.</exception>
+        public void SetSort(IReadOnlyList<SortKey> keys)
+        {
+            if (keys == null)
+                throw new ArgumentNullException(nameof(keys));
+
+            HashSet<int> columnIndices = new HashSet<int>();
+            foreach (SortKey key in keys)
+            {
+                if (key.ColumnIndex < 0 || key.ColumnIndex >= _accessors.Count)
+                    throw new ArgumentOutOfRangeException(nameof(keys), $"The column index {key.ColumnIndex} is out of range.");
+
+                if (key.Comparison == null)
+                    throw new ArgumentNullException(nameof(keys), $"The key of the column {key.ColumnIndex} has no comparison.");
+
+                if (!columnIndices.Add(key.ColumnIndex))
+                    throw new ArgumentException($"The column {key.ColumnIndex} is sorted by several keys.", nameof(keys));
+            }
+
+            _sortKeys = new List<SortKey>(keys);
             _isSortValid = false;
         }
 
@@ -165,9 +177,7 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         public void ClearSort()
         {
-            _sortColumnIndex = -1;
-            _isSortDescending = false;
-            _sortComparison = null;
+            _sortKeys.Clear();
             _isSortValid = false;
         }
 
@@ -328,21 +338,20 @@ namespace SideXP.Database.EditorOnly
         /// </remarks>
         private void ApplySort()
         {
-            if (_sortColumnIndex < 0)
+            // Copied, so the comparison of the rows doesn't go through the list
+            SortKey[] keys = _sortKeys.ToArray();
+            _visibleRows.Sort((a, b) =>
             {
-                _visibleRows.Sort((a, b) => a.SourceIndex.CompareTo(b.SourceIndex));
-            }
-            else
-            {
-                int columnIndex = _sortColumnIndex;
-                // The sign is used instead of the raw result, since negating int.MinValue overflows
-                int direction = _isSortDescending ? -1 : 1;
-                _visibleRows.Sort((a, b) =>
+                foreach (SortKey key in keys)
                 {
-                    int result = Math.Sign(_sortComparison(a.GetValue(columnIndex), b.GetValue(columnIndex))) * direction;
-                    return result != 0 ? result : a.SourceIndex.CompareTo(b.SourceIndex);
-                });
-            }
+                    // The sign is used instead of the raw result, since negating int.MinValue overflows
+                    int result = Math.Sign(key.Comparison(a.GetValue(key.ColumnIndex), b.GetValue(key.ColumnIndex)));
+                    if (result != 0)
+                        return key.IsDescending ? -result : result;
+                }
+
+                return a.SourceIndex.CompareTo(b.SourceIndex);
+            });
 
             _isSortValid = true;
         }

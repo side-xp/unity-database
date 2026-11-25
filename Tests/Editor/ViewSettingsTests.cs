@@ -10,7 +10,8 @@ namespace SideXP.Database.Tests
 {
 
     /// <summary>
-    /// Tests for the remembered settings of the tables (<see cref="ViewSettings"/>): column order, widths, visibility and sort.
+    /// Tests for the remembered settings of the tables (<see cref="ViewSettings"/>): column order, widths, visibility and sort on one
+    /// or several columns.
     /// </summary>
     public class ViewSettingsTests
     {
@@ -252,7 +253,7 @@ namespace SideXP.Database.Tests
         #region Sort
 
         /// <summary>
-        /// A sort is remembered with its direction, and setting the same sort again changes nothing.
+        /// A sort on a single column is remembered with its direction, and setting the same sort again changes nothing.
         /// </summary>
         [Test]
         public void SetSort_Column_Remembered()
@@ -262,8 +263,53 @@ namespace SideXP.Database.Tests
             Assert.IsTrue(settings.SetSort("A", true));
             Assert.IsFalse(settings.SetSort("A", true));
             Assert.IsTrue(settings.HasSort);
-            Assert.AreEqual("A", settings.SortColumnId);
-            Assert.IsTrue(settings.IsSortDescending);
+            CollectionAssert.AreEqual(new[] { new ColumnSort("A", true) }, settings.GetSort());
+        }
+
+        /// <summary>
+        /// A sort on several columns is remembered in its order, each column with its direction, and setting the same sort again
+        /// changes nothing.
+        /// </summary>
+        [Test]
+        public void SetSort_SeveralColumns_RememberedInOrder()
+        {
+            ViewSettings settings = new ViewSettings(TableId);
+            ColumnSort[] sort = { new ColumnSort("B", false), new ColumnSort("A", true) };
+
+            Assert.IsTrue(settings.SetSort(sort));
+            Assert.IsFalse(settings.SetSort(new[] { new ColumnSort("B", false), new ColumnSort("A", true) }));
+            CollectionAssert.AreEqual(sort, settings.GetSort());
+
+            Assert.IsTrue(settings.SetSort(new[] { new ColumnSort("B", false), new ColumnSort("A", false) }));
+            Assert.IsTrue(settings.SetSort(new[] { new ColumnSort("A", false), new ColumnSort("B", false) }));
+        }
+
+        /// <summary>
+        /// The columns that can't be sorted (for example missing or hidden columns) are skipped, and the next ones take their
+        /// priority. They are still remembered.
+        /// </summary>
+        [Test]
+        public void GetSort_MissingColumns_Skipped()
+        {
+            ViewSettings settings = new ViewSettings(TableId);
+            settings.SetSort(new[] { new ColumnSort("Missing", false), new ColumnSort("A", true), new ColumnSort("B", false) });
+            HashSet<string> columnIds = new HashSet<string> { "A", "B" };
+
+            CollectionAssert.AreEqual(new[] { new ColumnSort("A", true), new ColumnSort("B", false) },
+                settings.GetSort(columnIds.Contains));
+            Assert.AreEqual(3, settings.GetSort().Count);
+        }
+
+        /// <summary>
+        /// The entries without column and the duplicates of a column, which a file edited by hand can contain, are skipped.
+        /// </summary>
+        [Test]
+        public void GetSort_InvalidEntries_Skipped()
+        {
+            ViewSettings settings = new ViewSettings(TableId);
+            settings.SetSort(new[] { new ColumnSort("A", true), new ColumnSort(null, false), new ColumnSort("A", false) });
+
+            CollectionAssert.AreEqual(new[] { new ColumnSort("A", true) }, settings.GetSort());
         }
 
         /// <summary>
@@ -280,8 +326,11 @@ namespace SideXP.Database.Tests
             settings.SetSort("A", false);
             Assert.IsTrue(settings.SetSort(null, false));
             Assert.IsFalse(settings.HasSort);
-            Assert.IsNull(settings.SortColumnId);
-            Assert.IsFalse(settings.IsSortDescending);
+            Assert.IsEmpty(settings.GetSort());
+
+            settings.SetSort(new[] { new ColumnSort("A", false), new ColumnSort("B", true) });
+            Assert.IsTrue(settings.SetSort(new ColumnSort[0]));
+            Assert.IsFalse(settings.HasSort);
         }
 
         #endregion
@@ -300,7 +349,7 @@ namespace SideXP.Database.Tests
             settings.SetColumnOrder(new[] { "C", "B" });
             settings.SetWidth("B", ResizedWidth);
             settings.SetHidden("A", true);
-            settings.SetSort("C", true);
+            settings.SetSort(new[] { new ColumnSort("C", true), new ColumnSort("B", false) });
 
             ViewSettings copy = new ViewSettings(string.Empty);
             JsonUtility.FromJsonOverwrite(JsonUtility.ToJson(settings), copy);
@@ -309,8 +358,40 @@ namespace SideXP.Database.Tests
             CollectionAssert.AreEqual(new[] { "A", "C", "B" }, copy.GetColumnOrder(new[] { "A", "B", "C" }));
             Assert.AreEqual(ResizedWidth, copy.GetWidth("B"));
             Assert.IsTrue(copy.IsHidden("A"));
-            Assert.AreEqual("C", copy.SortColumnId);
-            Assert.IsTrue(copy.IsSortDescending);
+            CollectionAssert.AreEqual(new[] { new ColumnSort("C", true), new ColumnSort("B", false) }, copy.GetSort());
+        }
+
+        /// <summary>
+        /// The single sort remembered before the sort on several columns is read as a sort on one column.
+        /// </summary>
+        [Test]
+        public void Serialization_SingleSortOfFirstPass_ReadAsList()
+        {
+            string json = $"{{\"_tableId\":\"{TableId}\",\"_sortColumnId\":\"A\",\"_isSortDescending\":true}}";
+            ViewSettings settings = new ViewSettings(string.Empty);
+            JsonUtility.FromJsonOverwrite(json, settings);
+
+            CollectionAssert.AreEqual(new[] { new ColumnSort("A", true) }, settings.GetSort());
+
+            // The single sort is not saved again, so it doesn't come back once the user clears the sort
+            settings.ClearSort();
+            ViewSettings copy = new ViewSettings(string.Empty);
+            JsonUtility.FromJsonOverwrite(JsonUtility.ToJson(settings), copy);
+            Assert.IsFalse(copy.HasSort);
+        }
+
+        /// <summary>
+        /// The single sort of the first pass doesn't replace a sort on several columns found in the same settings.
+        /// </summary>
+        [Test]
+        public void Serialization_SingleSortAndList_ListKept()
+        {
+            string json = $"{{\"_tableId\":\"{TableId}\",\"_sort\":[{{\"_columnId\":\"B\",\"_isDescending\":false}}]," +
+                "\"_sortColumnId\":\"A\",\"_isSortDescending\":true}";
+            ViewSettings settings = new ViewSettings(string.Empty);
+            JsonUtility.FromJsonOverwrite(json, settings);
+
+            CollectionAssert.AreEqual(new[] { new ColumnSort("B", false) }, settings.GetSort());
         }
 
         #endregion
