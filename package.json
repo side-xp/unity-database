@@ -1,6 +1,6 @@
 {
   "name": "com.side-xp.database",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Spreadsheet-like view for editing Unity assets in a more practical way.",
   "displayName": "SideXP - Database",
   "unity": "6000.3",

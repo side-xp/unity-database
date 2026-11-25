@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v1.0.1 (2026-11-25)
+
+### Bug Fixes
+
+- Improved styles
+  ([`d0b0594`](https://github.com/side-xp/unity-database/commit/d0b0594c66bb2ac710755abec780a92c2d228fa0))
+
+- Update documentation website
+  ([`f86d2e3`](https://github.com/side-xp/unity-database/commit/f86d2e30bd8a3431ecb76beab337d3d6e7840b72))
+
+### Documentation
+
+- Update previews
+  ([`58d3da8`](https://github.com/side-xp/unity-database/commit/58d3da802ba754238be615fb7108b20821f14168))
+
+
 ## v1.0.0 (2026-11-24)
 
 ### Bug Fixes
