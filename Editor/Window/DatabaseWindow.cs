@@ -15,8 +15,8 @@ namespace SideXP.Database.EditorOnly
     /// Editor window that displays assets as tables, and lets you view and edit their values like in a spreadsheet.
     /// </summary>
     /// <remarks>
-    /// The window shows either the list of the tables, or an open table. The open table, the search text of the list and the search
-    /// text of the open table are remembered across domain reloads and editor sessions. Open it from
+    /// The window shows either the list of the tables, or an open table. The open table, the search text of the list, the search
+    /// text of the open table and the selection sync option are remembered across domain reloads and editor sessions. Open it from
     /// <c>Tools &gt; Sideways Experiments &gt; Database</c>, or from code.
     /// </remarks>
     /// <example>
@@ -54,6 +54,13 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         [SerializeField]
         private string _rowSearch = string.Empty;
+
+        /// <summary>
+        /// Checks if the selection of the open table is synced with the selection of Unity. Disabled by default, since it changes the
+        /// selection of the whole editor.
+        /// </summary>
+        [SerializeField]
+        private bool _isSelectionSynced = false;
 
         /// <summary>
         /// The asset whose row must be shown once the open table is displayed, or null if there is none. Kept until the UI is built,
@@ -95,6 +102,8 @@ namespace SideXP.Database.EditorOnly
             _tablePage = new TablePage();
             _tablePage.BackClicked += ShowTableList;
             _tablePage.SearchChanged += search => _rowSearch = search;
+            _tablePage.SetSelectionSynced(_isSelectionSynced);
+            _tablePage.SelectionSyncChanged += isSynced => _isSelectionSynced = isSynced;
             rootVisualElement.Add(_tablePage);
 
             RefreshPage();

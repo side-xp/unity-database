@@ -250,6 +250,7 @@ namespace SideXP.Database.EditorOnly
         /// <param name="evt">The emitted event.</param>
         private void OnAttachToPanel(AttachToPanelEvent evt)
         {
+            UpdateUnitySelectionListening(true);
             if (_changeTracker == null)
                 return;
 
@@ -268,6 +269,7 @@ namespace SideXP.Database.EditorOnly
             EndEdit(true, false);
             SaveColumnOrder();
             _changeTracker?.Stop();
+            UpdateUnitySelectionListening(false);
         }
 
         #endregion
@@ -885,6 +887,7 @@ namespace SideXP.Database.EditorOnly
             cell.EnableInClassList(ActiveCellClass, isActive);
             cell.EnableInClassList(SelectedCellClass, isSelected);
             cell.EnableInClassList(AltTargetCellClass, hasRow && IsAltTarget(binding.Column, isSelected, isActive));
+            cell.EnableInClassList(SyncedRowCellClass, hasRow && IsSyncedRow(binding.Row));
             if (isActive)
                 _activeCellElement = cell;
             else if (_activeCellElement == cell)

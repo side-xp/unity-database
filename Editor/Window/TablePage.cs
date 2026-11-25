@@ -21,6 +21,7 @@ namespace SideXP.Database.EditorOnly
         private const string TitleClass = "database-toolbar__title";
         private const string SpacerClass = "database-toolbar__spacer";
         private const string RowSearchClass = "database-toolbar__row-search";
+        private const string CheckedButtonClass = "database-toolbar__button--checked";
 
         private const string SearchTooltip = "Shows the rows that contain each word of the search, in their asset name or in their " +
             "cells, ignoring case. Cells are searched as they are displayed: names for enums, paths for references.";
@@ -31,6 +32,10 @@ namespace SideXP.Database.EditorOnly
         private const string RefreshText = "Refresh";
         private const string RefreshTooltip = "Loads the assets of the table again. Use it if a change made outside of the window " +
             "doesn't show up, such as a value written by a script without notifying Unity.";
+        private const string SyncSelectionText = "Sync Selection";
+        private const string SyncSelectionTooltip = "When enabled, selecting cells selects the assets of their rows in Unity, so the " +
+            "Inspector shows them (and edits several of them at once). The rows of the assets selected elsewhere are highlighted. " +
+            "Disabled by default, since it changes the selection of the whole editor, which other windows react to.";
 
         /// <summary>
         /// The displayed table, or null if none has been set.
@@ -58,9 +63,21 @@ namespace SideXP.Database.EditorOnly
         private ToolbarButton _createButton = null;
 
         /// <summary>
+        /// The button that enables and disables the selection sync (see <see cref="TableView.SetSelectionSynced(bool)"/>). A button
+        /// rather than a toggle, so it shows an icon like the other buttons of the toolbar: a link while the sync is enabled, a broken
+        /// link otherwise.
+        /// </summary>
+        private ToolbarButton _syncSelectionButton = null;
+
+        /// <summary>
         /// Displays the rows of the table.
         /// </summary>
         private TableView _tableView = null;
+
+        /// <summary>
+        /// Called when the user enables or disables the selection sync, with its new state.
+        /// </summary>
+        public event Action<bool> SelectionSyncChanged;
 
         /// <summary>
         /// Called when the user asks to go back to the table list.
@@ -116,6 +133,10 @@ namespace SideXP.Database.EditorOnly
             ToolbarButton refreshButton = new ToolbarButton(_tableView.Reload) { tooltip = RefreshTooltip };
             DatabaseElements.SetIcon(refreshButton, DatabaseIcons.Refresh, RefreshText);
             toolbar.Add(refreshButton);
+
+            _syncSelectionButton = new ToolbarButton(OnSyncSelectionClicked) { tooltip = SyncSelectionTooltip };
+            UpdateSyncSelectionButton();
+            toolbar.Add(_syncSelectionButton);
             Add(toolbar);
             Add(_tableView);
         }
@@ -157,6 +178,44 @@ namespace SideXP.Database.EditorOnly
         {
             _table = null;
             _tableView.ClearTable();
+        }
+
+        /// <summary>
+        /// Enables or disables the selection sync, without notifying <see cref="SelectionSyncChanged"/>. Used to restore the option.
+        /// </summary>
+        /// <param name="isSynced">If enabled, the selection of the table is synced with the selection of Unity.</param>
+        public void SetSelectionSynced(bool isSynced)
+        {
+            _tableView.SetSelectionSynced(isSynced);
+            UpdateSyncSelectionButton();
+        }
+
+        #endregion
+
+
+        #region Selection sync
+
+        /// <summary>
+        /// Called when the user clicks the button of the selection sync. Enables the sync if it's disabled, and disables it otherwise.
+        /// </summary>
+        private void OnSyncSelectionClicked()
+        {
+            bool isSynced = !_tableView.IsSelectionSynced;
+            _tableView.SetSelectionSynced(isSynced);
+            UpdateSyncSelectionButton();
+            SelectionSyncChanged?.Invoke(isSynced);
+        }
+
+        /// <summary>
+        /// Shows the state of the selection sync on its button: its icon, and the background of a checked toolbar button while the
+        /// sync is enabled.
+        /// </summary>
+        private void UpdateSyncSelectionButton()
+        {
+            bool isSynced = _tableView.IsSelectionSynced;
+            string iconName = isSynced ? DatabaseIcons.SelectionSynced : DatabaseIcons.SelectionNotSynced;
+            DatabaseElements.SetIcon(_syncSelectionButton, iconName, SyncSelectionText);
+            _syncSelectionButton.EnableInClassList(CheckedButtonClass, isSynced);
         }
 
         #endregion

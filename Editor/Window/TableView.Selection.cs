@@ -453,10 +453,14 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Ends the drag selection in progress, if any. The selection stays as it is.
+        /// Ends the drag selection in progress, if any. The selection stays as it is, and is given to Unity if the selection sync is
+        /// enabled.
         /// </summary>
         private void EndDragSelection()
         {
+            if (_dragMode != DragSelectionMode.None)
+                ScheduleUnitySelectionUpdate();
+
             _dragMode = DragSelectionMode.None;
             _dragAnchor = CellId.None;
             _dragLastCell = CellId.None;
@@ -769,6 +773,8 @@ namespace SideXP.Database.EditorOnly
             UpdateCellHighlights();
             if (_pipeline != null)
                 _statusLabel.text = GetStatusText();
+
+            ScheduleUnitySelectionUpdate();
         }
 
         /// <summary>

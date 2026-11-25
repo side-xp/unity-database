@@ -49,6 +49,16 @@ namespace SideXP.Database.EditorOnly
         public const string Delete = "trash";
 
         /// <summary>
+        /// A chain link, for the button of the selection sync while it's enabled.
+        /// </summary>
+        public const string SelectionSynced = "link";
+
+        /// <summary>
+        /// A broken chain link, for the button of the selection sync while it's disabled.
+        /// </summary>
+        public const string SelectionNotSynced = "link-off";
+
+        /// <summary>
         /// An arrow pointing up, shown in the header of a column sorted in ascending order.
         /// </summary>
         public const string SortAscending = "arrow-up";

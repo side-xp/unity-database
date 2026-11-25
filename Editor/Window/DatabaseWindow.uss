@@ -122,6 +122,12 @@
     margin-right: 0;
 }
 
+/* The cells of the rows whose assets are selected in Unity, while the selection sync is enabled. Lighter than the selection, which is
+   drawn over it (declared after it) */
+.database-table-view__cell--synced {
+    background-color: rgba(58, 121, 187, 0.1);
+}
+
 /* The selected cells. The active cell is usually selected too, so a single click shows both styles. Temporary look, until the style
    pass */
 .database-table-view__cell--selected {
@@ -326,11 +332,21 @@
     cursor: link;
 }
 
+
 /* The focused button keeps the borders of the other toolbar buttons instead of the blue focus border, and is marked by its
    background only, so the buttons can still be reached with the keyboard */
 .database-toolbar > .unity-toolbar-button:focus {
     border-color: var(--unity-colors-toolbar_button-border);
     background-color: var(--unity-colors-toolbar_button-background-focus);
+}
+
+/* A toolbar button used as a toggle, while it's on (the selection sync): the background of Unity's checked toolbar toggles. It stays
+   on hover and focus (and press, which is also a hover), so the state is always visible: declared after the focus style, with more
+   classes than it and than the hover style of Unity */
+.database-toolbar > .unity-toolbar-button.database-toolbar__button--checked,
+.database-toolbar > .unity-toolbar-button.database-toolbar__button--checked:hover,
+.database-toolbar > .unity-toolbar-button.database-toolbar__button--checked:focus {
+    background-color: var(--unity-colors-toolbar_button-background-checked);
 }
 
 .database-toolbar > .database-toolbar__search,
