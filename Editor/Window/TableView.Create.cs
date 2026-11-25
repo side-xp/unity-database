@@ -68,7 +68,7 @@ namespace SideXP.Database.EditorOnly
                 return;
 
             bool hasChoice = _creatableTypes.Count > 1;
-            DatabaseElements.SetBuiltInIcon(button, hasChoice ? BuiltInIcons.AddDropdown : BuiltInIcons.Add, label);
+            DatabaseElements.SetIcon(button, hasChoice ? DatabaseIcons.CreateWithChoice : DatabaseIcons.Create, label);
             button.tooltip = GetCreateTooltip();
         }
 

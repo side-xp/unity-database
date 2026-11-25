@@ -337,7 +337,7 @@ namespace SideXP.Database.EditorOnly
                 return;
 
             List<string> order = new List<string>(_listView.columns.Count);
-            _listView.Query<Label>(className: HeaderClass).ForEach(header =>
+            _listView.Query(className: HeaderClass).ForEach(header =>
             {
                 if (header.userData is TableViewColumn column)
                     order.Add(column.Id);

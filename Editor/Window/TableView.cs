@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 
+using SideXP.Core.EditorOnly;
+
 using Object = UnityEngine.Object;
 
 namespace SideXP.Database.EditorOnly
@@ -72,6 +74,8 @@ namespace SideXP.Database.EditorOnly
         private const string ListClass = "database-table-view__list";
         private const string FrozenListClass = "database-table-view__frozen-list";
         private const string HeaderClass = "database-table-view__header";
+        private const string HeaderLabelClass = "database-table-view__header-label";
+        private const string HeaderSortIconClass = "database-table-view__header-sort-icon";
         private const string CellClass = "database-table-view__cell";
         private const string ActiveCellClass = "database-table-view__cell--active";
         private const string HoverMirrorRowClass = "database-table-view__row--hover-mirror";
@@ -83,10 +87,10 @@ namespace SideXP.Database.EditorOnly
         private const string NoAssetMessage = "There is no asset of this table in the project.";
 
         /// <summary>
-        /// The height of the rows, in pixels. Smaller than the default height of the list views of the editor, so more rows fit, like
-        /// in a spreadsheet.
+        /// The height of the rows, in pixels. Leaves some space around the content of the cells, whose vertical padding is set by the
+        /// style sheet of the window.
         /// </summary>
-        private const float RowHeight = 20;
+        private const float RowHeight = 24;
 
         /// <summary>
         /// The initial width of the flexible columns, in pixels. They grow to fill the width left by the other columns.
@@ -584,18 +588,59 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Creates the header of a column, with its tooltip.
+        /// Creates the header of a column, with its tooltip: the icon of the sort, shown if the column is sorted, then the name.
         /// </summary>
         /// <remarks>
         /// The header holds its column, so the order of the columns can be read from the headers (see <see cref="SaveColumnOrder"/>).
+        /// The sort indicator of the list views is hidden by the style sheet, and replaced by the icon (see
+        /// <see cref="UpdateSortIcons"/>).
         /// </remarks>
         /// <param name="column">The column of which to create the header.</param>
         /// <returns>Returns the created header.</returns>
-        private static VisualElement MakeHeader(TableViewColumn column)
+        private VisualElement MakeHeader(TableViewColumn column)
         {
-            Label header = new Label(column.Name) { tooltip = column.Tooltip, userData = column };
+            VisualElement header = new VisualElement { tooltip = column.Tooltip, userData = column };
             header.AddToClassList(HeaderClass);
+
+            // The header is the target of the tooltip, not its content
+            Icon sortIcon = new Icon { pickingMode = PickingMode.Ignore };
+            sortIcon.AddToClassList(HeaderSortIconClass);
+            header.Add(sortIcon);
+
+            Label label = new Label(column.Name) { pickingMode = PickingMode.Ignore };
+            label.AddToClassList(HeaderLabelClass);
+            header.Add(label);
+
+            UpdateSortIcon(header);
             return header;
+        }
+
+        /// <summary>
+        /// Shows the sort of the pipeline on the headers of both list views.
+        /// </summary>
+        private void UpdateSortIcons()
+        {
+            _listView?.Query(className: HeaderClass).ForEach(UpdateSortIcon);
+            _frozenListView?.Query(className: HeaderClass).ForEach(UpdateSortIcon);
+        }
+
+        /// <summary>
+        /// Shows the icon of the sort on the header of a column if the pipeline is sorted by that column, or hides it otherwise.
+        /// </summary>
+        /// <param name="header">The header of the column, created by <see cref="MakeHeader"/>.</param>
+        private void UpdateSortIcon(VisualElement header)
+        {
+            Icon sortIcon = header.Q<Icon>(className: HeaderSortIconClass);
+            if (sortIcon == null)
+                return;
+
+            bool isSorted = _pipeline != null
+                && _pipeline.SortColumnIndex >= 0
+                && header.userData == _columns[_pipeline.SortColumnIndex];
+
+            sortIcon.SetDisplayed(isSorted);
+            if (isSorted)
+                sortIcon.IconName = _pipeline.IsSortDescending ? DatabaseIcons.SortDescending : DatabaseIcons.SortAscending;
         }
 
         /// <summary>
@@ -908,6 +953,7 @@ namespace SideXP.Database.EditorOnly
                 _isUpdatingSort = false;
             }
 
+            UpdateSortIcons();
             SaveSort();
             Refresh();
         }

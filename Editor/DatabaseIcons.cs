@@ -24,6 +24,16 @@ namespace SideXP.Database.EditorOnly
         public const string Refresh = "refresh";
 
         /// <summary>
+        /// A plus sign, for the buttons that create an asset when the table has a single type to create.
+        /// </summary>
+        public const string Create = "plus";
+
+        /// <summary>
+        /// A list with a plus sign, for the buttons that create an asset when the table has several types to choose from in a menu.
+        /// </summary>
+        public const string CreateWithChoice = "playlist-add";
+
+        /// <summary>
         /// A magnifying glass, for the button that selects an asset and shows it in the Project window.
         /// </summary>
         public const string Select = "search";
@@ -37,6 +47,16 @@ namespace SideXP.Database.EditorOnly
         /// A trash can, for the button that deletes an asset.
         /// </summary>
         public const string Delete = "trash";
+
+        /// <summary>
+        /// An arrow pointing up, shown in the header of a column sorted in ascending order.
+        /// </summary>
+        public const string SortAscending = "arrow-up";
+
+        /// <summary>
+        /// An arrow pointing down, shown in the header of a column sorted in descending order.
+        /// </summary>
+        public const string SortDescending = "arrow-down";
 
         #endregion
 
