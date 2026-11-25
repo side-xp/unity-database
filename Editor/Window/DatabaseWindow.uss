@@ -128,6 +128,17 @@
     background-color: rgba(58, 121, 187, 0.25);
 }
 
+/* While Alt is held, the selected cells that an edit of the active cell would change (same type, in any column). Fainter than the
+   outline of the active cell, declared before it so the active cell wins. The padding is reduced by the width of the border */
+.database-table-view__cell--alt-target {
+    padding-top: 2px;
+    padding-bottom: 2px;
+    padding-left: 3px;
+    padding-right: 3px;
+    border-width: 1px;
+    border-color: rgba(58, 121, 187, 0.7);
+}
+
 /* The active cell has an outline only, so it can be told apart inside a selection. The padding is reduced by the width of the border,
    so its content doesn't move */
 .database-table-view__cell--active {

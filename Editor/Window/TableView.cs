@@ -234,6 +234,9 @@ namespace SideXP.Database.EditorOnly
             // The view gets the focus when a cell is clicked, so it receives the keys that start an edit
             focusable = true;
             RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
+            // Alt changes the cells an edit applies to, which are outlined while it's held
+            RegisterCallback<KeyUpEvent>(OnKeyUp, TrickleDown.TrickleDown);
+            RegisterCallback<PointerMoveEvent>(OnPointerMoveTrickleDown, TrickleDown.TrickleDown);
         }
 
         /// <summary>
@@ -676,6 +679,8 @@ namespace SideXP.Database.EditorOnly
             cell.AddToClassList(CellClass);
             cell.Add(column.IsControls ? CreateControls(cell) : column.Handler.CreateDisplay());
             cell.RegisterCallback<PointerDownEvent>(OnCellPointerDown);
+            // Before the live controls of the display get the press, which they stop
+            cell.RegisterCallback<PointerDownEvent>(OnCellPointerDownTrickleDown, TrickleDown.TrickleDown);
             cell.RegisterCallback<PointerEnterEvent>(OnCellPointerEnter);
             cell.RegisterCallback<PointerLeaveEvent>(OnCellPointerLeave);
             cell.RegisterCallback<CellValueSubmitEvent>(OnCellValueSubmitted);
@@ -856,8 +861,8 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Highlights a cell element if it displays a selected cell, outlines it if it displays the active cell, and removes these
-        /// styles otherwise.
+        /// Highlights a cell element if it displays a selected cell, outlines it if it displays the active cell or a cell that an edit
+        /// with Alt would change (see <see cref="IsAltTarget"/>), and removes these styles otherwise.
         /// </summary>
         /// <param name="cell">The element created by <see cref="MakeCell(TableViewColumn, bool)"/>.</param>
         private void UpdateCellHighlight(VisualElement cell)
@@ -870,6 +875,7 @@ namespace SideXP.Database.EditorOnly
             bool isSelected = hasRow && _selection.Contains(new CellId(binding.Row.Asset, binding.Column.Id));
             cell.EnableInClassList(ActiveCellClass, isActive);
             cell.EnableInClassList(SelectedCellClass, isSelected);
+            cell.EnableInClassList(AltTargetCellClass, hasRow && IsAltTarget(binding.Column, isSelected, isActive));
             if (isActive)
                 _activeCellElement = cell;
             else if (_activeCellElement == cell)

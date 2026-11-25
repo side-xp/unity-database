@@ -505,6 +505,7 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         private void UpdateCellHighlights()
         {
+            UpdateAltTargetType();
             _body.Query(className: CellClass).ForEach(UpdateCellHighlight);
         }
 

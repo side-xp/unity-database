@@ -4,6 +4,7 @@ using NUnit.Framework;
 
 using UnityEngine;
 using UnityEngine.UIElements;
+using UnityEditor;
 using UnityEditor.UIElements;
 
 using SideXP.Database.EditorOnly;
@@ -300,6 +301,71 @@ namespace SideXP.Database.Tests
         public void Constructor_UnknownProperty_Throws()
         {
             Assert.Throws<ArgumentException>(() => new CellEditSession(_asset, "_unknown", "Edit"));
+        }
+
+        /// <summary>
+        /// The writes made to other cells during an edit join its Undo step: undoing the edit reverts all the cells.
+        /// </summary>
+        [Test]
+        public void WriteValue_ConfirmedEdit_SingleUndoStep()
+        {
+            PipelineTestSO otherAsset = ScriptableObject.CreateInstance<PipelineTestSO>();
+            otherAsset.number = 5;
+            try
+            {
+                using (CellEditSession session = new CellEditSession(_asset, NumberPath, "Edit Number"))
+                {
+                    session.Write(10);
+                    Assert.IsTrue(CellEditSession.WriteValue(otherAsset, NumberPath, 10));
+                    session.Confirm();
+                }
+
+                Assert.AreEqual(10, _asset.number);
+                Assert.AreEqual(10, otherAsset.number);
+
+                Undo.PerformUndo();
+                Assert.AreEqual(3, _asset.number);
+                Assert.AreEqual(5, otherAsset.number);
+            }
+            finally
+            {
+                Object.DestroyImmediate(otherAsset);
+            }
+        }
+
+        /// <summary>
+        /// A cancelled edit also reverts the writes made to other cells.
+        /// </summary>
+        [Test]
+        public void WriteValue_CancelledEdit_Reverted()
+        {
+            PipelineTestSO otherAsset = ScriptableObject.CreateInstance<PipelineTestSO>();
+            otherAsset.number = 5;
+            try
+            {
+                using (CellEditSession session = new CellEditSession(_asset, NumberPath, "Edit Number"))
+                {
+                    session.Write(10);
+                    CellEditSession.WriteValue(otherAsset, NumberPath, 10);
+                    session.Cancel();
+                }
+
+                Assert.AreEqual(3, _asset.number);
+                Assert.AreEqual(5, otherAsset.number);
+            }
+            finally
+            {
+                Object.DestroyImmediate(otherAsset);
+            }
+        }
+
+        /// <summary>
+        /// A write to a property that doesn't exist throws, like the start of an edit.
+        /// </summary>
+        [Test]
+        public void WriteValue_UnknownProperty_Throws()
+        {
+            Assert.Throws<ArgumentException>(() => CellEditSession.WriteValue(_asset, "_unknown", 10));
         }
 
         #endregion

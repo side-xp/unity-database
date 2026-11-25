@@ -27,6 +27,7 @@ namespace SideXP.Database.EditorOnly
             toggle.AddToClassList(ToggleClass);
             SetLiveControl(toggle);
             toggle.RegisterValueChangedCallback(evt => SubmitValue(toggle, evt.newValue));
+            AllowAltClick(toggle);
             return toggle;
         }
 
@@ -48,6 +49,33 @@ namespace SideXP.Database.EditorOnly
         public override VisualElement CreateEditField(SerializedProperty property, object value, CellContext context)
         {
             return null;
+        }
+
+        #endregion
+
+
+        #region Private API
+
+        /// <summary>
+        /// Makes a toggle react to Alt+click, which applies its value to the selected cells of the same type.
+        /// </summary>
+        /// <remarks>
+        /// The click manipulators of Unity only activate without the modifiers they don't expect, so a toggle may ignore an Alt+click.
+        /// The value is toggled here if the click didn't toggle it, which also works if Unity does handle it.
+        /// </remarks>
+        /// <param name="toggle">The toggle of the display.</param>
+        private static void AllowAltClick(Toggle toggle)
+        {
+            // The value when the toggle was pressed with Alt, or null if it wasn't
+            bool? valueOnAltPress = null;
+            toggle.RegisterCallback<PointerDownEvent>(evt => valueOnAltPress = evt.altKey ? toggle.value : (bool?)null);
+            toggle.RegisterCallback<ClickEvent>(evt =>
+            {
+                if (evt.altKey && valueOnAltPress.HasValue && toggle.value == valueOnAltPress.Value)
+                    toggle.value = !toggle.value;
+
+                valueOnAltPress = null;
+            });
         }
 
         #endregion

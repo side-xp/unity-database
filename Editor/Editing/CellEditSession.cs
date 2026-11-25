@@ -107,7 +107,33 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Confirms the edit: groups its writes into a single Undo step.
+        /// Writes a value to a cell other than the edited one, through its own serialized object, for an edit that applies to several
+        /// cells. The write is recorded in the current Undo group, so it joins the Undo step of the edit when the edit is confirmed.
+        /// </summary>
+        /// <param name="asset">The asset of the cell.</param>
+        /// <param name="propertyPath">The path of the serialized property of the cell, from the asset.</param>
+        /// <param name="value">The value to write, of the C# type of the field.</param>
+        /// <returns>Returns true if the value has changed the asset.</returns>
+        /// <exception cref="ArgumentException">Thrown if the asset has no property at the given path.</exception>
+        public static bool WriteValue(Object asset, string propertyPath, object value)
+        {
+            using (SerializedObject serializedObject = new SerializedObject(asset))
+            {
+                SerializedProperty property = serializedObject.FindProperty(propertyPath);
+                if (property == null)
+                {
+                    throw new ArgumentException($"The asset {asset.name} has no serialized property at \"{propertyPath}\".",
+                        nameof(propertyPath));
+                }
+
+                SetValue(property, value);
+                return serializedObject.ApplyModifiedProperties();
+            }
+        }
+
+        /// <summary>
+        /// Confirms the edit: groups its writes into a single Undo step, including the writes made to other cells with
+        /// <see cref="WriteValue(Object, string, object)"/> since the edit started.
         /// </summary>
         public void Confirm()
         {

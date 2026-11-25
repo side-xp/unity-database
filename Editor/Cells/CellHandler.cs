@@ -201,6 +201,26 @@ namespace SideXP.Database.EditorOnly
             return false;
         }
 
+        /// <summary>
+        /// Checks a value given to a cell by an edit of another cell, when the edit applies to the selection: the value comes from the
+        /// edited cell, which can be in another column of the same type (Alt+Enter).
+        /// </summary>
+        /// <remarks>
+        /// The edited cell itself doesn't go through this method: its value comes from <see cref="TryGetEditedValue"/>, or from the
+        /// live control of the display.
+        /// </remarks>
+        /// <param name="value">The value of the edited cell, of the type of the column.</param>
+        /// <param name="context">Information about the cell that receives the value.</param>
+        /// <param name="acceptedValue">Outputs the value to write to the cell, which can differ from the given value (for example, a
+        /// number clamped to the limits of the field).</param>
+        /// <returns>Returns true if the value can be written to the cell. Returns false to reject it: the cell is then skipped, and
+        /// reported. By default, accepts the value as it is.</returns>
+        public virtual bool TryAcceptValue(object value, CellContext context, out object acceptedValue)
+        {
+            acceptedValue = value;
+            return true;
+        }
+
         #endregion
 
 
