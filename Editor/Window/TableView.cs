@@ -299,8 +299,10 @@ namespace SideXP.Database.EditorOnly
             _creatableTypes = AssetOperations.GetCreatableTypes(table.Type);
             UpdateCreateButton(_emptyCreateButton, CreateAssetText);
 
-            ProjectAssetSource source = new ProjectAssetSource(table.Type);
-            IReadOnlyList<Object> assets = source.LoadAssets();
+            // The scope refers to the folders of the previous table
+            _folderScope = FolderScope.WholeProject;
+            _source = new ProjectAssetSource(table.Type);
+            IReadOnlyList<Object> assets = _source.LoadAssets();
             _columns = CreateColumns(table, assets.Count > 0 ? assets[0] : null);
             _viewSettings = UserViews.instance.GetDefaultView(table.Id);
 
@@ -308,7 +310,7 @@ namespace SideXP.Database.EditorOnly
             for (int i = 0; i < _columns.Count; i++)
                 accessors[i] = _columns[i].Accessor;
 
-            _pipeline = new TablePipeline(new PreloadedAssetSource(assets, source), accessors);
+            _pipeline = new TablePipeline(new PreloadedAssetSource(assets, _source), accessors);
             // Before the first update, so the rows are filtered and sorted once, on the displayed columns
             UpdateDisplayedColumns();
             StoreSearch(search);
@@ -320,6 +322,7 @@ namespace SideXP.Database.EditorOnly
 
             _changeTracker = new TableChangeTracker(table.Type, _pipeline);
             _changeTracker.Changed += ScheduleRefresh;
+            ApplyFolderScope();
             if (panel != null)
                 _changeTracker.Start();
 
@@ -339,8 +342,10 @@ namespace SideXP.Database.EditorOnly
             _table = null;
             _viewSettings = null;
             _pipeline = null;
+            _source = null;
             _filter = null;
             _compiledFilter = null;
+            _folderScope = FolderScope.WholeProject;
             _columns = new List<TableViewColumn>();
             _displayedColumns = new List<int>();
             _isColumnDisplayed = Array.Empty<bool>();
