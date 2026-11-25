@@ -11,25 +11,13 @@ namespace SideXP.Database.EditorOnly
     /// </summary>
     /// <remarks>
     /// The names of the built-in icons are not documented, and can change between Unity versions, so they are all declared here. The
-    /// editor loads the dark version of an icon (<c>d_</c> prefix) when the dark theme is active. Most buttons use Tabler icons
+    /// editor loads the dark version of an icon (<c>d_</c> prefix) when the dark theme is active. The buttons use Tabler icons
     /// instead (see <see cref="DatabaseIcons"/>).
     /// </remarks>
     internal static class BuiltInIcons
     {
 
         #region Fields
-
-        /// <summary>
-        /// A plus sign, for the button that creates an asset when the table has a single type to create. The <c>+</c> button of
-        /// Unity's reorderable lists.
-        /// </summary>
-        public const string Add = "Toolbar Plus";
-
-        /// <summary>
-        /// A plus sign with a dropdown arrow, for the button that creates an asset when the table has several types to choose from.
-        /// The <c>+</c> button of Unity's reorderable lists that opens a menu.
-        /// </summary>
-        public const string AddDropdown = "Toolbar Plus More";
 
         /// <summary>
         /// A small warning sign, for the mark of obsolete tables.

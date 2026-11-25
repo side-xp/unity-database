@@ -46,28 +46,10 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Shows a built-in icon of Unity on a button, followed by a label. If the icon doesn't exist in this version of Unity, the
-        /// button shows its label alone.
-        /// </summary>
-        /// <remarks>
-        /// Can be called again on the same button to change its icon, unlike <see cref="SetIcon(Button, string, string)"/>.
-        /// </remarks>
-        /// <param name="button">The button on which to show the icon, toolbar buttons included.</param>
-        /// <param name="iconName">The name of the icon, one of the constants of <see cref="BuiltInIcons"/>.</param>
-        /// <param name="label">The text shown after the icon.</param>
-        public static void SetBuiltInIcon(Button button, string iconName, string label)
-        {
-            button.iconImage = BuiltInIcons.Get(iconName) is Texture2D icon
-                ? Background.FromTexture2D(icon)
-                : default;
-
-            button.text = label;
-        }
-
-        /// <summary>
         /// Shows a Tabler icon on a button, alone or followed by a label. Without label, the tooltip of the button says what it does.
         /// </summary>
         /// <remarks>
+        /// Can be called again on the same button to change its icon or its label: the elements created by the first call are reused.
         /// The icon shows a loading placeholder until it's downloaded, the first time it's used on the computer (see the
         /// <c>EditorIcons</c> feature of the Core package).
         /// </remarks>
@@ -80,16 +62,32 @@ namespace SideXP.Database.EditorOnly
             button.text = string.Empty;
             button.AddToClassList(IconButtonClass);
 
-            // The button is the target of the clicks and of the tooltip, not its content
-            Icon icon = new Icon(iconName) { pickingMode = PickingMode.Ignore };
-            button.Add(icon);
+            // The button is the target of the clicks, of the tooltip and of the cursor, not its content
+            Icon icon = button.Q<Icon>();
+            if (icon != null)
+            {
+                icon.IconName = iconName;
+            }
+            else
+            {
+                icon = new Icon(iconName) { pickingMode = PickingMode.Ignore };
+                button.Insert(0, icon);
+            }
 
+            Label labelElement = button.Q<Label>(className: IconButtonLabelClass);
             if (string.IsNullOrEmpty(label))
+            {
+                labelElement?.RemoveFromHierarchy();
                 return;
+            }
 
-            Label labelElement = new Label(label) { pickingMode = PickingMode.Ignore };
-            labelElement.AddToClassList(IconButtonLabelClass);
-            button.Add(labelElement);
+            if (labelElement == null)
+            {
+                labelElement = new Label { pickingMode = PickingMode.Ignore };
+                labelElement.AddToClassList(IconButtonLabelClass);
+                button.Add(labelElement);
+            }
+            labelElement.text = label;
         }
 
         #endregion

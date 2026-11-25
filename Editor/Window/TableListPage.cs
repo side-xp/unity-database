@@ -16,6 +16,7 @@ namespace SideXP.Database.EditorOnly
         #region Fields
 
         private const string PageClass = "database-page";
+        private const string ToolbarClass = "database-toolbar";
         private const string SearchFieldClass = "database-toolbar__search";
         private const string ListClass = "database-table-list";
         private const string ItemClass = "database-table-list__item";
@@ -23,9 +24,10 @@ namespace SideXP.Database.EditorOnly
         private const string MessageClass = "database-message";
 
         /// <summary>
-        /// The height of the items of the list, in pixels. Matches the default height of the list views of the editor.
+        /// The height of the items of the list, in pixels. Taller than the default height of the list views of the editor, to fit the
+        /// larger names with some space around them.
         /// </summary>
-        private const float ItemHeight = 22;
+        private const float ItemHeight = 28;
 
         private const string ItemNameElement = "name";
         private const string ObsoleteMarkElement = "obsolete-mark";
@@ -82,6 +84,7 @@ namespace SideXP.Database.EditorOnly
             AddToClassList(PageClass);
 
             Toolbar toolbar = new Toolbar();
+            toolbar.AddToClassList(ToolbarClass);
             _searchField = new ToolbarSearchField();
             _searchField.AddToClassList(SearchFieldClass);
             _searchField.SetValueWithoutNotify(search ?? string.Empty);
@@ -139,12 +142,14 @@ namespace SideXP.Database.EditorOnly
             VisualElement item = new VisualElement();
             item.AddToClassList(ItemClass);
 
-            Label nameLabel = new Label { name = ItemNameElement };
+            // The item is the target of the pointer, so its hand cursor shows over its whole area (the cursor isn't inherited)
+            Label nameLabel = new Label { name = ItemNameElement, pickingMode = PickingMode.Ignore };
             nameLabel.AddToClassList(ItemNameClass);
             item.Add(nameLabel);
 
             VisualElement obsoleteMark = DatabaseElements.CreateObsoleteMark();
             obsoleteMark.name = ObsoleteMarkElement;
+            obsoleteMark.pickingMode = PickingMode.Ignore;
             item.Add(obsoleteMark);
 
             // A single click opens the table, since the list is only used to navigate

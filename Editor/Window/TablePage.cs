@@ -17,6 +17,7 @@ namespace SideXP.Database.EditorOnly
         #region Fields
 
         private const string PageClass = "database-page";
+        private const string ToolbarClass = "database-toolbar";
         private const string TitleClass = "database-toolbar__title";
         private const string SpacerClass = "database-toolbar__spacer";
         private const string RowSearchClass = "database-toolbar__row-search";
@@ -82,6 +83,7 @@ namespace SideXP.Database.EditorOnly
             AddToClassList(PageClass);
 
             Toolbar toolbar = new Toolbar();
+            toolbar.AddToClassList(ToolbarClass);
             ToolbarButton backButton = new ToolbarButton(() => BackClicked?.Invoke()) { tooltip = BackTooltip };
             DatabaseElements.SetIcon(backButton, DatabaseIcons.Back, BackText);
             toolbar.Add(backButton);
@@ -107,7 +109,7 @@ namespace SideXP.Database.EditorOnly
             toolbar.Add(_searchField);
 
             // Its icon and tooltip depend on the types of the table: set when the table is set
-            _createButton = new ToolbarButton { text = CreateText };
+            _createButton = new ToolbarButton();
             _createButton.clicked += () => _tableView.StartCreateAsset(_createButton);
             toolbar.Add(_createButton);
 

@@ -36,21 +36,50 @@
     margin-top: 0;
 }
 
+/* The header of a column: the icon of the sort, then the name (TableView.MakeHeader()) */
 .database-table-view__header {
-    -unity-text-align: middle-left;
-    padding-left: 4px;
-    padding-right: 4px;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    flex-grow: 1;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    padding-left: 6px;
+    padding-right: 6px;
+    overflow: hidden;
+}
+
+.database-table-view__header-label {
+    -unity-font-style: bold-and-italic;
+    -unity-text-align: middle-center;
+    font-size: 13px;
+    flex-shrink: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    flex-grow: 1;
+    padding-left: 0;
+    padding-right: 0;
+    margin-left: 0;
+    margin-right: 0;
 }
 
-/* The container of the display created by the cell handler */
+.database-table-view__header-sort-icon {
+    margin-right: 4px;
+}
+
+/* Replaced by the icon of the header, which shows the sort beside the name instead of above it */
+.database-table-view MultiColumnHeaderColumnSortIndicator {
+    display: none;
+}
+
+/* The container of the display created by the cell handler. The vertical padding leaves the height of the editor's small controls
+   (as the buttons of the Controls column) to the content of the rows, set by TableView.RowHeight */
 .database-table-view__cell {
     flex-direction: row;
     align-items: center;
     flex-grow: 1;
+    padding-top: 3px;
+    padding-bottom: 3px;
     padding-left: 4px;
     padding-right: 4px;
     overflow: hidden;
@@ -65,6 +94,8 @@
 /* The padding is reduced by the width of the border, so the content of the active cell doesn't move. Temporary look, until the style
    pass */
 .database-table-view__cell--active {
+    padding-top: 2px;
+    padding-bottom: 2px;
     padding-left: 3px;
     padding-right: 3px;
     border-width: 1px;
@@ -234,6 +265,35 @@
     opacity: 0.8;
 }
 
+/* The toolbar of both pages. Taller than Unity's toolbars, so its items get some room around them */
+.database-toolbar {
+    height: 28px;
+    padding-left: 2px;
+    padding-right: 2px;
+}
+
+/* Two classes, so they win over the styles of Unity's toolbar items */
+.database-toolbar > .unity-toolbar-button {
+    padding-left: 8px;
+    padding-right: 8px;
+    cursor: link;
+}
+
+/* The focused button keeps the borders of the other toolbar buttons instead of the blue focus border, and is marked by its
+   background only, so the buttons can still be reached with the keyboard */
+.database-toolbar > .unity-toolbar-button:focus {
+    border-color: var(--unity-colors-toolbar_button-border);
+    background-color: var(--unity-colors-toolbar_button-background-focus);
+}
+
+.database-toolbar > .database-toolbar__search,
+.database-toolbar > .database-toolbar__row-search {
+    margin-top: 4px;
+    margin-bottom: 4px;
+    margin-left: 6px;
+    margin-right: 6px;
+}
+
 .database-toolbar__search {
     flex-grow: 1;
     width: auto;
@@ -254,7 +314,11 @@
 .database-toolbar__title {
     -unity-font-style: bold;
     -unity-text-align: middle-left;
-    margin-left: 6px;
+    font-size: 15px;
+    margin-left: 8px;
+    margin-right: 4px;
+    padding-left: 0;
+    padding-right: 0;
 }
 
 .database-obsolete-mark {
@@ -266,15 +330,20 @@
     flex-grow: 1;
 }
 
+/* The height of the items is set by TableListPage. The hand cursor says that a single click opens the table */
 .database-table-list__item {
+    cursor: link;
     flex-direction: row;
     align-items: center;
-    padding-left: 6px;
-    padding-right: 6px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    padding-left: 10px;
+    padding-right: 10px;
 }
 
 .database-table-list__name {
     -unity-text-align: middle-left;
+    font-size: 14px;
 }
 
 .database-message {
