@@ -17,6 +17,7 @@ namespace SideXP.Database.EditorOnly
         #region Fields
 
         private const string PageClass = "database-page";
+        private const string ContentClass = "database-page__content";
         private const string ToolbarClass = "database-toolbar";
         private const string TitleClass = "database-toolbar__title";
         private const string SpacerClass = "database-toolbar__spacer";
@@ -36,6 +37,9 @@ namespace SideXP.Database.EditorOnly
         private const string SyncSelectionTooltip = "When enabled, selecting cells selects the assets of their rows in Unity, so the " +
             "Inspector shows them (and edits several of them at once). The rows of the assets selected elsewhere are highlighted. " +
             "Disabled by default, since it changes the selection of the whole editor, which other windows react to.";
+        private const string ViewPanelText = "View";
+        private const string ViewPanelTooltip = "Shows or hides the panel of the view, on the right of the table, where the filters " +
+            "are edited.";
 
         /// <summary>
         /// The displayed table, or null if none has been set.
@@ -70,14 +74,29 @@ namespace SideXP.Database.EditorOnly
         private ToolbarButton _syncSelectionButton = null;
 
         /// <summary>
+        /// The button that shows and hides the view panel, with the background of a checked toolbar button while the panel is open.
+        /// </summary>
+        private ToolbarButton _viewPanelButton = null;
+
+        /// <summary>
         /// Displays the rows of the table.
         /// </summary>
         private TableView _tableView = null;
 
         /// <summary>
+        /// The panel of the view, on the right of the table.
+        /// </summary>
+        private ViewPanel _viewPanel = null;
+
+        /// <summary>
         /// Called when the user enables or disables the selection sync, with its new state.
         /// </summary>
         public event Action<bool> SelectionSyncChanged;
+
+        /// <summary>
+        /// Called when the user shows or hides the view panel, with its new state.
+        /// </summary>
+        public event Action<bool> ViewPanelToggled;
 
         /// <summary>
         /// Called when the user asks to go back to the table list.
@@ -137,8 +156,20 @@ namespace SideXP.Database.EditorOnly
             _syncSelectionButton = new ToolbarButton(OnSyncSelectionClicked) { tooltip = SyncSelectionTooltip };
             UpdateSyncSelectionButton();
             toolbar.Add(_syncSelectionButton);
+
+            _viewPanelButton = new ToolbarButton(OnViewPanelClicked) { tooltip = ViewPanelTooltip };
+            DatabaseElements.SetIcon(_viewPanelButton, DatabaseIcons.ViewPanel, ViewPanelText);
+            toolbar.Add(_viewPanelButton);
             Add(toolbar);
-            Add(_tableView);
+
+            // The panel is beside the table, so the status line of the table stays under the rows only
+            VisualElement content = new VisualElement();
+            content.AddToClassList(ContentClass);
+            content.Add(_tableView);
+            _viewPanel = new ViewPanel(_tableView);
+            content.Add(_viewPanel);
+            Add(content);
+            SetViewPanelOpen(false);
         }
 
         #endregion
@@ -163,6 +194,22 @@ namespace SideXP.Database.EditorOnly
             _searchField.SetValueWithoutNotify(search ?? string.Empty);
             _tableView.SetTable(table, search);
             _tableView.UpdateCreateButton(_createButton, CreateText);
+            _viewPanel.Refresh();
+        }
+
+        /// <summary>
+        /// Checks if the view panel is open.
+        /// </summary>
+        public bool IsViewPanelOpen => _viewPanel.IsDisplayed();
+
+        /// <summary>
+        /// Shows or hides the view panel, without notifying <see cref="ViewPanelToggled"/>. Used to restore the option.
+        /// </summary>
+        /// <param name="isOpen">If enabled, the panel is shown.</param>
+        public void SetViewPanelOpen(bool isOpen)
+        {
+            _viewPanel.SetDisplayed(isOpen);
+            _viewPanelButton.EnableInClassList(CheckedButtonClass, isOpen);
         }
 
         /// <inheritdoc cref="TableView.ShowAsset(Object)"/>
@@ -216,6 +263,21 @@ namespace SideXP.Database.EditorOnly
             string iconName = isSynced ? DatabaseIcons.SelectionSynced : DatabaseIcons.SelectionNotSynced;
             DatabaseElements.SetIcon(_syncSelectionButton, iconName, SyncSelectionText);
             _syncSelectionButton.EnableInClassList(CheckedButtonClass, isSynced);
+        }
+
+        #endregion
+
+
+        #region View panel
+
+        /// <summary>
+        /// Called when the user clicks the button of the view panel. Opens the panel if it's closed, and closes it otherwise.
+        /// </summary>
+        private void OnViewPanelClicked()
+        {
+            bool isOpen = !IsViewPanelOpen;
+            SetViewPanelOpen(isOpen);
+            ViewPanelToggled?.Invoke(isOpen);
         }
 
         #endregion

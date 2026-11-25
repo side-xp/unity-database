@@ -7,8 +7,8 @@ namespace SideXP.Database.EditorOnly
 {
 
     /// <summary>
-    /// The display settings of a table, remembered for the user: column order, widths, hidden columns and the sort on one or several
-    /// columns.
+    /// The display settings of a table, remembered for the user: column order, widths, hidden columns, the sort on one or several
+    /// columns, the filters and the folder scope.
     /// </summary>
     /// <remarks>
     /// The tool stores one per table, as the user's default view of the table (see <see cref="UserViews"/>), so it becomes a regular
@@ -58,6 +58,19 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         [SerializeField]
         private bool _isSortDescending = false;
+
+        /// <summary>
+        /// The root of the filter tree, or null if the rows are not filtered. May contain conditions on columns that don't exist
+        /// anymore, which are ignored (see <see cref="FilterNode.Compile"/>).
+        /// </summary>
+        [SerializeReference]
+        private FilterNode _filter = null;
+
+        /// <summary>
+        /// The folders of the folder scope (see <see cref="FolderScope"/>), or an empty list for the whole project.
+        /// </summary>
+        [SerializeField]
+        private List<string> _folders = new List<string>();
 
         #endregion
 
@@ -216,9 +229,13 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Removes all the settings, so the columns get their default order, widths and visibility, and the rows the order of the
-        /// source.
+        /// Removes the settings of the columns and the sort, so the columns get their default order, widths and visibility, and the
+        /// rows the order of the source.
         /// </summary>
+        /// <remarks>
+        /// The filters and the folder scope are kept: they are cleared on their own (see <see cref="Filter"/> and
+        /// <see cref="SetFolders"/>), so resetting the columns doesn't lose a filter built by hand.
+        /// </remarks>
         /// <returns>Returns true if there were settings to remove.</returns>
         public bool Reset()
         {
@@ -292,6 +309,42 @@ namespace SideXP.Database.EditorOnly
                 return false;
 
             _sort.Clear();
+            return true;
+        }
+
+        /// <summary>
+        /// The root of the filter tree, or null if the rows are not filtered.
+        /// </summary>
+        /// <remarks>
+        /// The tree is stored by reference: a change of its nodes is a change of the settings, so the owner must save the settings
+        /// after editing the tree.
+        /// </remarks>
+        public FilterNode Filter
+        {
+            get => _filter;
+            set => _filter = value;
+        }
+
+        /// <inheritdoc cref="_folders"/>
+        public IReadOnlyList<string> Folders => _folders;
+
+        /// <summary>
+        /// Sets the folders of the folder scope.
+        /// </summary>
+        /// <param name="folders">The paths of the folders, relative to the project, or null or empty for the whole project. Stored as
+        /// given: normalize them first (see <see cref="FolderScope.Folders"/>).</param>
+        /// <returns>Returns true if the folders have changed.</returns>
+        public bool SetFolders(IEnumerable<string> folders)
+        {
+            List<string> newFolders = folders != null ? new List<string>(folders) : new List<string>();
+            bool isSame = newFolders.Count == _folders.Count;
+            for (int i = 0; isSame && i < newFolders.Count; i++)
+                isSame = newFolders[i] == _folders[i];
+
+            if (isSame)
+                return false;
+
+            _folders = newFolders;
             return true;
         }
 

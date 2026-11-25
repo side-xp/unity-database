@@ -247,6 +247,81 @@ namespace SideXP.Database.Tests
             Assert.IsFalse(new ViewSettings(TableId).Reset());
         }
 
+        /// <summary>
+        /// Resetting keeps the filters and the folder scope, which are cleared on their own.
+        /// </summary>
+        [Test]
+        public void Reset_FiltersAndFolders_Kept()
+        {
+            ViewSettings settings = new ViewSettings(TableId);
+            BoolCondition filter = new BoolCondition("A", true);
+            settings.Filter = filter;
+            settings.SetFolders(new[] { "Assets/Items" });
+
+            Assert.IsFalse(settings.Reset());
+            Assert.AreSame(filter, settings.Filter);
+            CollectionAssert.AreEqual(new[] { "Assets/Items" }, settings.Folders);
+        }
+
+        #endregion
+
+
+        #region Filters and folders
+
+        /// <summary>
+        /// The folders are remembered in their order, and setting the same folders again changes nothing.
+        /// </summary>
+        [Test]
+        public void SetFolders_Folders_RememberedInOrder()
+        {
+            ViewSettings settings = new ViewSettings(TableId);
+            Assert.IsEmpty(settings.Folders);
+
+            Assert.IsTrue(settings.SetFolders(new[] { "Assets/Items/Weapons", "Assets/Items/Shields" }));
+            Assert.IsFalse(settings.SetFolders(new[] { "Assets/Items/Weapons", "Assets/Items/Shields" }));
+            CollectionAssert.AreEqual(new[] { "Assets/Items/Weapons", "Assets/Items/Shields" }, settings.Folders);
+
+            Assert.IsTrue(settings.SetFolders(new[] { "Assets/Items/Shields", "Assets/Items/Weapons" }));
+            Assert.IsTrue(settings.SetFolders(null));
+            Assert.IsEmpty(settings.Folders);
+        }
+
+        /// <summary>
+        /// The filter tree and the folders survive Unity's serialization, which <see cref="UserViews"/> uses to store them.
+        /// </summary>
+        [Test]
+        public void Serialization_FiltersAndFolders_Kept()
+        {
+            ViewSettingsTestSO holder = ScriptableObject.CreateInstance<ViewSettingsTestSO>();
+            ViewSettingsTestSO copy = null;
+            try
+            {
+                holder.settings = new ViewSettings(TableId);
+                holder.settings.Filter = new FilterGroup(FilterOperator.Or,
+                    new BoolCondition("A", false),
+                    new TextCondition("B", "sword"));
+                holder.settings.SetFolders(new[] { "Assets/Items" });
+
+                // Instantiating copies the object through its serialized data
+                copy = Object.Instantiate(holder);
+
+                FilterGroup root = copy.settings.Filter as FilterGroup;
+                Assert.IsNotNull(root);
+                Assert.AreNotSame(holder.settings.Filter, root);
+                Assert.AreEqual(FilterOperator.Or, root.Operator);
+                Assert.IsInstanceOf<BoolCondition>(root.Nodes[0]);
+                Assert.AreEqual("sword", ((TextCondition)root.Nodes[1]).Text);
+                CollectionAssert.AreEqual(new[] { "Assets/Items" }, copy.settings.Folders);
+                Assert.AreEqual(TableId, copy.settings.TableId);
+            }
+            finally
+            {
+                Object.DestroyImmediate(holder);
+                if (copy != null)
+                    Object.DestroyImmediate(copy);
+            }
+        }
+
         #endregion
 
 

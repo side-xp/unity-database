@@ -59,6 +59,31 @@ namespace SideXP.Database.EditorOnly
         public const string SelectionNotSynced = "link-off";
 
         /// <summary>
+        /// A window with a panel on its right, for the button that shows and hides the view panel.
+        /// </summary>
+        public const string ViewPanel = "layout-sidebar-right";
+
+        /// <summary>
+        /// A funnel with a bar across it, for the button that clears the filters.
+        /// </summary>
+        public const string ClearFilters = "filter-off";
+
+        /// <summary>
+        /// An arrow that splits in two, for the button that adds a condition to a group of the filters.
+        /// </summary>
+        public const string AddCondition = "arrows-split";
+
+        /// <summary>
+        /// Several circles, for the button that adds a group of conditions to a group of the filters.
+        /// </summary>
+        public const string AddGroup = "circles";
+
+        /// <summary>
+        /// A cross, for the buttons that remove an item from a list, such as a condition from a filter.
+        /// </summary>
+        public const string Remove = "x";
+
+        /// <summary>
         /// An arrow pointing up, shown in the header of a column sorted in ascending order.
         /// </summary>
         public const string SortAscending = "arrow-up";

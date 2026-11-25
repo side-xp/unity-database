@@ -228,7 +228,7 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         /// <param name="columnId">The identifier of the column.</param>
         /// <returns>Returns true if the column exists and is displayed.</returns>
-        private bool IsColumnDisplayed(string columnId)
+        public bool IsColumnDisplayed(string columnId)
         {
             return IsColumnDisplayed(_columns.FindIndex(column => column.Id == columnId));
         }

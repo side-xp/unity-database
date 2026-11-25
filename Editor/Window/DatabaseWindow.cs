@@ -16,7 +16,8 @@ namespace SideXP.Database.EditorOnly
     /// </summary>
     /// <remarks>
     /// The window shows either the list of the tables, or an open table. The open table, the search text of the list, the search
-    /// text of the open table and the selection sync option are remembered across domain reloads and editor sessions. Open it from
+    /// text of the open table, the selection sync option and the view panel (open or closed) are remembered across domain reloads and
+    /// editor sessions. Open it from
     /// <c>Tools &gt; Sideways Experiments &gt; Database</c>, or from code.
     /// </remarks>
     /// <example>
@@ -63,6 +64,12 @@ namespace SideXP.Database.EditorOnly
         private bool _isSelectionSynced = false;
 
         /// <summary>
+        /// Checks if the panel of the view is open, on the right of the open table.
+        /// </summary>
+        [SerializeField]
+        private bool _isViewPanelOpen = false;
+
+        /// <summary>
         /// The asset whose row must be shown once the open table is displayed, or null if there is none. Kept until the UI is built,
         /// for a window that has just been created.
         /// </summary>
@@ -104,6 +111,8 @@ namespace SideXP.Database.EditorOnly
             _tablePage.SearchChanged += search => _rowSearch = search;
             _tablePage.SetSelectionSynced(_isSelectionSynced);
             _tablePage.SelectionSyncChanged += isSynced => _isSelectionSynced = isSynced;
+            _tablePage.SetViewPanelOpen(_isViewPanelOpen);
+            _tablePage.ViewPanelToggled += isOpen => _isViewPanelOpen = isOpen;
             rootVisualElement.Add(_tablePage);
 
             RefreshPage();
@@ -158,7 +167,7 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         /// <remarks>
         /// Used by the <i>Open In Database</i> menu of the Project window (see <see cref="OpenInDatabaseMenu"/>). A warning is logged if
-        /// the asset has no row in the table.
+        /// the asset has no row in the table, or if the filters or the folder scope hide it (see <see cref="TableView.ShowAsset"/>).
         /// </remarks>
         /// <param name="table">The table to open.</param>
         /// <param name="asset">The asset of which to show the row.</param>
@@ -230,13 +239,11 @@ namespace SideXP.Database.EditorOnly
             _tablePage.SetDisplayed(isTableOpen);
             _tableListPage.SetDisplayed(!isTableOpen);
 
+            // The table view warns if it can't show the asset, with the reason
             Object assetToShow = _assetToShow;
             _assetToShow = null;
-            if (isTableOpen && assetToShow != null && !_tablePage.ShowAsset(assetToShow))
-            {
-                Debug.LogWarning($"{DatabaseConstants.LogPrefix}The asset \"{assetToShow.name}\" has no row in the table " +
-                    $"\"{table.Name}\".", assetToShow);
-            }
+            if (isTableOpen && assetToShow != null)
+                _tablePage.ShowAsset(assetToShow);
         }
 
         #endregion

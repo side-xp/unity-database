@@ -506,6 +506,32 @@ namespace SideXP.Database.Tests
         #endregion
 
 
+        #region Default conditions
+
+        /// <summary>
+        /// A checkbox column gets a condition that keeps the checked rows, the other columns a text condition that keeps all the rows.
+        /// Each default condition applies to its column.
+        /// </summary>
+        [Test]
+        public void CreateDefault_ByType_ApplicableCondition()
+        {
+            FilterCondition boolCondition = FilterConditions.CreateDefault(CheckedId, typeof(bool));
+            Assert.IsInstanceOf<BoolCondition>(boolCondition);
+            Assert.IsTrue(((BoolCondition)boolCondition).IsChecked);
+
+            foreach (Type type in new[] { typeof(string), typeof(int), typeof(DayOfWeek), typeof(ScriptableObject), typeof(Vector2) })
+            {
+                FilterCondition condition = FilterConditions.CreateDefault(LabelId, type);
+                Assert.IsInstanceOf<TextCondition>(condition, type.Name);
+                Assert.AreEqual(LabelId, condition.ColumnId);
+                Assert.IsTrue(condition.CanApplyTo(type), type.Name);
+                Assert.IsTrue(Matches(condition, type, "Anything"), type.Name);
+            }
+        }
+
+        #endregion
+
+
         #region Serialization
 
         /// <summary>

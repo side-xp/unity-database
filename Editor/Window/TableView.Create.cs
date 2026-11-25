@@ -163,7 +163,7 @@ namespace SideXP.Database.EditorOnly
 
         /// <summary>
         /// Gets the folder in which the save dialog opens: the folder of the asset of the active cell, or of the first row, so new assets
-        /// go next to the others by default.
+        /// go next to the others by default. Without row, the first existing folder of the folder scope, so the new asset is in it.
         /// </summary>
         /// <returns>Returns the folder, from the project folder.</returns>
         private string GetDefaultFolder()
@@ -174,9 +174,16 @@ namespace SideXP.Database.EditorOnly
 
             string path = asset != null ? AssetDatabase.GetAssetPath(asset) : null;
             string folder = !string.IsNullOrEmpty(path) ? Path.GetDirectoryName(path)?.Replace('\\', '/') : null;
-            return !string.IsNullOrEmpty(folder) && AssetDatabase.IsValidFolder(folder)
-                ? folder
-                : FallbackFolder;
+            if (!string.IsNullOrEmpty(folder) && AssetDatabase.IsValidFolder(folder))
+                return folder;
+
+            foreach (string scopeFolder in _folderScope.Folders)
+            {
+                if (AssetDatabase.IsValidFolder(scopeFolder))
+                    return scopeFolder;
+            }
+
+            return FallbackFolder;
         }
 
         #endregion

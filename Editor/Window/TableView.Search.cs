@@ -22,7 +22,13 @@ namespace SideXP.Database.EditorOnly
 
         #region Fields
 
-        private const string NoMatchMessage = "No row matches the search.";
+        private const string NoSearchMatchMessage = "No row matches the search.";
+
+        /// <summary>
+        /// The label shown by the main list when the search or the filters hide all the rows, or null if the list hasn't created it.
+        /// Its text is updated on each refresh (see <see cref="GetNoMatchMessage"/>).
+        /// </summary>
+        private Label _noMatchLabel = null;
 
         /// <summary>
         /// The text of the search, or an empty string if there is none.
@@ -165,7 +171,7 @@ namespace SideXP.Database.EditorOnly
 
         /// <summary>
         /// Clears the search if it hides the row of an asset, so a new asset is always visible, and notifies it with
-        /// <see cref="SearchReset"/>.
+        /// <see cref="SearchReset"/>. Call it only when the filters don't hide the row, since the search would be cleared for nothing.
         /// </summary>
         /// <param name="asset">The asset that must be visible.</param>
         private void ResetSearchIfHidden(Object asset)
@@ -178,15 +184,15 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Creates the element shown by the main list when it has no row, which only happens when the search hides all the rows: a
-        /// table without asset shows its own message instead of the lists.
+        /// Creates the element shown by the main list when it has no row, which only happens when the search or the filters hide all
+        /// the rows: a table without asset shows its own message instead of the lists.
         /// </summary>
         /// <returns>Returns the created element.</returns>
-        private static VisualElement MakeNoMatchElement()
+        private VisualElement MakeNoMatchElement()
         {
-            Label label = new Label(NoMatchMessage);
-            label.AddToClassList(MessageClass);
-            return label;
+            _noMatchLabel = new Label(GetNoMatchMessage());
+            _noMatchLabel.AddToClassList(MessageClass);
+            return _noMatchLabel;
         }
 
         #endregion

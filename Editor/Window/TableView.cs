@@ -189,6 +189,11 @@ namespace SideXP.Database.EditorOnly
         private VisualElement _emptyMessage = null;
 
         /// <summary>
+        /// The label of <see cref="_emptyMessage"/>, which says if the table has no asset in the project or in its folder scope.
+        /// </summary>
+        private Label _emptyMessageLabel = null;
+
+        /// <summary>
         /// The button of <see cref="_emptyMessage"/> that creates an asset, hidden if the table has no type that can be created.
         /// </summary>
         private Button _emptyCreateButton = null;
@@ -215,9 +220,9 @@ namespace SideXP.Database.EditorOnly
             _emptyMessage = new VisualElement();
             _emptyMessage.AddToClassList(EmptyClass);
             _emptyMessage.SetDisplayed(false);
-            Label messageLabel = new Label(NoAssetMessage);
-            messageLabel.AddToClassList(MessageClass);
-            _emptyMessage.Add(messageLabel);
+            _emptyMessageLabel = new Label(NoAssetMessage);
+            _emptyMessageLabel.AddToClassList(MessageClass);
+            _emptyMessage.Add(_emptyMessageLabel);
             _emptyCreateButton = CreateEmptyCreateButton();
             _emptyMessage.Add(_emptyCreateButton);
             Add(_emptyMessage);
@@ -283,7 +288,7 @@ namespace SideXP.Database.EditorOnly
 
         /// <summary>
         /// Displays a table: loads its assets, and builds its columns and its pipeline, with the remembered order, widths, hidden
-        /// columns and sort of the table.
+        /// columns, sort, filters and folder scope of the table.
         /// </summary>
         /// <param name="table">The table to display.</param>
         /// <param name="search">The search that filters the rows (see <see cref="SetSearch(string)"/>), or null to show all the rows.
@@ -299,12 +304,13 @@ namespace SideXP.Database.EditorOnly
             _creatableTypes = AssetOperations.GetCreatableTypes(table.Type);
             UpdateCreateButton(_emptyCreateButton, CreateAssetText);
 
-            // The scope refers to the folders of the previous table
-            _folderScope = FolderScope.WholeProject;
-            _source = new ProjectAssetSource(table.Type);
+            // The scope applies to the first load, so the assets outside of it are never loaded. The columns are then validated
+            // against the first asset of the scope
+            _viewSettings = UserViews.instance.GetDefaultView(table.Id);
+            _folderScope = new FolderScope(_viewSettings.Folders);
+            _source = new ProjectAssetSource(table.Type) { Scope = _folderScope };
             IReadOnlyList<Object> assets = _source.LoadAssets();
             _columns = CreateColumns(table, assets.Count > 0 ? assets[0] : null);
-            _viewSettings = UserViews.instance.GetDefaultView(table.Id);
 
             IValueAccessor[] accessors = new IValueAccessor[_columns.Count];
             for (int i = 0; i < _columns.Count; i++)
@@ -314,8 +320,7 @@ namespace SideXP.Database.EditorOnly
             // Before the first update, so the rows are filtered and sorted once, on the displayed columns
             UpdateDisplayedColumns();
             StoreSearch(search);
-            // The filter refers to the columns of the previous table
-            _filter = null;
+            _filter = _viewSettings.Filter;
             CompileFilter();
             ApplyRowFilter();
             ApplyRememberedSort();
@@ -352,6 +357,7 @@ namespace SideXP.Database.EditorOnly
             _rows.Clear();
             ClearSelection();
             _hoveredRow = null;
+            _noMatchLabel = null;
             _creatableTypes = new List<Type>();
 
             _body.Clear();
@@ -387,13 +393,27 @@ namespace SideXP.Database.EditorOnly
         /// <remarks>
         /// The asset must already be in the table: call <see cref="Reload"/> first if it has just been created. Works on a table that
         /// has just been set, whose list views are not laid out yet.
+        /// <para>
+        /// The filters and the folder scope are kept, even if they hide the asset: a filter built by hand must not be lost. The view
+        /// warns instead, with the reason, and the asset is not shown. The search is only cleared when it's what hides the row.
+        /// </para>
         /// </remarks>
         /// <param name="asset">The asset to show.</param>
-        /// <returns>Returns true if the asset has a row in the table, false if it doesn't (or if no table is displayed).</returns>
+        /// <returns>
+        /// Returns true if the asset is shown, false if it has no row in the table, if the filters hide its row, or if no table is
+        /// displayed.
+        /// </returns>
         public bool ShowAsset(Object asset)
         {
-            if (asset == null || _pipeline == null || !_pipeline.TryGetRow(asset, out _))
+            if (asset == null || _pipeline == null)
                 return false;
+
+            _pipeline.TryGetRow(asset, out TableRow row);
+            if (row == null || IsHiddenByFilters(row))
+            {
+                WarnAssetNotShown(asset, row);
+                return false;
+            }
 
             // The user just asked for that asset: it must not stay hidden by the search
             ResetSearchIfHidden(asset);
@@ -455,6 +475,10 @@ namespace SideXP.Database.EditorOnly
             bool hasAssets = _pipeline.Rows.Count > 0;
             _body.SetDisplayed(hasAssets);
             _emptyMessage.SetDisplayed(!hasAssets);
+            _emptyMessageLabel.text = GetNoAssetMessage();
+            if (_noMatchLabel != null)
+                _noMatchLabel.text = GetNoMatchMessage();
+
             _statusLabel.text = GetStatusText();
         }
 

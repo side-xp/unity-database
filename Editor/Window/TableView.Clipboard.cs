@@ -280,9 +280,10 @@ namespace SideXP.Database.EditorOnly
         /// console.
         /// </summary>
         /// <param name="message">The message to show.</param>
-        private void ShowMessage(string message)
+        /// <param name="context">The object the message is about, pinged when the message is clicked in the console, or null.</param>
+        private void ShowMessage(string message, Object context = null)
         {
-            Debug.LogWarning($"{DatabaseConstants.LogPrefix}{message}");
+            Debug.LogWarning($"{DatabaseConstants.LogPrefix}{message}", context);
 
             EditorWindow window = EditorWindow.focusedWindow;
             if (window != null && window.rootVisualElement.panel == panel)

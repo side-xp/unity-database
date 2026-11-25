@@ -4,8 +4,143 @@
     flex-grow: 1;
 }
 
+/* Holds the table view and the view panel, side by side under the toolbar */
+.database-page__content {
+    flex-direction: row;
+    flex-grow: 1;
+}
+
+/* The panel of the view (ViewPanel), on the right of the table. A translucent border works with both editor themes. Temporary look,
+   until the style pass */
+.database-view-panel {
+    width: 320px;
+    min-width: 220px;
+    flex-shrink: 0;
+    border-left-width: 1px;
+    border-left-color: rgba(0, 0, 0, 0.4);
+}
+
+.database-view-panel__content {
+    flex-grow: 1;
+}
+
+.database-view-panel__section {
+    padding-left: 6px;
+    padding-right: 6px;
+    padding-bottom: 8px;
+}
+
+.database-view-panel__section-header {
+    flex-direction: row;
+    align-items: center;
+    height: 26px;
+    margin-bottom: 4px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(0, 0, 0, 0.25);
+}
+
+/* Grows, so the buttons of the section are on the right */
+.database-view-panel__section-title {
+    -unity-font-style: bold;
+    -unity-text-align: middle-left;
+    font-size: 13px;
+    flex-grow: 1;
+    padding-left: 0;
+    margin-left: 0;
+}
+
+.database-view-panel__section-button {
+    margin-right: 0;
+}
+
+/* A group of the filter editor (FilterEditor). The groups inside another group are indented, with a line on their left */
+.database-filter-group {
+    margin-top: 2px;
+    margin-bottom: 2px;
+}
+
+.database-filter-group .database-filter-group {
+    margin-left: 4px;
+    padding-left: 6px;
+    border-left-width: 2px;
+    border-left-color: rgba(128, 128, 128, 0.4);
+}
+
+.database-filter-group__header {
+    flex-direction: row;
+    align-items: center;
+}
+
+/* Grows, so the remove button of the group is on the right */
+.database-filter-group__operator {
+    flex-grow: 1;
+    margin-left: 0;
+}
+
+.database-filter-group__footer {
+    flex-direction: row;
+    margin-top: 2px;
+}
+
+.database-filter-group__footer > .database-filter-editor__add {
+    margin-left: 0;
+    margin-right: 4px;
+}
+
+.database-filter-group__empty,
+.database-filter-condition__ignored {
+    -unity-font-style: italic;
+    white-space: normal;
+    opacity: 0.6;
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+
+/* A condition: its column, its fields, then the remove button */
+.database-filter-condition {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 1px;
+    margin-bottom: 1px;
+}
+
+.database-filter-condition__column {
+    width: 35%;
+    flex-shrink: 0;
+    -unity-text-align: middle-left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-left: 0;
+}
+
+/* A condition on a column that doesn't exist anymore. Orange like the warnings of the console, readable with both editor themes */
+.database-filter-condition__column--missing {
+    color: rgb(230, 150, 40);
+}
+
+.database-filter-condition__field,
+.database-filter-condition__ignored {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 40px;
+}
+
+.database-filter-editor__remove {
+    flex-shrink: 0;
+    padding-left: 1px;
+    padding-right: 1px;
+    margin-right: 0;
+}
+
+.database-filter-editor__remove > .sxp-icon {
+    --sxp-icon-size: 14;
+}
+
+/* Shrinks beside the view panel instead of pushing it out of the window: the list views scroll horizontally */
 .database-table-view {
     flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 100px;
 }
 
 /* Holds the frozen list and the main list, side by side */

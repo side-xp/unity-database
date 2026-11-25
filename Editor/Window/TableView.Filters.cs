@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Generic;
 
+using UnityEditor;
+
+using Object = UnityEngine.Object;
+
 namespace SideXP.Database.EditorOnly
 {
 
@@ -18,15 +22,19 @@ namespace SideXP.Database.EditorOnly
     /// all, and the status line counts the rows of the scope only.
     /// </para>
     /// <para>
-    /// @todo 21b: the UI, the filters and the scope remembered in the view settings (they are cleared when the table changes until
-    /// then), the message of the list when the filters hide all the rows, and what happens when a new asset is hidden by the filters
-    /// or created outside of the scope.
+    /// Both are remembered in the settings of the table (see <see cref="ViewSettings"/>), and kept when an asset shown by the view (a
+    /// new asset, or an asset of <i>Open In Database</i>) is hidden by them: the view warns instead (see
+    /// <see cref="ShowAsset(Object)"/>).
     /// </para>
     /// </remarks>
     internal partial class TableView
     {
 
         #region Fields
+
+        private const string NoAssetInScopeMessage = "There is no asset of this table in the folders of the scope.";
+        private const string NoFilterMatchMessage = "No row meets the filters.";
+        private const string NoSearchAndFilterMatchMessage = "No row matches the search and the filters.";
 
         /// <summary>
         /// The root of the filter tree, or null if the rows are not filtered.
@@ -62,12 +70,12 @@ namespace SideXP.Database.EditorOnly
         public bool IsFiltering => _compiledFilter != null;
 
         /// <summary>
-        /// Shows only the rows that meet a filter, and match the search.
+        /// Shows only the rows that meet a filter, and match the search. The filter is remembered with the settings of the table.
         /// </summary>
         /// <remarks>
         /// The conditions on columns that don't exist, or whose values are of a type they don't support, are ignored. The filter is
-        /// compiled when it's set: call this method again after changing the nodes of the tree. The active cell is cleared if its row
-        /// is hidden.
+        /// compiled when it's set: call this method again after changing the nodes of the tree, which also saves the settings. The
+        /// active cell is cleared if its row is hidden.
         /// </remarks>
         /// <param name="filter">The root of the filter tree, or null to show all the rows that match the search.</param>
         public void SetRowFilter(FilterNode filter)
@@ -76,16 +84,36 @@ namespace SideXP.Database.EditorOnly
             if (_pipeline == null)
                 return;
 
+            // Always saved, since the nodes of the same tree may have changed
+            _viewSettings.Filter = filter;
+            UserViews.instance.ScheduleSave();
+
             CompileFilter();
             ApplyRowFilter();
             Refresh();
+        }
+
+        /// <summary>
+        /// Gets the columns that the filters can use: all the columns except <i>Controls</i>, hidden ones included, since the filters
+        /// also apply to them.
+        /// </summary>
+        /// <returns>Returns the columns in their display order, or an empty list if no table is displayed.</returns>
+        public List<TableViewColumn> GetFilterableColumns()
+        {
+            if (_viewSettings == null)
+                return new List<TableViewColumn>();
+
+            List<TableViewColumn> columns = GetColumnOrder().ConvertAll(columnIndex => _columns[columnIndex]);
+            columns.RemoveAll(column => column.IsControls);
+            return columns;
         }
 
         /// <inheritdoc cref="_folderScope"/>
         public FolderScope FolderScope => _folderScope;
 
         /// <summary>
-        /// Limits the table to the assets of some folders and of their subfolders, and loads the assets again.
+        /// Limits the table to the assets of some folders and of their subfolders, and loads the assets again. The folders are
+        /// remembered with the settings of the table.
         /// </summary>
         /// <remarks>
         /// The folders that don't exist are ignored: if none of them exists, the table has no row. The active cell and the selected
@@ -98,6 +126,9 @@ namespace SideXP.Database.EditorOnly
             _folderScope = new FolderScope(folders);
             if (_pipeline == null)
                 return;
+
+            if (_viewSettings.SetFolders(_folderScope.Folders))
+                UserViews.instance.ScheduleSave();
 
             ApplyFolderScope();
             _pipeline.InvalidateSource();
@@ -160,6 +191,56 @@ namespace SideXP.Database.EditorOnly
                 _pipeline.Filter = MatchesSearch;
             else
                 _pipeline.Filter = null;
+        }
+
+        /// <summary>
+        /// Checks if the filters hide a row, whatever the search.
+        /// </summary>
+        /// <param name="row">The row to check.</param>
+        /// <returns>Returns true if a filter applies and the row doesn't meet it.</returns>
+        private bool IsHiddenByFilters(TableRow row)
+        {
+            return _compiledFilter != null && !_compiledFilter(row);
+        }
+
+        /// <summary>
+        /// Warns that an asset the view was asked to show has no visible row, with the reason: outside of the folder scope, hidden by
+        /// the filters, or not in the table.
+        /// </summary>
+        /// <param name="asset">The asset that can't be shown.</param>
+        /// <param name="row">The row of the asset, or null if it has none.</param>
+        private void WarnAssetNotShown(Object asset, TableRow row)
+        {
+            string reason;
+            if (row != null)
+                reason = "is hidden by the filters of";
+            else if (!_folderScope.Contains(AssetDatabase.GetAssetPath(asset)))
+                reason = "is outside of the folder scope of";
+            else
+                reason = "has no row in";
+
+            ShowMessage($"The asset \"{asset.name}\" {reason} the table \"{_table.Name}\".", asset);
+        }
+
+        /// <summary>
+        /// Gets the message of a table without any asset, in the project or in the folders of the scope.
+        /// </summary>
+        /// <returns>Returns the message to display.</returns>
+        private string GetNoAssetMessage()
+        {
+            return _folderScope.IsWholeProject ? NoAssetMessage : NoAssetInScopeMessage;
+        }
+
+        /// <summary>
+        /// Gets the message of the list when the search, the filters or both hide all the rows.
+        /// </summary>
+        /// <returns>Returns the message to display.</returns>
+        private string GetNoMatchMessage()
+        {
+            if (IsFiltering && IsSearching)
+                return NoSearchAndFilterMatchMessage;
+
+            return IsFiltering ? NoFilterMatchMessage : NoSearchMatchMessage;
         }
 
         /// <summary>
