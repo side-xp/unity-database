@@ -106,6 +106,47 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
+        /// Selects a group of cells, such as a whole row or a whole column, and deselects the others.
+        /// </summary>
+        /// <param name="cells">The cells to select.</param>
+        public void Select(IEnumerable<CellId> cells)
+        {
+            _cells.Clear();
+            _cells.UnionWith(cells);
+            SetBase();
+        }
+
+        /// <summary>
+        /// Checks if all the cells of a group are selected.
+        /// </summary>
+        /// <param name="cells">The cells to check.</param>
+        /// <returns>Returns true if all the cells are selected, or if the group is empty.</returns>
+        public bool ContainsAll(IEnumerable<CellId> cells)
+        {
+            return _cells.IsSupersetOf(cells);
+        }
+
+        /// <summary>
+        /// Selects a group of cells, without changing the other cells.
+        /// </summary>
+        /// <param name="cells">The cells to select.</param>
+        public void Add(IEnumerable<CellId> cells)
+        {
+            _cells.UnionWith(cells);
+            SetBase();
+        }
+
+        /// <summary>
+        /// Deselects a group of cells, without changing the other cells.
+        /// </summary>
+        /// <param name="cells">The cells to deselect.</param>
+        public void Remove(IEnumerable<CellId> cells)
+        {
+            _cells.ExceptWith(cells);
+            SetBase();
+        }
+
+        /// <summary>
         /// Selects a cell if it's not selected, and deselects it otherwise, without changing the other cells (a Ctrl-click).
         /// </summary>
         /// <param name="cell">The cell to select or deselect.</param>

@@ -12,7 +12,8 @@ namespace SideXP.Database.Tests
 {
 
     /// <summary>
-    /// Tests for <see cref="CellSelection"/>: single cells, toggled cells, ranges and their base, removed cells.
+    /// Tests for <see cref="CellSelection"/>: single cells, toggled cells, ranges and their base, groups of cells (rows and columns),
+    /// removed cells.
     /// </summary>
     public class CellSelectionTests
     {
@@ -244,6 +245,57 @@ namespace SideXP.Database.Tests
         }
 
         /// <summary>
+        /// Selecting a group of cells (a row or a column) deselects the others.
+        /// </summary>
+        [Test]
+        public void Select_Group_ReplacesSelection()
+        {
+            CellSelection selection = new CellSelection();
+            selection.Select(Cell(3, ThirdColumn));
+            selection.Select(RowCells(1));
+
+            Assert.AreEqual(_columns.Count, selection.Count);
+            Assert.IsTrue(selection.ContainsAll(RowCells(1)));
+            Assert.IsFalse(selection.Contains(Cell(3, ThirdColumn)));
+        }
+
+        /// <summary>
+        /// Adding and removing a group of cells doesn't change the other cells, and the next added range keeps the result.
+        /// </summary>
+        [Test]
+        public void AddRemove_Group_OtherCellsKept()
+        {
+            CellSelection selection = new CellSelection();
+            selection.Select(Cell(3, ThirdColumn));
+
+            selection.Add(RowCells(0));
+            Assert.AreEqual(_columns.Count + 1, selection.Count);
+
+            selection.Remove(RowCells(0));
+            Assert.AreEqual(1, selection.Count);
+            Assert.IsTrue(selection.Contains(Cell(3, ThirdColumn)));
+
+            selection.Add(RowCells(2));
+            selection.SelectRange(new List<CellId> { Cell(0, FirstColumn) }, true);
+            Assert.IsTrue(selection.ContainsAll(RowCells(2)));
+            Assert.IsTrue(selection.Contains(Cell(3, ThirdColumn)));
+        }
+
+        /// <summary>
+        /// A group is contained only if all its cells are selected, and an empty group is always contained.
+        /// </summary>
+        [Test]
+        public void ContainsAll_PartlySelectedGroup_ReturnsFalse()
+        {
+            CellSelection selection = new CellSelection();
+            selection.Select(Cell(1, FirstColumn));
+            selection.Toggle(Cell(1, SecondColumn));
+
+            Assert.IsFalse(selection.ContainsAll(RowCells(1)));
+            Assert.IsTrue(selection.ContainsAll(new List<CellId>()));
+        }
+
+        /// <summary>
         /// A copy of the selection doesn't change when the selection changes, and restores it.
         /// </summary>
         [Test]
@@ -277,6 +329,16 @@ namespace SideXP.Database.Tests
         private CellId Cell(int rowIndex, string columnId)
         {
             return new CellId(_rows[rowIndex], columnId);
+        }
+
+        /// <summary>
+        /// Gets all the cells of a test row.
+        /// </summary>
+        /// <param name="rowIndex">The index of the row.</param>
+        /// <returns>Returns the cells of the row, in the order of the columns.</returns>
+        private List<CellId> RowCells(int rowIndex)
+        {
+            return CellSelection.GetRange(_rows, _columns, Cell(rowIndex, FirstColumn), Cell(rowIndex, ThirdColumn));
         }
 
         #endregion

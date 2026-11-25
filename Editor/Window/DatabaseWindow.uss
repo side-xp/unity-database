@@ -91,6 +91,37 @@
     background-color: var(--unity-colors-list_view_item-background-hover);
 }
 
+/* Holds the handle of a row and the cell of the first displayed column (TableView.WrapWithRowHandle()) */
+.database-table-view__row-handle-container {
+    flex-direction: row;
+    flex-grow: 1;
+}
+
+/* The handle at the start of each row, which selects the whole row and shows its number. Its width is set by TableView, so the largest
+   number fits. Translucent colors work with both editor themes. Temporary look, until the style pass */
+.database-table-view__row-handle {
+    flex-shrink: 0;
+    justify-content: center;
+    background-color: rgba(128, 128, 128, 0.15);
+    border-right-width: 1px;
+    border-right-color: rgba(0, 0, 0, 0.2);
+}
+
+.database-table-view__row-handle:hover {
+    background-color: rgba(58, 121, 187, 0.5);
+}
+
+/* Small and faded, so the numbers don't draw attention. TableView.RowNumberDigitWidth depends on this font size */
+.database-table-view__row-number {
+    font-size: 9px;
+    opacity: 0.6;
+    -unity-text-align: middle-center;
+    padding-left: 0;
+    padding-right: 0;
+    margin-left: 0;
+    margin-right: 0;
+}
+
 /* The selected cells. The active cell is usually selected too, so a single click shows both styles. Temporary look, until the style
    pass */
 .database-table-view__cell--selected {

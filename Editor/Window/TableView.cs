@@ -415,6 +415,8 @@ namespace SideXP.Database.EditorOnly
                 _changeTracker.UpdateIndex();
                 _rows.Clear();
                 _rows.AddRange(_pipeline.VisibleRows);
+                // Before the list views bind their rows again, so the handles get the width of the new largest number
+                UpdateRowHandleWidth();
 
                 // The asset of the active cell may have been deleted, may not be in the table anymore, or may be hidden by the search
                 if (!_activeCell.IsNone && !IsAssetVisible(_activeCell.Asset))
@@ -489,7 +491,8 @@ namespace SideXP.Database.EditorOnly
                 float frozenColumnWidth = GetInitialWidth(frozenColumn);
 
                 _frozenColumnLink = new FrozenColumnLink(_frozenListView, _listView, frozenColumnWidth);
-                _frozenListView.columns.Add(CreateListColumn(frozenColumn, frozenColumnIndex, frozenColumnWidth, false, _frozenColumnLink));
+                _frozenListView.columns.Add(CreateListColumn(frozenColumn, frozenColumnIndex, frozenColumnWidth, false, true,
+                    _frozenColumnLink));
                 firstMainColumn = 1;
             }
 
@@ -497,7 +500,10 @@ namespace SideXP.Database.EditorOnly
             {
                 int columnIndex = displayedColumns[i];
                 TableViewColumn column = _columns[columnIndex];
-                _listView.columns.Add(CreateListColumn(column, columnIndex, GetInitialWidth(column), column.IsFlexible, null));
+                // Without frozen list, the row handles go in the first column of the main list
+                bool hasRowHandle = i == 0;
+                _listView.columns.Add(CreateListColumn(column, columnIndex, GetInitialWidth(column), column.IsFlexible, hasRowHandle,
+                    null));
             }
 
             ShowSortInHeader();
@@ -555,9 +561,11 @@ namespace SideXP.Database.EditorOnly
         /// <param name="columnIndex">The index of the column in the pipeline.</param>
         /// <param name="width">The initial width of the column, in pixels.</param>
         /// <param name="isStretchable">If enabled, the column grows to fill the width left by the other columns.</param>
+        /// <param name="hasRowHandle">If enabled, the cells of the column start with the handle that selects their row (see
+        /// <see cref="WrapWithRowHandle(VisualElement)"/>). Only the first displayed column has them.</param>
         /// <param name="frozenColumnLink">The link that tracks the cells of the frozen column, or null if the column is not frozen.</param>
         /// <returns>Returns the created column.</returns>
-        private Column CreateListColumn(TableViewColumn column, int columnIndex, float width, bool isStretchable,
+        private Column CreateListColumn(TableViewColumn column, int columnIndex, float width, bool isStretchable, bool hasRowHandle,
             FrozenColumnLink frozenColumnLink)
         {
             Column listColumn = new Column
@@ -573,11 +581,17 @@ namespace SideXP.Database.EditorOnly
                 makeCell = () =>
                 {
                     VisualElement cell = MakeCell(column, frozenColumnLink != null);
-                    frozenColumnLink?.TrackCell(cell);
-                    return cell;
+                    VisualElement element = hasRowHandle ? WrapWithRowHandle(cell) : cell;
+                    frozenColumnLink?.TrackCell(element);
+                    return element;
                 },
-                bindCell = (element, rowIndex) => BindCell(element, column, columnIndex, _rows[rowIndex]),
-                unbindCell = (element, rowIndex) => UnbindCell(element),
+                bindCell = (element, rowIndex) =>
+                {
+                    BindCell(GetCellElement(element), column, columnIndex, _rows[rowIndex]);
+                    if (hasRowHandle)
+                        BindRowHandle(element, rowIndex);
+                },
+                unbindCell = (element, rowIndex) => UnbindCell(GetCellElement(element)),
             };
 
             // After the initial width is set, so only the widths chosen by the user are reported
@@ -591,7 +605,8 @@ namespace SideXP.Database.EditorOnly
         /// <remarks>
         /// The header holds its column, so the order of the columns can be read from the headers (see <see cref="SaveColumnOrder"/>).
         /// The sort indicator of the list views is hidden by the style sheet, and replaced by the icon (see
-        /// <see cref="UpdateSortIcons"/>).
+        /// <see cref="UpdateSortIcons"/>). Ctrl-clicking the header selects the column instead of sorting it (see
+        /// <see cref="OnHeaderPointerDown(PointerDownEvent)"/>).
         /// </remarks>
         /// <param name="column">The column of which to create the header.</param>
         /// <returns>Returns the created header.</returns>
@@ -609,6 +624,8 @@ namespace SideXP.Database.EditorOnly
             label.AddToClassList(HeaderLabelClass);
             header.Add(label);
 
+            header.RegisterCallback<PointerDownEvent>(OnHeaderPointerDown);
+            header.RegisterCallback<MouseDownEvent>(OnHeaderMouseDown);
             UpdateSortIcon(header);
             return header;
         }

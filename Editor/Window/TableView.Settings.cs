@@ -53,8 +53,9 @@ namespace SideXP.Database.EditorOnly
         #region Column visibility
 
         /// <summary>
-        /// Called when the header of a list view is right-clicked. Replaces the items of Unity with the items that show and hide the
-        /// columns of the table.
+        /// Called when the header of a list view is right-clicked. Replaces the items of Unity with the item that adds the clicked
+        /// column to the selection (see <see cref="AppendColumnSelectionItem"/>), and the items that show and hide the columns of the
+        /// table.
         /// </summary>
         /// <remarks>
         /// The items of Unity only know the columns of their own list view, and hiding a column directly in a list view would ignore
@@ -67,6 +68,9 @@ namespace SideXP.Database.EditorOnly
             evt.menu.ClearItems();
             if (_viewSettings == null)
                 return;
+
+            if (AppendColumnSelectionItem(evt.menu, clickedColumn))
+                evt.menu.AppendSeparator();
 
             // The hidden columns are listed at their place, so the menu shows the whole order of the table
             bool hasHiddenColumns = _displayedColumns.Count < _columns.Count;
