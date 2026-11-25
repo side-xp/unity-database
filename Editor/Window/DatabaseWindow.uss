@@ -125,6 +125,61 @@
     min-width: 40px;
 }
 
+/* A number range: the minimum, "to", then the maximum, sharing the width of the fields */
+.database-filter-condition__range {
+    flex-direction: row;
+    align-items: center;
+}
+
+.database-filter-condition__limit {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 30px;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+/* A limit that isn't a number, which is not applied. Red like the errors of the console, readable with both editor themes */
+.database-filter-condition__limit--invalid > .unity-text-field__input {
+    border-color: rgb(220, 70, 60);
+}
+
+.database-filter-condition__range-separator {
+    -unity-text-align: middle-center;
+    opacity: 0.7;
+    padding-left: 3px;
+    padding-right: 3px;
+}
+
+/* The chosen values of an enum, which can be long: aligned like a text, cut with an ellipsis */
+.database-filter-condition__enum {
+    -unity-text-align: middle-left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-left: 0;
+}
+
+/* A reference: what it checks, then the asset, which takes the remaining width */
+.database-filter-condition__reference {
+    flex-direction: row;
+    align-items: center;
+}
+
+.database-filter-condition__match {
+    width: 84px;
+    flex-shrink: 0;
+    margin-left: 0;
+}
+
+.database-filter-condition__asset {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 40px;
+    margin-left: 2px;
+    margin-right: 0;
+}
+
 .database-filter-editor__remove {
     flex-shrink: 0;
     padding-left: 1px;
@@ -171,7 +226,8 @@
     margin-top: 0;
 }
 
-/* The header of a column: the priority of the column in the sort, the icon of the sort, then the name (TableView.MakeHeader()) */
+/* The header of a column: the priority of the column in the sort, the icon of the sort, the icon of the filters, then the name
+   (TableView.MakeHeader()) */
 .database-table-view__header {
     flex-direction: row;
     justify-content: center;
@@ -212,6 +268,13 @@
     padding-right: 0;
     margin-left: 0;
     margin-right: 1px;
+}
+
+/* Shown only on the headers of the columns that a condition of the filters uses. Faded, so it doesn't compete with the sort */
+.database-table-view__header-filter-icon {
+    margin-right: 4px;
+    opacity: 0.8;
+    --sxp-icon-size: 14;
 }
 
 /* Replaced by the icon of the header, which shows the sort beside the name instead of above it */

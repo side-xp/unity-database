@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UIElements;
 using UnityEditor;
+using UnityEditor.UIElements;
 
 namespace SideXP.Database.EditorOnly
 {
@@ -39,6 +40,14 @@ namespace SideXP.Database.EditorOnly
         private const string ConditionColumnMissingClass = "database-filter-condition__column--missing";
         private const string ConditionFieldClass = "database-filter-condition__field";
         private const string ConditionIgnoredClass = "database-filter-condition__ignored";
+        private const string ConditionRangeClass = "database-filter-condition__range";
+        private const string ConditionRangeSeparatorClass = "database-filter-condition__range-separator";
+        private const string ConditionLimitClass = "database-filter-condition__limit";
+        private const string ConditionLimitInvalidClass = "database-filter-condition__limit--invalid";
+        private const string ConditionEnumClass = "database-filter-condition__enum";
+        private const string ConditionReferenceClass = "database-filter-condition__reference";
+        private const string ConditionMatchClass = "database-filter-condition__match";
+        private const string ConditionAssetClass = "database-filter-condition__asset";
         private const string RemoveButtonClass = "database-filter-editor__remove";
         private const string AddButtonClass = "database-filter-editor__add";
 
@@ -64,6 +73,20 @@ namespace SideXP.Database.EditorOnly
             "(names for enums, paths for references). Empty: all the rows.";
         private const string CheckedText = "is checked";
         private const string UncheckedText = "is unchecked";
+        private const string MinPlaceholder = "Min";
+        private const string MaxPlaceholder = "Max";
+        private const string MinTooltip = "The smallest number kept, included. Empty: no minimum. Use a dot before the decimals.";
+        private const string MaxTooltip = "The largest number kept, included. Empty: no maximum. Use a dot before the decimals.";
+        private const string RangeSeparatorText = "to";
+        private const string EnumTooltip = "The values kept. Click to check or uncheck them. For an enum with flags, a row is kept if " +
+            "it has at least one of the checked flags.";
+        private const string SelectAllText = "Select All";
+        private const string SelectNoneText = "Select None";
+        private const string IsAssetText = "is";
+        private const string IsMissingText = "is missing";
+        private const string ReferenceMatchTooltip = "is: the rows that reference the asset (or no asset if the field is empty). " +
+            "is missing: the rows that reference a deleted asset.";
+        private const string AssetTooltip = "The referenced asset. Empty: the rows that reference no asset (None).";
 
         /// <summary>
         /// The choices of the operator of a group, in the order of <see cref="FilterOperator"/>.
@@ -74,6 +97,11 @@ namespace SideXP.Database.EditorOnly
         /// The choices of a checkbox condition: checked first, like <see cref="BoolCondition.IsChecked"/>.
         /// </summary>
         private static readonly List<string> CheckedChoices = new List<string> { CheckedText, UncheckedText };
+
+        /// <summary>
+        /// The choices of a reference condition, in the order of <see cref="ReferenceCondition.ReferenceMatch"/>.
+        /// </summary>
+        private static readonly List<string> ReferenceMatchChoices = new List<string> { IsAssetText, IsMissingText };
 
         /// <summary>
         /// The edited tree, whose root is always a group.
@@ -136,6 +164,22 @@ namespace SideXP.Database.EditorOnly
         {
             Clear();
             Add(CreateGroupElement(_root, null));
+        }
+
+        /// <summary>
+        /// Adds the default condition of a column at the end of the root group (see <see cref="FilterConditions.CreateDefault"/>),
+        /// and notifies the change.
+        /// </summary>
+        /// <param name="columnId">The identifier of the column.</param>
+        /// <returns>Returns true if the condition has been added, false if the editor has no such column.</returns>
+        public bool AddCondition(string columnId)
+        {
+            TableViewColumn column = FindColumn(columnId);
+            if (column == null)
+                return false;
+
+            AddCondition(_root, column);
+            return true;
         }
 
         #endregion
@@ -276,7 +320,7 @@ namespace SideXP.Database.EditorOnly
 
             Type valueType = column?.Accessor.ValueType;
             bool isApplicable = valueType != null && condition.CanApplyTo(valueType);
-            VisualElement fields = isApplicable ? CreateConditionFields(condition) : CreateNote(IgnoredText);
+            VisualElement fields = isApplicable ? CreateConditionFields(condition, valueType) : CreateNote(IgnoredText);
             element.Add(fields);
 
             element.Add(CreateRemoveButton(RemoveConditionTooltip, () => RemoveNode(parent, condition)));
@@ -287,10 +331,10 @@ namespace SideXP.Database.EditorOnly
         /// Creates the fields that edit the values of a condition, by kind of condition.
         /// </summary>
         /// <param name="condition">The condition to edit, which applies to its column.</param>
+        /// <param name="valueType">The type of the values of the column of the condition.</param>
         /// <returns>Returns the created fields.</returns>
-        private VisualElement CreateConditionFields(FilterCondition condition)
+        private VisualElement CreateConditionFields(FilterCondition condition, Type valueType)
         {
-            // @todo 21b2b: the fields of the number, enum and reference conditions
             switch (condition)
             {
                 case TextCondition textCondition:
@@ -299,9 +343,196 @@ namespace SideXP.Database.EditorOnly
                 case BoolCondition boolCondition:
                     return CreateBoolFields(boolCondition);
 
+                case NumberRangeCondition rangeCondition:
+                    return CreateRangeFields(rangeCondition);
+
+                case EnumCondition enumCondition:
+                    return CreateEnumFields(enumCondition, valueType);
+
+                case ReferenceCondition referenceCondition:
+                    return CreateReferenceFields(referenceCondition, valueType);
+
+                // A kind of condition added later, or by a custom tool
                 default:
                     return CreateNote(NotEditableText);
             }
+        }
+
+        /// <summary>
+        /// Creates the fields of a number range: its minimum and its maximum, each optional.
+        /// </summary>
+        /// <remarks>
+        /// A text that isn't a number is marked and not applied, so the range keeps its previous limit until the text is valid.
+        /// </remarks>
+        /// <param name="condition">The condition to edit.</param>
+        /// <returns>Returns the created fields.</returns>
+        private VisualElement CreateRangeFields(NumberRangeCondition condition)
+        {
+            VisualElement fields = new VisualElement();
+            fields.AddToClassList(ConditionFieldClass);
+            fields.AddToClassList(ConditionRangeClass);
+
+            fields.Add(CreateLimitField(MinPlaceholder, MinTooltip, condition.Min, limit => condition.Min = limit));
+            Label separator = new Label(RangeSeparatorText);
+            separator.AddToClassList(ConditionRangeSeparatorClass);
+            fields.Add(separator);
+            fields.Add(CreateLimitField(MaxPlaceholder, MaxTooltip, condition.Max, limit => condition.Max = limit));
+            return fields;
+        }
+
+        /// <summary>
+        /// Creates the field of a limit of a number range.
+        /// </summary>
+        /// <param name="placeholder">The text shown while the field is empty.</param>
+        /// <param name="tooltip">The tooltip of the field.</param>
+        /// <param name="limit">The current limit, or null if there is none.</param>
+        /// <param name="setLimit">Sets the limit of the condition, null for no limit.</param>
+        /// <returns>Returns the created field.</returns>
+        private TextField CreateLimitField(string placeholder, string tooltip, double? limit, Action<double?> setLimit)
+        {
+            TextField field = new TextField { value = FilterConditions.ToLimitText(limit), tooltip = tooltip };
+            field.textEdition.placeholder = placeholder;
+            field.AddToClassList(ConditionLimitClass);
+            field.RegisterValueChangedCallback(evt =>
+            {
+                bool isValid = FilterConditions.TryParseLimit(evt.newValue, out double? newLimit);
+                field.EnableInClassList(ConditionLimitInvalidClass, !isValid);
+                if (!isValid)
+                    return;
+
+                setLimit(newLimit);
+                NotifyValueChanged();
+            });
+            return field;
+        }
+
+        /// <summary>
+        /// Creates the field of an enum condition: a button with the chosen values, which opens a menu to check and uncheck them.
+        /// </summary>
+        /// <param name="condition">The condition to edit.</param>
+        /// <param name="enumType">The type of the enum of the column.</param>
+        /// <returns>Returns the created field.</returns>
+        private VisualElement CreateEnumFields(EnumCondition condition, Type enumType)
+        {
+            Button button = null;
+            button = new Button(() => ShowEnumMenu(button, condition, enumType)) { tooltip = EnumTooltip };
+            button.AddToClassList(ConditionFieldClass);
+            button.AddToClassList(ConditionEnumClass);
+            UpdateEnumButton(button, condition, enumType);
+            return button;
+        }
+
+        /// <summary>
+        /// Shows the menu of the values of an enum condition under its button: each value checked if it's chosen, then the items that
+        /// choose all or none of them. The menu closes after each click, like the other menus of the editor.
+        /// </summary>
+        /// <param name="button">The button of the condition.</param>
+        /// <param name="condition">The condition to edit.</param>
+        /// <param name="enumType">The type of the enum of the column.</param>
+        private void ShowEnumMenu(Button button, EnumCondition condition, Type enumType)
+        {
+            List<long> numbers = FilterConditions.GetEnumNumbers(enumType);
+            GenericMenu menu = new GenericMenu();
+            foreach (long number in numbers)
+            {
+                long value = number;
+                bool isChosen = condition.Values.Contains(value);
+                menu.AddItem(new GUIContent(FilterConditions.GetEnumValueText(enumType, value)), isChosen, () =>
+                {
+                    if (isChosen)
+                        condition.Values.RemoveAll(item => item == value);
+                    else
+                        condition.Values.Add(value);
+
+                    OnEnumValuesChanged(button, condition, enumType);
+                });
+            }
+
+            menu.AddSeparator(string.Empty);
+            menu.AddItem(new GUIContent(SelectAllText), false, () =>
+            {
+                condition.Values.Clear();
+                condition.Values.AddRange(numbers);
+                OnEnumValuesChanged(button, condition, enumType);
+            });
+            menu.AddItem(new GUIContent(SelectNoneText), false, () =>
+            {
+                condition.Values.Clear();
+                OnEnumValuesChanged(button, condition, enumType);
+            });
+
+            menu.DropDown(button.worldBound);
+        }
+
+        /// <summary>
+        /// Called when the chosen values of an enum condition have changed. Updates its button, and notifies the change.
+        /// </summary>
+        /// <param name="button">The button of the condition.</param>
+        /// <param name="condition">The edited condition.</param>
+        /// <param name="enumType">The type of the enum of the column.</param>
+        private void OnEnumValuesChanged(Button button, EnumCondition condition, Type enumType)
+        {
+            UpdateEnumButton(button, condition, enumType);
+            NotifyValueChanged();
+        }
+
+        /// <summary>
+        /// Shows the chosen values of an enum condition on its button.
+        /// </summary>
+        /// <param name="button">The button of the condition.</param>
+        /// <param name="condition">The condition.</param>
+        /// <param name="enumType">The type of the enum of the column.</param>
+        private static void UpdateEnumButton(Button button, EnumCondition condition, Type enumType)
+        {
+            button.text = FilterConditions.GetEnumValuesText(enumType, condition.Values);
+        }
+
+        /// <summary>
+        /// Creates the fields of a reference condition: what it checks (an asset, or a missing reference), and the asset, shown only
+        /// while it checks an asset. An empty asset field keeps the empty references (<i>None</i>).
+        /// </summary>
+        /// <param name="condition">The condition to edit.</param>
+        /// <param name="referenceType">The type of the references of the column, which the asset field accepts.</param>
+        /// <returns>Returns the created fields.</returns>
+        private VisualElement CreateReferenceFields(ReferenceCondition condition, Type referenceType)
+        {
+            VisualElement fields = new VisualElement();
+            fields.AddToClassList(ConditionFieldClass);
+            fields.AddToClassList(ConditionReferenceClass);
+
+            ObjectField assetField = new ObjectField
+            {
+                objectType = referenceType,
+                allowSceneObjects = false,
+                value = condition.Asset,
+                tooltip = AssetTooltip,
+            };
+            assetField.AddToClassList(ConditionAssetClass);
+            assetField.RegisterValueChangedCallback(evt =>
+            {
+                condition.Asset = evt.newValue;
+                NotifyValueChanged();
+            });
+
+            DropdownField matchField = new DropdownField
+            {
+                choices = ReferenceMatchChoices,
+                index = condition.Match == ReferenceCondition.ReferenceMatch.IsMissing ? 1 : 0,
+                tooltip = ReferenceMatchTooltip,
+            };
+            matchField.AddToClassList(ConditionMatchClass);
+            matchField.RegisterValueChangedCallback(evt =>
+            {
+                bool isMissing = matchField.index == 1;
+                condition.Match = isMissing ? ReferenceCondition.ReferenceMatch.IsMissing : ReferenceCondition.ReferenceMatch.IsAsset;
+                assetField.SetDisplayed(!isMissing);
+                NotifyValueChanged();
+            });
+
+            assetField.SetDisplayed(condition.Match == ReferenceCondition.ReferenceMatch.IsAsset);
+            fields.Add(matchField);
+            fields.Add(assetField);
+            return fields;
         }
 
         /// <summary>

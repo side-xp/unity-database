@@ -91,6 +91,15 @@ namespace SideXP.Database.EditorOnly
             UpdateClearFiltersButton();
         }
 
+        /// <summary>
+        /// Adds a condition on a column at the end of the filters, and applies it (see <see cref="FilterEditor.AddCondition(string)"/>).
+        /// </summary>
+        /// <param name="columnId">The identifier of the column.</param>
+        public void AddCondition(string columnId)
+        {
+            _filterEditor.AddCondition(columnId);
+        }
+
         #endregion
 
 

@@ -44,6 +44,14 @@ namespace SideXP.Database.Tests
         }
 
         /// <summary>
+        /// An enum whose member names are nicified by the editor.
+        /// </summary>
+        private enum NicifiedEnum
+        {
+            DayOfWeek = 0,
+        }
+
+        /// <summary>
         /// Reads a fixed value, to build rows with known values.
         /// </summary>
         private class ConstantAccessor : IValueAccessor
@@ -509,24 +517,143 @@ namespace SideXP.Database.Tests
         #region Default conditions
 
         /// <summary>
-        /// A checkbox column gets a condition that keeps the checked rows, the other columns a text condition that keeps all the rows.
-        /// Each default condition applies to its column.
+        /// Each type of column gets its own default condition, on the given column, which applies to it.
         /// </summary>
         [Test]
-        public void CreateDefault_ByType_ApplicableCondition()
+        public void CreateDefault_ByType_ConditionOfTheType()
         {
-            FilterCondition boolCondition = FilterConditions.CreateDefault(CheckedId, typeof(bool));
-            Assert.IsInstanceOf<BoolCondition>(boolCondition);
-            Assert.IsTrue(((BoolCondition)boolCondition).IsChecked);
+            Assert.IsInstanceOf<BoolCondition>(FilterConditions.CreateDefault(CheckedId, typeof(bool)));
+            Assert.IsInstanceOf<NumberRangeCondition>(FilterConditions.CreateDefault(NumberId, typeof(int)));
+            Assert.IsInstanceOf<NumberRangeCondition>(FilterConditions.CreateDefault(NumberId, typeof(float)));
+            Assert.IsInstanceOf<EnumCondition>(FilterConditions.CreateDefault(NumberId, typeof(DayOfWeek)));
+            Assert.IsInstanceOf<ReferenceCondition>(FilterConditions.CreateDefault(NumberId, typeof(ScriptableObject)));
+            Assert.IsInstanceOf<TextCondition>(FilterConditions.CreateDefault(LabelId, typeof(string)));
+            Assert.IsInstanceOf<TextCondition>(FilterConditions.CreateDefault(LabelId, typeof(Vector2)));
 
-            foreach (Type type in new[] { typeof(string), typeof(int), typeof(DayOfWeek), typeof(ScriptableObject), typeof(Vector2) })
+            foreach (Type type in new[] { typeof(bool), typeof(int), typeof(DayOfWeek), typeof(ScriptableObject), typeof(Vector2) })
             {
                 FilterCondition condition = FilterConditions.CreateDefault(LabelId, type);
-                Assert.IsInstanceOf<TextCondition>(condition, type.Name);
-                Assert.AreEqual(LabelId, condition.ColumnId);
+                Assert.AreEqual(LabelId, condition.ColumnId, type.Name);
                 Assert.IsTrue(condition.CanApplyTo(type), type.Name);
-                Assert.IsTrue(Matches(condition, type, "Anything"), type.Name);
             }
+        }
+
+        /// <summary>
+        /// The default conditions keep all the rows until the user sets them, except the checkboxes (the checked rows) and the
+        /// references (the empty references).
+        /// </summary>
+        [Test]
+        public void CreateDefault_NeutralConditions_KeepAllRows()
+        {
+            Assert.IsTrue(Matches(FilterConditions.CreateDefault(NumberId, typeof(int)), typeof(int), int.MinValue));
+            Assert.IsTrue(Matches(FilterConditions.CreateDefault(NumberId, typeof(int)), typeof(int), int.MaxValue));
+            Assert.IsTrue(Matches(FilterConditions.CreateDefault(LabelId, typeof(string)), typeof(string), "Anything"));
+
+            FilterCondition dayCondition = FilterConditions.CreateDefault(NumberId, typeof(DayOfWeek));
+            foreach (DayOfWeek day in Enum.GetValues(typeof(DayOfWeek)))
+                Assert.IsTrue(Matches(dayCondition, typeof(DayOfWeek), day), day.ToString());
+
+            FilterCondition flagsCondition = FilterConditions.CreateDefault(NumberId, typeof(TestFlags));
+            Assert.IsTrue(Matches(flagsCondition, typeof(TestFlags), TestFlags.None));
+            Assert.IsTrue(Matches(flagsCondition, typeof(TestFlags), TestFlags.Fire | TestFlags.Poison));
+
+            FilterCondition referenceCondition = FilterConditions.CreateDefault(NumberId, typeof(ScriptableObject));
+            Assert.IsTrue(Matches(referenceCondition, typeof(ScriptableObject), null));
+            Assert.IsFalse(Matches(referenceCondition, typeof(ScriptableObject), CreateObject()));
+        }
+
+        #endregion
+
+
+        #region Texts of the editor
+
+        /// <summary>
+        /// A limit is a number in the invariant culture, or an empty text for no limit. Other texts are refused.
+        /// </summary>
+        [Test]
+        public void TryParseLimit_Texts_NumbersOrEmpty()
+        {
+            Assert.IsTrue(FilterConditions.TryParseLimit("12.5", out double? limit));
+            Assert.AreEqual(12.5, limit);
+            Assert.IsTrue(FilterConditions.TryParseLimit(" -3 ", out limit));
+            Assert.AreEqual(-3, limit);
+            Assert.IsTrue(FilterConditions.TryParseLimit("1e3", out limit));
+            Assert.AreEqual(1000, limit);
+
+            Assert.IsTrue(FilterConditions.TryParseLimit("  ", out limit));
+            Assert.IsNull(limit);
+            Assert.IsTrue(FilterConditions.TryParseLimit(null, out limit));
+            Assert.IsNull(limit);
+
+            Assert.IsFalse(FilterConditions.TryParseLimit("abc", out _));
+            Assert.IsFalse(FilterConditions.TryParseLimit("12,5", out _));
+            Assert.IsFalse(FilterConditions.TryParseLimit("NaN", out _));
+        }
+
+        /// <summary>
+        /// The text of a limit is read back as the same limit.
+        /// </summary>
+        [Test]
+        public void ToLimitText_Limits_ReadBack()
+        {
+            foreach (double value in new[] { 0, 12.5, -3, 0.1, 1e20 })
+            {
+                Assert.IsTrue(FilterConditions.TryParseLimit(FilterConditions.ToLimitText(value), out double? limit));
+                Assert.AreEqual(value, limit);
+            }
+
+            Assert.AreEqual(string.Empty, FilterConditions.ToLimitText(null));
+            Assert.AreEqual("12.5", FilterConditions.ToLimitText(12.5));
+        }
+
+        /// <summary>
+        /// The values of an enum are listed in the order of the declaration, with their displayed names.
+        /// </summary>
+        [Test]
+        public void GetEnumNumbers_Enum_DeclarationOrder()
+        {
+            CollectionAssert.AreEqual(new long[] { 0, 1, 2, 4 }, FilterConditions.GetEnumNumbers(typeof(TestFlags)));
+            Assert.AreEqual("Poison", FilterConditions.GetEnumValueText(typeof(TestFlags), 4));
+            Assert.AreEqual("Day Of Week", FilterConditions.GetEnumValueText(typeof(NicifiedEnum), 0));
+            Assert.AreEqual("8", FilterConditions.GetEnumValueText(typeof(TestFlags), 8));
+        }
+
+        /// <summary>
+        /// The text of the chosen values of an enum condition names them, or says that all or none are chosen.
+        /// </summary>
+        [Test]
+        public void GetEnumValuesText_ChosenValues_Summary()
+        {
+            Type type = typeof(TestFlags);
+
+            Assert.AreEqual("Fire, Poison", FilterConditions.GetEnumValuesText(type, new long[] { 4, 1 }));
+            Assert.AreEqual(FilterConditions.AnyEnumValueText, FilterConditions.GetEnumValuesText(type, new long[] { 0, 1, 2, 4 }));
+            Assert.AreEqual(FilterConditions.NoEnumValueText, FilterConditions.GetEnumValuesText(type, new long[0]));
+            // A value that isn't a member of the enum anymore is not named
+            Assert.AreEqual(FilterConditions.NoEnumValueText, FilterConditions.GetEnumValuesText(type, new long[] { 8 }));
+        }
+
+        #endregion
+
+
+        #region Filtered columns
+
+        /// <summary>
+        /// The filtered columns are the columns of the conditions that apply, in all the groups, without the ignored ones.
+        /// </summary>
+        [Test]
+        public void GetFilteredColumnIds_Tree_ApplicableConditionsOnly()
+        {
+            FilterGroup root = new FilterGroup(FilterOperator.And,
+                new BoolCondition(CheckedId, true),
+                new FilterGroup(FilterOperator.Or,
+                    new TextCondition(LabelId, "sword"),
+                    new BoolCondition(MissingId, true)),
+                new BoolCondition(NumberId, true),
+                null);
+
+            CollectionAssert.AreEquivalent(new[] { CheckedId, LabelId }, FilterConditions.GetFilteredColumnIds(root, Columns));
+            Assert.IsEmpty(FilterConditions.GetFilteredColumnIds(null, Columns));
         }
 
         #endregion

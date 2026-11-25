@@ -55,7 +55,8 @@ namespace SideXP.Database.EditorOnly
         /// <summary>
         /// Called when the header of a list view is right-clicked. Replaces the items of Unity with the item that adds the clicked
         /// column to the selection (see <see cref="AppendColumnSelectionItem"/>), the items of the sort (see
-        /// <see cref="AppendSortItems"/>), and the items that show and hide the columns of the table.
+        /// <see cref="AppendSortItems"/>), the item that filters by the column (see <see cref="AppendFilterItem"/>), and the items
+        /// that show and hide the columns of the table.
         /// </summary>
         /// <remarks>
         /// The items of Unity only know the columns of their own list view, and hiding a column directly in a list view would ignore
@@ -73,6 +74,9 @@ namespace SideXP.Database.EditorOnly
                 evt.menu.AppendSeparator();
 
             if (AppendSortItems(evt.menu, clickedColumn))
+                evt.menu.AppendSeparator();
+
+            if (AppendFilterItem(evt.menu, clickedColumn))
                 evt.menu.AppendSeparator();
 
             // The hidden columns are listed at their place, so the menu shows the whole order of the table

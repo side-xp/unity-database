@@ -77,6 +77,7 @@ namespace SideXP.Database.EditorOnly
         private const string HeaderLabelClass = "database-table-view__header-label";
         private const string HeaderSortIconClass = "database-table-view__header-sort-icon";
         private const string HeaderSortPriorityClass = "database-table-view__header-sort-priority";
+        private const string HeaderFilterIconClass = "database-table-view__header-filter-icon";
         private const string CellClass = "database-table-view__cell";
         private const string ActiveCellClass = "database-table-view__cell--active";
         private const string SelectedCellClass = "database-table-view__cell--selected";
@@ -350,6 +351,7 @@ namespace SideXP.Database.EditorOnly
             _source = null;
             _filter = null;
             _compiledFilter = null;
+            _filteredColumnIds.Clear();
             _folderScope = FolderScope.WholeProject;
             _columns = new List<TableViewColumn>();
             _displayedColumns = new List<int>();
@@ -646,7 +648,7 @@ namespace SideXP.Database.EditorOnly
 
         /// <summary>
         /// Creates the header of a column, with its tooltip: the priority of the column in the sort and the icon of the sort, shown if
-        /// the column is sorted, then the name.
+        /// the column is sorted, the icon of the filters, shown if a condition of the filters applies to the column, then the name.
         /// </summary>
         /// <remarks>
         /// The header holds its column, so the order of the columns can be read from the headers (see <see cref="SaveColumnOrder"/>).
@@ -671,6 +673,10 @@ namespace SideXP.Database.EditorOnly
             sortIcon.AddToClassList(HeaderSortIconClass);
             header.Add(sortIcon);
 
+            Icon filterIcon = new Icon(DatabaseIcons.Filter) { pickingMode = PickingMode.Ignore };
+            filterIcon.AddToClassList(HeaderFilterIconClass);
+            header.Add(filterIcon);
+
             Label label = new Label(column.Name) { pickingMode = PickingMode.Ignore };
             label.AddToClassList(HeaderLabelClass);
             header.Add(label);
@@ -679,6 +685,7 @@ namespace SideXP.Database.EditorOnly
             header.RegisterCallback<PointerDownEvent>(OnHeaderSortPointerDown);
             header.RegisterCallback<MouseDownEvent>(OnHeaderMouseDown);
             UpdateSortIcon(header);
+            UpdateFilterIcon(header);
             return header;
         }
 

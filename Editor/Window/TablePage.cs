@@ -170,6 +170,7 @@ namespace SideXP.Database.EditorOnly
             content.Add(_viewPanel);
             Add(content);
             SetViewPanelOpen(false);
+            _tableView.FilterByColumnRequested += OnFilterByColumnRequested;
         }
 
         #endregion
@@ -278,6 +279,22 @@ namespace SideXP.Database.EditorOnly
             bool isOpen = !IsViewPanelOpen;
             SetViewPanelOpen(isOpen);
             ViewPanelToggled?.Invoke(isOpen);
+        }
+
+        /// <summary>
+        /// Called when the user asks to filter the rows by a column from the menu of its header. Opens the view panel if it's closed,
+        /// and adds a condition on the column to the filters.
+        /// </summary>
+        /// <param name="columnId">The identifier of the column.</param>
+        private void OnFilterByColumnRequested(string columnId)
+        {
+            if (!IsViewPanelOpen)
+            {
+                SetViewPanelOpen(true);
+                ViewPanelToggled?.Invoke(true);
+            }
+
+            _viewPanel.AddCondition(columnId);
         }
 
         #endregion

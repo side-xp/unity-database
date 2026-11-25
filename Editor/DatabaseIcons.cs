@@ -64,6 +64,11 @@ namespace SideXP.Database.EditorOnly
         public const string ViewPanel = "layout-sidebar-right";
 
         /// <summary>
+        /// A funnel, shown in the header of a column that the filters use.
+        /// </summary>
+        public const string Filter = "filter";
+
+        /// <summary>
         /// A funnel with a bar across it, for the button that clears the filters.
         /// </summary>
         public const string ClearFilters = "filter-off";

@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 
+using UnityEngine.UIElements;
 using UnityEditor;
+
+using SideXP.Core.EditorOnly;
 
 using Object = UnityEngine.Object;
 
@@ -32,6 +35,7 @@ namespace SideXP.Database.EditorOnly
 
         #region Fields
 
+        private const string FilterByColumnText = "Filter by This Column";
         private const string NoAssetInScopeMessage = "There is no asset of this table in the folders of the scope.";
         private const string NoFilterMatchMessage = "No row meets the filters.";
         private const string NoSearchAndFilterMatchMessage = "No row matches the search and the filters.";
@@ -47,6 +51,11 @@ namespace SideXP.Database.EditorOnly
         private Predicate<TableRow> _compiledFilter = null;
 
         /// <summary>
+        /// The identifiers of the columns used by the conditions of the filter that apply to the table, marked in their header.
+        /// </summary>
+        private HashSet<string> _filteredColumnIds = new HashSet<string>();
+
+        /// <summary>
         /// The folders the table is limited to.
         /// </summary>
         private FolderScope _folderScope = FolderScope.WholeProject;
@@ -55,6 +64,12 @@ namespace SideXP.Database.EditorOnly
         /// The source of the assets of the table, which applies the folder scope, or null if no table is displayed.
         /// </summary>
         private ProjectAssetSource _source = null;
+
+        /// <summary>
+        /// Called when the user asks to filter the rows by a column from the menu of its header, with the identifier of the column.
+        /// The owner of the view adds the condition in its filter editor (see <see cref="ViewPanel"/>).
+        /// </summary>
+        public event Action<string> FilterByColumnRequested;
 
         #endregion
 
@@ -90,6 +105,7 @@ namespace SideXP.Database.EditorOnly
 
             CompileFilter();
             ApplyRowFilter();
+            UpdateFilterIcons();
             Refresh();
         }
 
@@ -158,6 +174,7 @@ namespace SideXP.Database.EditorOnly
             if (_filter == null)
             {
                 _compiledFilter = null;
+                _filteredColumnIds.Clear();
                 return;
             }
 
@@ -172,6 +189,48 @@ namespace SideXP.Database.EditorOnly
             }
 
             _compiledFilter = _filter.Compile(columns);
+            _filteredColumnIds = FilterConditions.GetFilteredColumnIds(_filter, columns);
+        }
+
+        /// <summary>
+        /// Adds the item that filters the rows by the clicked column to the context menu of a header (see
+        /// <see cref="FilterByColumnRequested"/>).
+        /// </summary>
+        /// <param name="menu">The context menu of the header.</param>
+        /// <param name="clickedColumn">The column of the list view under the pointer, or null if there is none.</param>
+        /// <returns>Returns true if the item has been added.</returns>
+        private bool AppendFilterItem(DropdownMenu menu, Column clickedColumn)
+        {
+            // The columns of the list views are named after the identifiers of the columns of the table
+            string columnId = clickedColumn?.name;
+            TableViewColumn column = string.IsNullOrEmpty(columnId) ? null : _columns.Find(item => item.Id == columnId);
+            if (column == null)
+                return false;
+
+            // The Controls column has no value to filter
+            DropdownMenuAction.Status status = column.IsControls ? DropdownMenuAction.Status.Disabled : DropdownMenuAction.Status.Normal;
+            menu.AppendAction(FilterByColumnText, action => FilterByColumnRequested?.Invoke(column.Id), status);
+            return true;
+        }
+
+        /// <summary>
+        /// Shows the mark of the filtered columns on the headers of both list views.
+        /// </summary>
+        private void UpdateFilterIcons()
+        {
+            _listView?.Query(className: HeaderClass).ForEach(UpdateFilterIcon);
+            _frozenListView?.Query(className: HeaderClass).ForEach(UpdateFilterIcon);
+        }
+
+        /// <summary>
+        /// Shows the mark of the filters on the header of a column if a condition of the filter applies to it, or hides it otherwise.
+        /// </summary>
+        /// <param name="header">The header of the column, created by <see cref="MakeHeader"/>.</param>
+        private void UpdateFilterIcon(VisualElement header)
+        {
+            Icon filterIcon = header.Q<Icon>(className: HeaderFilterIconClass);
+            if (filterIcon != null)
+                filterIcon.SetDisplayed(header.userData is TableViewColumn column && _filteredColumnIds.Contains(column.Id));
         }
 
         /// <summary>
