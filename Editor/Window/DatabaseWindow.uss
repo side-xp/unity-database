@@ -91,8 +91,14 @@
     background-color: var(--unity-colors-list_view_item-background-hover);
 }
 
-/* The padding is reduced by the width of the border, so the content of the active cell doesn't move. Temporary look, until the style
+/* The selected cells. The active cell is usually selected too, so a single click shows both styles. Temporary look, until the style
    pass */
+.database-table-view__cell--selected {
+    background-color: rgba(58, 121, 187, 0.25);
+}
+
+/* The active cell has an outline only, so it can be told apart inside a selection. The padding is reduced by the width of the border,
+   so its content doesn't move */
 .database-table-view__cell--active {
     padding-top: 2px;
     padding-bottom: 2px;
@@ -100,7 +106,6 @@
     padding-right: 3px;
     border-width: 1px;
     border-color: rgb(58, 121, 187);
-    background-color: rgba(58, 121, 187, 0.25);
 }
 
 /* Public class: CellHandler.EditFieldClass, also used by the custom handlers. The field fills the cell, which already has a padding */

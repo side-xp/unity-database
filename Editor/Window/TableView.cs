@@ -78,6 +78,7 @@ namespace SideXP.Database.EditorOnly
         private const string HeaderSortIconClass = "database-table-view__header-sort-icon";
         private const string CellClass = "database-table-view__cell";
         private const string ActiveCellClass = "database-table-view__cell--active";
+        private const string SelectedCellClass = "database-table-view__cell--selected";
         private const string HoverMirrorRowClass = "database-table-view__row--hover-mirror";
         private const string StatusBarClass = "database-status-bar";
         private const string StatusLabelClass = "database-status-bar__label";
@@ -283,8 +284,7 @@ namespace SideXP.Database.EditorOnly
             SaveColumnOrder();
             _changeTracker?.Stop();
             _table = table;
-            _activeCell = CellId.None;
-            _activeCellElement = null;
+            ClearSelection();
             _creatableTypes = AssetOperations.GetCreatableTypes(table.Type);
             UpdateCreateButton(_emptyCreateButton, CreateAssetText);
 
@@ -329,8 +329,7 @@ namespace SideXP.Database.EditorOnly
             _displayedColumns = new List<int>();
             _isColumnDisplayed = Array.Empty<bool>();
             _rows.Clear();
-            _activeCell = CellId.None;
-            _activeCellElement = null;
+            ClearSelection();
             _hoveredRow = null;
             _creatableTypes = new List<Type>();
 
@@ -344,7 +343,7 @@ namespace SideXP.Database.EditorOnly
         public CellId ActiveCell => _activeCell;
 
         /// <summary>
-        /// Sets the active cell, and highlights it.
+        /// Sets the active cell, and highlights it. The selection doesn't change.
         /// </summary>
         /// <param name="cell">The cell to activate, or <see cref="CellId.None"/> to have no active cell.</param>
         public void SetActiveCell(CellId cell)
@@ -353,18 +352,16 @@ namespace SideXP.Database.EditorOnly
                 return;
 
             _activeCell = cell;
-            _activeCellElement?.RemoveFromClassList(ActiveCellClass);
             _activeCellElement = null;
 
-            // Find the element of the new active cell among the visible cells. Elements that are not visible get the highlight when
+            // Finds the element of the new active cell among the visible cells. Elements that are not visible get the highlight when
             // they are bound
-            if (!cell.IsNone)
-                _body.Query(className: CellClass).ForEach(UpdateActiveCellHighlight);
+            UpdateCellHighlights();
         }
 
         /// <summary>
-        /// Shows the row of an asset: clears the search if it hides the row, makes the asset the active cell (see
-        /// <see cref="GetShownAssetColumnId"/>), scrolls to its row, and focuses the view.
+        /// Shows the row of an asset: clears the search if it hides the row, selects a cell of the asset and makes it the active cell
+        /// (see <see cref="GetShownAssetColumnId"/>), scrolls to its row, and focuses the view.
         /// </summary>
         /// <remarks>
         /// The asset must already be in the table: call <see cref="Reload"/> first if it has just been created. Works on a table that
@@ -380,7 +377,7 @@ namespace SideXP.Database.EditorOnly
             // The user just asked for that asset: it must not stay hidden by the search
             ResetSearchIfHidden(asset);
 
-            SetActiveCell(new CellId(asset, GetShownAssetColumnId()));
+            SelectCell(new CellId(asset, GetShownAssetColumnId()));
             ScrollToAsset(asset);
             Focus();
             return true;
@@ -427,6 +424,7 @@ namespace SideXP.Database.EditorOnly
                     SetActiveCell(CellId.None);
                 }
 
+                RemoveHiddenRowsFromSelection();
                 _listView.RefreshItems();
                 _frozenListView?.RefreshItems();
             }
@@ -668,7 +666,8 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Shows the cached value of a row in a cell, through the handler of the column, and highlights the cell if it's active.
+        /// Shows the cached value of a row in a cell, through the handler of the column, and highlights the cell if it's active or
+        /// selected.
         /// </summary>
         /// <remarks>
         /// An error of the handler is logged once per column, and doesn't prevent the other cells from being displayed.
@@ -680,7 +679,7 @@ namespace SideXP.Database.EditorOnly
         private void BindCell(VisualElement cell, TableViewColumn column, int columnIndex, TableRow row)
         {
             ((CellBinding)cell.userData).Row = row;
-            UpdateActiveCellHighlight(cell);
+            UpdateCellHighlight(cell);
             UpdateHoverMirror(cell);
             EndEditIfRebound(cell, row);
 
@@ -713,7 +712,7 @@ namespace SideXP.Database.EditorOnly
         {
             // A released element may stay in the hierarchy, hidden, so it must not keep the highlight of its last row
             ((CellBinding)cell.userData).Row = null;
-            UpdateActiveCellHighlight(cell);
+            UpdateCellHighlight(cell);
             UpdateHoverMirror(cell);
             EndEditIfRebound(cell, null);
         }
@@ -799,7 +798,8 @@ namespace SideXP.Database.EditorOnly
         #region Active cell
 
         /// <summary>
-        /// Called when a cell is clicked. Activates the cell, and edits it on a double-click.
+        /// Called when a cell is clicked. Changes the selection and the active cell (see <see cref="ClickCell"/>), and edits the cell on
+        /// a double-click.
         /// </summary>
         /// <param name="evt">The emitted event.</param>
         private void OnCellPointerDown(PointerDownEvent evt)
@@ -823,23 +823,36 @@ namespace SideXP.Database.EditorOnly
             // Ended explicitly, since the field may not have the focus (for example a custom edit field without focusable element)
             EndEdit(true, false);
             Focus();
-            SetActiveCell(clickedCell);
 
-            if (evt.clickCount == 2 && _activeCellElement != null)
-                BeginEdit(_activeCellElement, '\0');
+            // The first click of the double-click has already changed the selection
+            if (evt.clickCount == 2)
+            {
+                RestoreSelectionBeforeClick(clickedCell);
+                if (_activeCellElement != null)
+                    BeginEdit(_activeCellElement, '\0');
+
+                return;
+            }
+
+            // Ctrl on Windows and Linux, Command on macOS
+            ClickCell(clickedCell, evt.actionKey, evt.shiftKey);
         }
 
         /// <summary>
-        /// Highlights a cell element if it displays the active cell, and removes its highlight otherwise.
+        /// Highlights a cell element if it displays a selected cell, outlines it if it displays the active cell, and removes these
+        /// styles otherwise.
         /// </summary>
         /// <param name="cell">The element created by <see cref="MakeCell(TableViewColumn, bool)"/>.</param>
-        private void UpdateActiveCellHighlight(VisualElement cell)
+        private void UpdateCellHighlight(VisualElement cell)
         {
             if (cell.userData is not CellBinding binding)
                 return;
 
-            bool isActive = binding.Row != null && _activeCell.Is(binding.Row.Asset, binding.Column.Id);
+            bool hasRow = binding.Row != null;
+            bool isActive = hasRow && _activeCell.Is(binding.Row.Asset, binding.Column.Id);
+            bool isSelected = hasRow && _selection.Contains(new CellId(binding.Row.Asset, binding.Column.Id));
             cell.EnableInClassList(ActiveCellClass, isActive);
+            cell.EnableInClassList(SelectedCellClass, isSelected);
             if (isActive)
                 _activeCellElement = cell;
             else if (_activeCellElement == cell)
@@ -1024,16 +1037,19 @@ namespace SideXP.Database.EditorOnly
         #region Private API
 
         /// <summary>
-        /// Gets the text of the status line: the number of rows, and the number of visible rows when the search hides some.
+        /// Gets the text of the status line: the number of rows, the number of visible rows when the search hides some, and the
+        /// selection (see <see cref="GetSelectionStatusText"/>).
         /// </summary>
         /// <returns>Returns the text of the status line.</returns>
         private string GetStatusText()
         {
             int rowCount = _pipeline.Rows.Count;
             string rowsText = rowCount == 1 ? "row" : "rows";
-            return _rows.Count == rowCount
+            string countText = _rows.Count == rowCount
                 ? $"{rowCount} {rowsText}"
                 : $"{_rows.Count} of {rowCount} {rowsText}";
+
+            return $"{countText}{GetSelectionStatusText()}";
         }
 
         /// <summary>
