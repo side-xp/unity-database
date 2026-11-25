@@ -10,6 +10,7 @@ namespace SideXP.Database.EditorOnly
 
     /// <summary>
     /// The search of the table view: filters the rows on their asset name and on the text of their cells (see <see cref="RowSearch"/>).
+    /// It's combined with the filters of the view (see <see cref="ApplyRowFilter"/>).
     /// </summary>
     /// <remarks>
     /// The text of a cell comes from the text conversion of its handler (<see cref="CellHandler.ToText(object)"/>), so the search finds
@@ -71,7 +72,7 @@ namespace SideXP.Database.EditorOnly
             if (_pipeline == null)
                 return;
 
-            ApplySearchFilter();
+            ApplyRowFilter();
             Refresh();
         }
 
@@ -88,14 +89,6 @@ namespace SideXP.Database.EditorOnly
         {
             _search = search ?? string.Empty;
             _searchWords = RowSearch.SplitWords(_search);
-        }
-
-        /// <summary>
-        /// Sets the filter of the pipeline from the words of the search. The rows are filtered on the next update of the pipeline.
-        /// </summary>
-        private void ApplySearchFilter()
-        {
-            _pipeline.Filter = IsSearching ? MatchesSearch : null;
         }
 
         /// <summary>

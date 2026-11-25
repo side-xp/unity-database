@@ -312,7 +312,10 @@ namespace SideXP.Database.EditorOnly
             // Before the first update, so the rows are filtered and sorted once, on the displayed columns
             UpdateDisplayedColumns();
             StoreSearch(search);
-            ApplySearchFilter();
+            // The filter refers to the columns of the previous table
+            _filter = null;
+            CompileFilter();
+            ApplyRowFilter();
             ApplyRememberedSort();
 
             _changeTracker = new TableChangeTracker(table.Type, _pipeline);
@@ -336,6 +339,8 @@ namespace SideXP.Database.EditorOnly
             _table = null;
             _viewSettings = null;
             _pipeline = null;
+            _filter = null;
+            _compiledFilter = null;
             _columns = new List<TableViewColumn>();
             _displayedColumns = new List<int>();
             _isColumnDisplayed = Array.Empty<bool>();
@@ -941,8 +946,8 @@ namespace SideXP.Database.EditorOnly
         #region Private API
 
         /// <summary>
-        /// Gets the text of the status line: the number of rows, the number of visible rows when the search hides some, and the
-        /// selection (see <see cref="GetSelectionStatusText"/>).
+        /// Gets the text of the status line: the number of rows, the number of visible rows when the search or the filters hide some,
+        /// and the selection (see <see cref="GetSelectionStatusText"/>).
         /// </summary>
         /// <returns>Returns the text of the status line.</returns>
         private string GetStatusText()
