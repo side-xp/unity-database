@@ -239,6 +239,9 @@ namespace SideXP.Database.EditorOnly
             RegisterCallback<PointerMoveEvent>(OnPointerMoveTrickleDown, TrickleDown.TrickleDown);
             // Ends the drag selections started on a cell or a row handle
             RegisterCallback<PointerUpEvent>(OnPointerUpTrickleDown, TrickleDown.TrickleDown);
+            // Ctrl+C and Ctrl+V, sent by the editor as commands to the focused element
+            RegisterCallback<ValidateCommandEvent>(OnValidateCommand);
+            RegisterCallback<ExecuteCommandEvent>(OnExecuteCommand);
         }
 
         /// <summary>

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 
-using UnityEngine;
 using UnityEngine.UIElements;
 
 using Object = UnityEngine.Object;
@@ -150,29 +149,15 @@ namespace SideXP.Database.EditorOnly
         /// Converts the value of a cell to text through the handler of its column.
         /// </summary>
         /// <remarks>
-        /// An error of the handler is logged once per column, and the cell is then searched as an empty text, so a broken custom
-        /// handler doesn't break the search.
+        /// An error of the handler is logged once per column (see <see cref="ToCellText"/>), and the cell is then searched as an empty
+        /// text, so a broken custom handler doesn't break the search.
         /// </remarks>
         /// <param name="column">The column of the cell.</param>
         /// <param name="value">The cached value of the cell.</param>
         /// <returns>Returns the text of the cell, or null if the handler failed.</returns>
         private static string ToSearchText(TableViewColumn column, object value)
         {
-            try
-            {
-                return column.Handler.ToText(value);
-            }
-            catch (Exception exception)
-            {
-                if (!column.HasLoggedError)
-                {
-                    column.HasLoggedError = true;
-                    Debug.LogError($"{DatabaseConstants.LogPrefix}The cell handler {column.Handler.GetType()} failed to convert a " +
-                        $"value of the column \"{column.Name}\" to text for the search. The next errors of this column are not logged.");
-                    Debug.LogException(exception);
-                }
-                return null;
-            }
+            return ToCellText(column, value, "for the search");
         }
 
         /// <summary>

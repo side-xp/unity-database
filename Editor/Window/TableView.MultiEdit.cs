@@ -193,20 +193,36 @@ namespace SideXP.Database.EditorOnly
                 _pipeline.InvalidateRow(target.Row.Asset);
             }
 
+            string cellsText = targets.Count == 1 ? "cell" : "cells";
+            ReportUnchangedCells($"The edit of \"{editedColumn.Name}\"", $"the {targets.Count} other selected {cellsText}", rejectedCount,
+                "rejected the value", readOnlyCount);
+        }
+
+        /// <summary>
+        /// Reports the cells that an operation on several cells (an edit or a paste) left unchanged, in a single warning. Does nothing if
+        /// all the cells have been changed.
+        /// </summary>
+        /// <param name="operation">The operation, at the start of the message (for example "The paste").</param>
+        /// <param name="cellsText">The cells of the operation, with their number (for example "the 12 pasted cells").</param>
+        /// <param name="rejectedCount">The number of cells whose handler rejected the value.</param>
+        /// <param name="rejectedReason">What the rejected cells did (for example "rejected the value").</param>
+        /// <param name="readOnlyCount">The number of cells that can't be edited.</param>
+        private static void ReportUnchangedCells(string operation, string cellsText, int rejectedCount, string rejectedReason,
+            int readOnlyCount)
+        {
             int skippedCount = readOnlyCount + rejectedCount;
             if (skippedCount == 0)
                 return;
 
             List<string> reasons = new List<string>(2);
             if (rejectedCount > 0)
-                reasons.Add($"{rejectedCount} rejected the value");
+                reasons.Add($"{rejectedCount} {rejectedReason}");
 
             if (readOnlyCount > 0)
                 reasons.Add($"{readOnlyCount} can't be edited");
 
-            string cellsText = targets.Count == 1 ? "cell" : "cells";
-            Debug.LogWarning($"{DatabaseConstants.LogPrefix}The edit of \"{editedColumn.Name}\" left {skippedCount} of the " +
-                $"{targets.Count} other selected {cellsText} unchanged: {string.Join(", ", reasons)}.");
+            Debug.LogWarning($"{DatabaseConstants.LogPrefix}{operation} left {skippedCount} of {cellsText} unchanged: " +
+                $"{string.Join(", ", reasons)}.");
         }
 
         /// <summary>
