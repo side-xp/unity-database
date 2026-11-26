@@ -139,6 +139,33 @@ namespace SideXP.Database.EditorOnly
             return new List<ViewSettings> { view.Settings };
         }
 
+        /// <summary>
+        /// Checks if the user changed a project view: their overrides of it set at least one setting of the view.
+        /// </summary>
+        /// <param name="view">The view to check.</param>
+        /// <returns>Returns true if the view is a project view with overrides, or false for a personal view.</returns>
+        public bool HasOverrides(SavedView view)
+        {
+            if (view is not ProjectView)
+                return false;
+
+            ViewOverride viewOverride = _personalViews.FindOverride(view.Id);
+            return viewOverride != null && !viewOverride.Settings.IsEmpty;
+        }
+
+        /// <summary>
+        /// Gets the kind of a view, and whether the user changed it.
+        /// </summary>
+        /// <param name="view">The view of which to get the status.</param>
+        /// <returns>Returns the status of the view.</returns>
+        public ViewStatus GetStatus(SavedView view)
+        {
+            if (view == null || !view.IsProjectView)
+                return ViewStatus.Personal;
+
+            return HasOverrides(view) ? ViewStatus.OverriddenProject : ViewStatus.Project;
+        }
+
         #endregion
 
 

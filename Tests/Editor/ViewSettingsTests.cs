@@ -291,6 +291,44 @@ namespace SideXP.Database.Tests
         #endregion
 
 
+        #region Empty
+
+        /// <summary>
+        /// A layer is empty until it sets a setting of the view. The page size doesn't count.
+        /// </summary>
+        [Test]
+        public void IsEmpty_EachSetting_NotEmpty()
+        {
+            ViewSettings settings = new ViewSettings(TableId);
+            Assert.IsTrue(settings.IsEmpty);
+
+            settings.SetPageSize(PageSize);
+            Assert.IsTrue(settings.IsEmpty);
+
+            settings.SetColumnOrder(new[] { "A" });
+            Assert.IsFalse(settings.IsEmpty);
+            settings.SetColumnOrder(null);
+
+            settings.SetVisibility("A", ColumnVisibility.Hidden);
+            Assert.IsFalse(settings.IsEmpty);
+            settings.SetVisibility("A", ColumnVisibility.Unset);
+            Assert.IsTrue(settings.IsEmpty);
+
+            settings.SetSort(new ColumnSort[0]);
+            Assert.IsFalse(settings.IsEmpty);
+            settings.UnsetSort();
+
+            settings.SetFilter(null);
+            Assert.IsFalse(settings.IsEmpty);
+            settings.UnsetFilter();
+
+            settings.SetFolders(null);
+            Assert.IsFalse(settings.IsEmpty);
+        }
+
+        #endregion
+
+
         #region Reset
 
         /// <summary>

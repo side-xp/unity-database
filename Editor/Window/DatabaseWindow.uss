@@ -53,6 +53,32 @@
     margin-right: 0;
 }
 
+/* The status of the open view, on the right of the title of the View section (ViewPanel): faded, so it informs without competing
+   with the title */
+.database-view-panel__view-status {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 1;
+    opacity: 0.6;
+}
+
+.database-view-panel__view-status-icon {
+    --sxp-icon-size: 14;
+    flex-shrink: 0;
+}
+
+.database-view-panel__view-status-label {
+    -unity-text-align: middle-left;
+    font-size: 11px;
+    margin-left: 3px;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
+    flex-shrink: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* A group of the filter editor (FilterEditor). The groups inside another group are indented, with a line on their left */
 .database-filter-group {
     margin-top: 2px;

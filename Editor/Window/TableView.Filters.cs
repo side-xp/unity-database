@@ -101,7 +101,7 @@ namespace SideXP.Database.EditorOnly
 
             // Always saved, since the nodes of the same tree may have changed
             _viewSettings.SetFilter(filter);
-            UserViews.instance.ScheduleSave();
+            OnViewSettingsChanged();
 
             ResetPage();
             CompileFilter();
@@ -145,7 +145,7 @@ namespace SideXP.Database.EditorOnly
                 return;
 
             if (_viewSettings.SetFolders(_folderScope.Folders))
-                UserViews.instance.ScheduleSave();
+                OnViewSettingsChanged();
 
             ResetPage();
             ApplyFolderScope();

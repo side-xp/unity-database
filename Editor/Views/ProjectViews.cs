@@ -24,9 +24,9 @@ namespace SideXP.Database.EditorOnly
         #region Fields
 
         /// <summary>
-        /// The path of the file, from the project folder.
+        /// The path of the file, from the project folder. Also shown to the user, who must commit the file to share the views.
         /// </summary>
-        private const string RelativeFilePath = "ProjectSettings/SideXP.Database.Views.asset";
+        public const string RelativeFilePath = "ProjectSettings/SideXP.Database.Views.asset";
 
         /// <inheritdoc cref="ProjectViewList"/>
         [SerializeField]

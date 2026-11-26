@@ -54,6 +54,12 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         private bool[] _isColumnDisplayed = Array.Empty<bool>();
 
+        /// <summary>
+        /// Called after the table view changed a setting of the open view (columns, sort, filters or folders), once the save is
+        /// scheduled. Called on each move of the pointer while a column is resized.
+        /// </summary>
+        public event Action ViewSettingsChanged;
+
         #endregion
 
 
@@ -178,13 +184,23 @@ namespace SideXP.Database.EditorOnly
 
             RebuildListViews(true);
             Refresh();
-            UserViews.instance.ScheduleSave();
+            OnViewSettingsChanged();
         }
 
         #endregion
 
 
         #region Private API
+
+        /// <summary>
+        /// Schedules the save of the settings of the open view, and notifies <see cref="ViewSettingsChanged"/>. Call it after each
+        /// change of a setting of the view.
+        /// </summary>
+        private void OnViewSettingsChanged()
+        {
+            UserViews.instance.ScheduleSave();
+            ViewSettingsChanged?.Invoke();
+        }
 
         /// <summary>
         /// Updates the displayed columns from the remembered settings: the columns that are not hidden, in their remembered order.
@@ -288,7 +304,7 @@ namespace SideXP.Database.EditorOnly
         private void SaveSort()
         {
             if (_viewSettings.SetSort(GetSort()))
-                UserViews.instance.ScheduleSave();
+                OnViewSettingsChanged();
         }
 
         /// <summary>
@@ -307,7 +323,7 @@ namespace SideXP.Database.EditorOnly
                     return;
 
                 if (_viewSettings.SetWidth(column.Id, listColumn.width.value))
-                    UserViews.instance.ScheduleSave();
+                    OnViewSettingsChanged();
             };
         }
 
@@ -346,7 +362,7 @@ namespace SideXP.Database.EditorOnly
                 return;
 
             if (_viewSettings.SetColumnOrder(GetColumnIds(), order))
-                UserViews.instance.ScheduleSave();
+                OnViewSettingsChanged();
         }
 
         #endregion

@@ -150,6 +150,12 @@ namespace SideXP.Database.EditorOnly
         public string TableId => _tableId;
 
         /// <summary>
+        /// Checks if the layer sets no setting of the view: no column order, width or visibility, no sort, no filters and no folder
+        /// scope. The page size doesn't count, since it's not a setting of the views (see <see cref="PageSize"/>).
+        /// </summary>
+        public bool IsEmpty => !IsColumnOrderSet && GetColumnsWithSettings().Count == 0 && !_isSortSet && !_isFilterSet && !_areFoldersSet;
+
+        /// <summary>
         /// Gets a copy of these settings, the filter tree included, so the copy can be edited without changing them.
         /// </summary>
         /// <returns>Returns the copied settings.</returns>

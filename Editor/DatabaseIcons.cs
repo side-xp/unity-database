@@ -64,9 +64,22 @@ namespace SideXP.Database.EditorOnly
         public const string ViewPanel = "layout-sidebar-right";
 
         /// <summary>
-        /// An eye, for the button that shows the name of the open view and the menu of the views.
+        /// An eye, for the button of the views and the status of the view panel while the open view is a personal view (see
+        /// <see cref="ViewStatus.Personal"/>).
         /// </summary>
-        public const string View = "eye";
+        public const string PersonalView = "eye";
+
+        /// <summary>
+        /// An eye with a check mark, for the button of the views and the status of the view panel while the open view is a project
+        /// view without overrides (see <see cref="ViewStatus.Project"/>).
+        /// </summary>
+        public const string ProjectView = "eye-check";
+
+        /// <summary>
+        /// An eye with a bolt, for the button of the views and the status of the view panel while the open view is a project view
+        /// with overrides of the user (see <see cref="ViewStatus.OverriddenProject"/>).
+        /// </summary>
+        public const string OverriddenProjectView = "eye-bolt";
 
         /// <summary>
         /// A chevron pointing down, after the name of the open view, to show that the button opens a menu.

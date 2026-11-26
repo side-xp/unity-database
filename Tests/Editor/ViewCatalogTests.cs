@@ -202,6 +202,36 @@ namespace SideXP.Database.Tests
             CollectionAssert.AreEqual(new[] { new ColumnSort("B", true) }, settings.GetSort());
         }
 
+        /// <summary>
+        /// A personal view has no overrides. A project view is not overridden until a setting of the view is set in the overrides, and
+        /// is again when the user's changes give back the settings of the project view.
+        /// </summary>
+        [Test]
+        public void GetStatus_BothKinds_OverridesFollowTheChanges()
+        {
+            SavedView personalView = _catalog.GetOpenView(TableId);
+            ProjectView projectView = AddProjectView("Shared");
+            projectView.Settings.SetWidth("A", 100);
+            Assert.AreEqual(ViewStatus.Personal, _catalog.GetStatus(personalView));
+            Assert.IsFalse(_catalog.HasOverrides(personalView));
+            Assert.AreEqual(ViewStatus.Project, _catalog.GetStatus(projectView));
+
+            // Opened by the table view: the overrides exist, without any setting
+            LayeredViewSettings settings = new LayeredViewSettings(_catalog.GetLayers(projectView));
+            Assert.AreEqual(ViewStatus.Project, _catalog.GetStatus(projectView));
+
+            // The page size is not a setting of the views
+            settings.Top.SetPageSize(PageSize);
+            Assert.AreEqual(ViewStatus.Project, _catalog.GetStatus(projectView));
+
+            settings.SetWidth("A", ResizedWidth);
+            Assert.IsTrue(_catalog.HasOverrides(projectView));
+            Assert.AreEqual(ViewStatus.OverriddenProject, _catalog.GetStatus(projectView));
+
+            settings.SetWidth("A", 100);
+            Assert.AreEqual(ViewStatus.Project, _catalog.GetStatus(projectView));
+        }
+
         #endregion
 
 

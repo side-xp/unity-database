@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -44,12 +45,30 @@ namespace SideXP.Database.EditorOnly
         private const string ViewTooltip = "The open view of the table: the order, widths and visibility of the columns, the sort, the " +
             "filters and the folders. Click to switch to another view, or to create, duplicate, rename, delete or reset a view. The " +
             "views are only visible to you.";
+        private const string ProjectViewTooltip = "The open view of the table, a project view shared with the team: the order, widths " +
+            "and visibility of the columns, the sort, the filters and the folders. Your changes to it are personal overrides, saved " +
+            "for you only. Click to switch to another view, or to duplicate, rename, delete or reset a view.";
+        private const string PersonalStatusText = "Personal view";
+        private const string PersonalStatusTooltip = "Only you see this view. It's saved in the UserSettings folder of the project, " +
+            "which is not versioned.";
+        private const string ProjectStatusText = "Project view";
+        private const string ProjectStatusTooltip = "This view is shared with the team, and you see it as saved in the project. Your " +
+            "changes to it will be personal overrides, saved for you only.";
+        private const string OverriddenProjectStatusText = "Project view, with overrides";
+        private const string OverriddenProjectStatusTooltip = "This view is shared with the team, and you changed some of its " +
+            "settings. Your changes are personal overrides, saved for you only: the team still sees the view as saved in the project.";
+        private const string PersonalViewsText = "Personal Views";
+        private const string ProjectViewsText = "Project Views";
         private const string NewViewText = "New View";
         private const string DuplicateViewText = "Duplicate View";
+        private const string DuplicateAsPersonalText = "Duplicate as Personal View";
+        private const string ShareViewText = "Share as Project View...";
         private const string RenameViewText = "Rename View...";
         private const string DeleteViewText = "Delete View";
         private const string DeleteViewTitle = "Delete View";
         private const string DeleteText = "Delete";
+        private const string ShareViewTitle = "Share as Project View";
+        private const string ShareText = "Share";
         private const string CancelText = "Cancel";
 
         private const string SearchTooltip = "Shows the rows that contain each word of the search, in their asset name or in their " +
@@ -93,6 +112,12 @@ namespace SideXP.Database.EditorOnly
         /// The arrow after the name of the open view, kept after the label of the button.
         /// </summary>
         private Icon _viewMenuArrow = null;
+
+        /// <summary>
+        /// The status of the open view shown by the button of the views and the view panel, so they're only updated when it changes
+        /// (see <see cref="OnViewSettingsChanged"/>).
+        /// </summary>
+        private ViewStatus _shownViewStatus = ViewStatus.Personal;
 
         /// <summary>
         /// The field that filters the rows of the table.
@@ -189,7 +214,7 @@ namespace SideXP.Database.EditorOnly
             // The name of the view is set with the table. The icon is created first, so the arrow isn't the icon of the button
             _viewButton = new ToolbarButton(ShowViewMenu) { tooltip = ViewTooltip };
             _viewButton.AddToClassList(ViewButtonClass);
-            DatabaseElements.SetIcon(_viewButton, DatabaseIcons.View);
+            DatabaseElements.SetIcon(_viewButton, DatabaseIcons.PersonalView);
             _viewMenuArrow = new Icon(DatabaseIcons.MenuArrow) { pickingMode = PickingMode.Ignore };
             _viewMenuArrow.AddToClassList(ViewMenuArrowClass);
             _viewButton.Add(_viewMenuArrow);
@@ -219,6 +244,7 @@ namespace SideXP.Database.EditorOnly
             content.Add(_tableView);
             _viewPanel = new ViewPanel(_tableView);
             _viewPanel.ViewRenamed += OnViewRenamed;
+            _tableView.ViewSettingsChanged += OnViewSettingsChanged;
             content.Add(_viewPanel);
             Add(content);
             SetViewPanelOpen(false);
@@ -307,7 +333,8 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Shows the name of the open view on the button of the views and in the view panel.
+        /// Shows the name and the status of the open view on the button of the views and in the view panel: the icon says if it's a
+        /// personal view, or a project view with or without overrides of the user, and the panel says it with a text.
         /// </summary>
         private void UpdateViewControls()
         {
@@ -315,10 +342,50 @@ namespace SideXP.Database.EditorOnly
             if (view == null)
                 return;
 
-            DatabaseElements.SetIcon(_viewButton, DatabaseIcons.View, view.Name);
+            _shownViewStatus = ViewCatalog.Current.GetStatus(view);
+            string iconName;
+            string statusText;
+            string statusTooltip;
+            switch (_shownViewStatus)
+            {
+                case ViewStatus.Project:
+                    iconName = DatabaseIcons.ProjectView;
+                    statusText = ProjectStatusText;
+                    statusTooltip = ProjectStatusTooltip;
+                    break;
+
+                case ViewStatus.OverriddenProject:
+                    iconName = DatabaseIcons.OverriddenProjectView;
+                    statusText = OverriddenProjectStatusText;
+                    statusTooltip = OverriddenProjectStatusTooltip;
+                    break;
+
+                default:
+                    iconName = DatabaseIcons.PersonalView;
+                    statusText = PersonalStatusText;
+                    statusTooltip = PersonalStatusTooltip;
+                    break;
+            }
+
+            DatabaseElements.SetIcon(_viewButton, iconName, view.Name);
+            _viewButton.tooltip = view.IsProjectView ? ProjectViewTooltip : ViewTooltip;
             // The label is added at the end of the button the first time it's set
             _viewMenuArrow.BringToFront();
-            _viewPanel.SetViewName(view.Name);
+            _viewPanel.SetView(view.Name, iconName, statusText, statusTooltip);
+        }
+
+        /// <summary>
+        /// Called after the table view changed a setting of the open view. Shows the new status of the view if it changed, for
+        /// example a project view that gets its first override, or loses its last one.
+        /// </summary>
+        /// <remarks>
+        /// Called on each move of the pointer while a column is resized, so the controls are only updated when the status changes.
+        /// </remarks>
+        private void OnViewSettingsChanged()
+        {
+            SavedView view = GetOpenView();
+            if (view != null && ViewCatalog.Current.GetStatus(view) != _shownViewStatus)
+                UpdateViewControls();
         }
 
         /// <summary>
@@ -326,8 +393,8 @@ namespace SideXP.Database.EditorOnly
         /// checked), then the operations on the open view.
         /// </summary>
         /// <remarks>
-        /// @todo Step 23b2: the personal and the project views in two groups, <i>Share as Project View</i> and <i>Duplicate as
-        /// Personal View</i>.
+        /// If the table has project views, the views are listed in two groups, each under a title: the personal views, then the project
+        /// views. Otherwise the personal views are listed without title, since there is nothing to tell apart.
         /// </remarks>
         private void ShowViewMenu()
         {
@@ -337,15 +404,31 @@ namespace SideXP.Database.EditorOnly
 
             ViewCatalog catalog = ViewCatalog.Current;
             GenericMenu menu = new GenericMenu();
-            foreach (SavedView view in catalog.GetViews(_table.Id))
+            List<ProjectView> projectViews = catalog.GetProjectViews(_table.Id);
+            bool hasGroups = projectViews.Count > 0;
+            List<PersonalView> personalViews = catalog.GetPersonalViews(_table.Id);
+            if (hasGroups && personalViews.Count > 0)
+                menu.AddDisabledItem(new GUIContent(PersonalViewsText));
+
+            foreach (PersonalView view in personalViews)
+                AddViewItem(menu, view, openView);
+
+            if (hasGroups)
             {
-                string text = view.Name.Replace(MenuPathSeparator, MenuSlashReplacement);
-                menu.AddItem(new GUIContent(text), view == openView, () => OpenView(view));
+                if (personalViews.Count > 0)
+                    menu.AddSeparator(string.Empty);
+
+                menu.AddDisabledItem(new GUIContent(ProjectViewsText));
+                foreach (ProjectView view in projectViews)
+                    AddViewItem(menu, view, openView);
             }
 
             menu.AddSeparator(string.Empty);
             menu.AddItem(new GUIContent(NewViewText), false, CreateView);
-            menu.AddItem(new GUIContent(DuplicateViewText), false, DuplicateView);
+            menu.AddItem(new GUIContent(openView.IsProjectView ? DuplicateAsPersonalText : DuplicateViewText), false, DuplicateView);
+            if (openView is PersonalView)
+                menu.AddItem(new GUIContent(ShareViewText), false, ShareView);
+
             menu.AddItem(new GUIContent(RenameViewText), false, StartRenameView);
             // The last view of a table can't be deleted: Reset View clears it instead
             if (catalog.CanDeleteView(openView))
@@ -356,6 +439,18 @@ namespace SideXP.Database.EditorOnly
             menu.AddSeparator(string.Empty);
             menu.AddItem(new GUIContent(TableView.ResetViewText), false, _tableView.ResetView);
             menu.DropDown(_viewButton.worldBound);
+        }
+
+        /// <summary>
+        /// Adds an item to the menu of the views, which opens a view.
+        /// </summary>
+        /// <param name="menu">The menu of the views.</param>
+        /// <param name="view">The view the item opens.</param>
+        /// <param name="openView">The open view of the table, whose item is checked.</param>
+        private void AddViewItem(GenericMenu menu, SavedView view, SavedView openView)
+        {
+            string text = view.Name.Replace(MenuPathSeparator, MenuSlashReplacement);
+            menu.AddItem(new GUIContent(text), view == openView, () => OpenView(view));
         }
 
         /// <summary>
@@ -379,12 +474,31 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Creates a personal copy of the open view, and opens it.
+        /// Creates a personal copy of the open view, and opens it. The copy of a project view has the settings the user sees, with
+        /// their overrides.
         /// </summary>
         private void DuplicateView()
         {
             ViewCatalog catalog = ViewCatalog.Current;
             catalog.SetOpenView(catalog.DuplicateView(GetOpenView()));
+            ShowOpenView();
+        }
+
+        /// <summary>
+        /// Shares the open personal view with the team after a confirmation: it moves to the project views, and stays open.
+        /// </summary>
+        private void ShareView()
+        {
+            if (GetOpenView() is not PersonalView view)
+                return;
+
+            string message = $"Share the view \"{view.Name}\" of the table {_table.Name} with the team?" +
+                "\nYour later changes to the view stay personal overrides, saved for you only.";
+            if (!EditorUtility.DisplayDialog(ShareViewTitle, message, ShareText, CancelText))
+                return;
+
+            ViewCatalog.Current.ShareView(view);
+            // The settings of the view are the same, only its kind and its layers change
             ShowOpenView();
         }
 
@@ -423,8 +537,12 @@ namespace SideXP.Database.EditorOnly
         private void DeleteView()
         {
             SavedView view = GetOpenView();
-            string message = $"Delete the view \"{view.Name}\" of the table {_table.Name}? Its settings (the columns, the sort, the " +
-                "filters and the folders) are lost. This can't be undone.";
+            string message = view.IsProjectView
+                ? $"Delete the project view \"{view.Name}\" of the table {_table.Name} for the whole team? It's removed from " +
+                    $"{ProjectViews.RelativeFilePath}, so the others lose it once they get this file. Your overrides of it are lost " +
+                    "too. This can't be undone."
+                : $"Delete the view \"{view.Name}\" of the table {_table.Name}? Its settings (the columns, the sort, the filters and " +
+                    "the folders) are lost. This can't be undone.";
             if (!EditorUtility.DisplayDialog(DeleteViewTitle, message, DeleteText, CancelText))
                 return;
 

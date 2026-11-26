@@ -3,6 +3,8 @@ using System.Collections.Generic;
 
 using UnityEngine.UIElements;
 
+using SideXP.Core.EditorOnly;
+
 namespace SideXP.Database.EditorOnly
 {
 
@@ -28,10 +30,13 @@ namespace SideXP.Database.EditorOnly
         private const string SectionTitleClass = "database-view-panel__section-title";
         private const string SectionButtonClass = "database-view-panel__section-button";
         private const string ViewNameClass = "database-view-panel__view-name";
+        private const string ViewStatusClass = "database-view-panel__view-status";
+        private const string ViewStatusIconClass = "database-view-panel__view-status-icon";
+        private const string ViewStatusLabelClass = "database-view-panel__view-status-label";
 
         private const string ViewTitle = "View";
         private const string ViewNameTooltip = "The name of the view, unique among the views of the table. Applied with Enter, or when " +
-            "the field loses the focus. A name taken by another view gets a number.";
+            "the field loses the focus. A name taken by another view gets a number. Renaming a project view renames it for the team.";
         private const string FiltersTitle = "Filters";
         private const string ClearFiltersText = "Clear";
         private const string ClearFiltersTooltip = "Removes all the conditions, so the filters show all the rows again.";
@@ -73,8 +78,24 @@ namespace SideXP.Database.EditorOnly
         private TextField _viewNameField = null;
 
         /// <summary>
+        /// The status of the open view, on the right of the title of the <i>View</i> section: an icon and a faded label, which say if
+        /// the view is personal, or a project view with or without overrides of the user.
+        /// </summary>
+        private VisualElement _viewStatus = null;
+
+        /// <summary>
+        /// The icon of <see cref="_viewStatus"/>, the same as the icon of the button of the views.
+        /// </summary>
+        private Icon _viewStatusIcon = null;
+
+        /// <summary>
+        /// The label of <see cref="_viewStatus"/>.
+        /// </summary>
+        private Label _viewStatusLabel = null;
+
+        /// <summary>
         /// Called when the user confirms a new name for the open view, with the typed name. The owner renames the view, then shows
-        /// its actual name with <see cref="SetViewName"/>.
+        /// its actual name with <see cref="SetView"/>.
         /// </summary>
         public event Action<string> ViewRenamed;
 
@@ -98,7 +119,18 @@ namespace SideXP.Database.EditorOnly
             _viewNameField = new TextField { isDelayed = true, tooltip = ViewNameTooltip };
             _viewNameField.AddToClassList(ViewNameClass);
             _viewNameField.RegisterValueChangedCallback(evt => ViewRenamed?.Invoke(evt.newValue));
-            VisualElement viewSection = CreateSection(content, ViewTitle);
+
+            // The icon and the text are set with the view
+            _viewStatus = new VisualElement();
+            _viewStatus.AddToClassList(ViewStatusClass);
+            _viewStatusIcon = new Icon(DatabaseIcons.PersonalView) { pickingMode = PickingMode.Ignore };
+            _viewStatusIcon.AddToClassList(ViewStatusIconClass);
+            _viewStatus.Add(_viewStatusIcon);
+            _viewStatusLabel = new Label { pickingMode = PickingMode.Ignore };
+            _viewStatusLabel.AddToClassList(ViewStatusLabelClass);
+            _viewStatus.Add(_viewStatusLabel);
+
+            VisualElement viewSection = CreateSection(content, ViewTitle, _viewStatus);
             viewSection.Add(_viewNameField);
 
             // The folders first: they limit the assets of the table, which the filters then filter
@@ -145,12 +177,18 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Shows the name of the open view, without notifying <see cref="ViewRenamed"/>.
+        /// Shows the name and the status of the open view, without notifying <see cref="ViewRenamed"/>.
         /// </summary>
         /// <param name="name">The name of the open view.</param>
-        public void SetViewName(string name)
+        /// <param name="iconName">The icon of the status of the view, one of the constants of <see cref="DatabaseIcons"/>.</param>
+        /// <param name="statusText">The short text of the status of the view, for example "Personal view".</param>
+        /// <param name="statusTooltip">The tooltip of the status, which says what it means for the changes of the user.</param>
+        public void SetView(string name, string iconName, string statusText, string statusTooltip)
         {
             _viewNameField.SetValueWithoutNotify(name);
+            _viewStatusIcon.IconName = iconName;
+            _viewStatusLabel.text = statusText;
+            _viewStatus.tooltip = statusTooltip;
         }
 
         /// <summary>
@@ -181,13 +219,15 @@ namespace SideXP.Database.EditorOnly
         #region Private API
 
         /// <summary>
-        /// Creates a section of the panel: a header with a title and optional buttons, then the content of the section.
+        /// Creates a section of the panel: a header with a title and optional elements (buttons, a status), then the content of the
+        /// section.
         /// </summary>
         /// <param name="parent">The element to which the section is added.</param>
         /// <param name="title">The title of the section.</param>
-        /// <param name="buttons">The buttons shown on the right of the title.</param>
+        /// <param name="headerItems">The elements shown on the right of the title. The buttons get the style of the buttons of the
+        /// sections.</param>
         /// <returns>Returns the element that holds the content of the section.</returns>
-        private static VisualElement CreateSection(VisualElement parent, string title, params Button[] buttons)
+        private static VisualElement CreateSection(VisualElement parent, string title, params VisualElement[] headerItems)
         {
             VisualElement section = new VisualElement();
             section.AddToClassList(SectionClass);
@@ -197,10 +237,12 @@ namespace SideXP.Database.EditorOnly
             Label titleLabel = new Label(title);
             titleLabel.AddToClassList(SectionTitleClass);
             header.Add(titleLabel);
-            foreach (Button button in buttons)
+            foreach (VisualElement item in headerItems)
             {
-                button.AddToClassList(SectionButtonClass);
-                header.Add(button);
+                if (item is Button)
+                    item.AddToClassList(SectionButtonClass);
+
+                header.Add(item);
             }
 
             section.Add(header);
