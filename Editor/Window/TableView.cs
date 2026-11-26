@@ -264,6 +264,11 @@ namespace SideXP.Database.EditorOnly
         private void OnAttachToPanel(AttachToPanelEvent evt)
         {
             UpdateUnitySelectionListening(true);
+            // Removed first, since a view can be attached again without being detached in between (moved to another parent)
+            DatabasePreferences.PageSizeChanged -= OnPageSizeChanged;
+            DatabasePreferences.PageSizeChanged += OnPageSizeChanged;
+            // The size may have changed in another window while the view was detached
+            OnPageSizeChanged();
             if (_changeTracker == null)
                 return;
 
@@ -283,6 +288,7 @@ namespace SideXP.Database.EditorOnly
             SaveColumnOrder();
             _changeTracker?.Stop();
             UpdateUnitySelectionListening(false);
+            DatabasePreferences.PageSizeChanged -= OnPageSizeChanged;
         }
 
         #endregion
@@ -295,7 +301,7 @@ namespace SideXP.Database.EditorOnly
 
         /// <summary>
         /// Displays a table: loads its assets, and builds its columns and its pipeline, with the remembered order, widths, hidden
-        /// columns, sort, filters, folder scope and page size of the table.
+        /// columns, sort, filters and folder scope of the open view of the table, and the page size of the preferences.
         /// </summary>
         /// <param name="table">The table to display.</param>
         /// <param name="search">The search that filters the rows (see <see cref="SetSearch(string)"/>), or null to show all the rows.

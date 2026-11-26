@@ -360,10 +360,6 @@ namespace SideXP.Database.EditorOnly
         /// Shares a personal view as a project view: the view leaves the personal views and becomes a project view with the same id,
         /// name and settings, so it stays open if it was.
         /// </summary>
-        /// <remarks>
-        /// The page size of the view stays a setting of the user: it moves to the overrides of the project view (see
-        /// <see cref="ViewSettings.PageSize"/>).
-        /// </remarks>
         /// <param name="view">The personal view to share.</param>
         /// <returns>Returns the created project view.</returns>
         /// <exception cref="ArgumentException">Thrown if the view is not one of the personal views of the catalog.</exception>
@@ -372,10 +368,6 @@ namespace SideXP.Database.EditorOnly
             CheckContains(view);
             _personalViews.Remove(view);
             ProjectView projectView = _projectViews.Add(new ProjectView(view.Id, view.Name, view.Settings));
-
-            ViewSettings viewOverride = _personalViews.GetOrCreateOverride(projectView);
-            viewOverride.SetPageSize(view.Settings.PageSize);
-            view.Settings.SetPageSize(0);
 
             _personalViewsChanged?.Invoke();
             _projectViewsChanged?.Invoke();
@@ -387,8 +379,7 @@ namespace SideXP.Database.EditorOnly
         /// Changes the project views.
         /// </summary>
         /// <remarks>
-        /// Only the settings the user changed are written: the other settings of the project view are kept. The page size stays in the
-        /// overrides, since it's a setting of the user.
+        /// Only the settings the user changed are written: the other settings of the project view are kept.
         /// </remarks>
         /// <param name="view">The project view.</param>
         /// <returns>Returns true if the view had overrides to save.</returns>
@@ -408,8 +399,7 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Discards the overrides of the user on a project view, so they see it as saved in the project again. The page size stays in
-        /// the overrides, since it's a setting of the user.
+        /// Discards the overrides of the user on a project view, so they see it as saved in the project again.
         /// </summary>
         /// <param name="view">The project view.</param>
         /// <returns>Returns true if the view had overrides to discard.</returns>

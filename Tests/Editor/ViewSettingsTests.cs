@@ -23,7 +23,6 @@ namespace SideXP.Database.Tests
 
         private const string TableId = "Tests.TableId";
         private const float ResizedWidth = 150;
-        private const int PageSize = 50;
 
         #endregion
 
@@ -294,15 +293,12 @@ namespace SideXP.Database.Tests
         #region Empty
 
         /// <summary>
-        /// A layer is empty until it sets a setting of the view. The page size doesn't count.
+        /// A layer is empty until it sets a setting of the view.
         /// </summary>
         [Test]
         public void IsEmpty_EachSetting_NotEmpty()
         {
             ViewSettings settings = new ViewSettings(TableId);
-            Assert.IsTrue(settings.IsEmpty);
-
-            settings.SetPageSize(PageSize);
             Assert.IsTrue(settings.IsEmpty);
 
             settings.SetColumnOrder(new[] { "A" });
@@ -381,10 +377,10 @@ namespace SideXP.Database.Tests
         }
 
         /// <summary>
-        /// Unsetting all the settings leaves an empty layer, and keeps the page size.
+        /// Unsetting all the settings leaves an empty layer.
         /// </summary>
         [Test]
-        public void UnsetAll_Settings_EmptyAndPageSizeKept()
+        public void UnsetAll_Settings_Empty()
         {
             ViewSettings settings = new ViewSettings(TableId);
             settings.SetColumnOrder(new[] { "B", "A" });
@@ -392,17 +388,15 @@ namespace SideXP.Database.Tests
             settings.SetSort(new ColumnSort[0]);
             settings.SetFilter(new BoolCondition("A", true));
             settings.SetFolders(null);
-            settings.SetPageSize(PageSize);
 
             Assert.IsTrue(settings.UnsetAll());
             Assert.IsTrue(settings.IsEmpty);
-            Assert.AreEqual(PageSize, settings.PageSize);
             Assert.IsFalse(settings.UnsetAll());
         }
 
         /// <summary>
         /// Applying a layer to another one writes the settings it sets, per column for the widths and the visibility, and keeps the
-        /// other settings of the other layer and its page size. The filter tree is copied.
+        /// other settings of the other layer. The filter tree is copied.
         /// </summary>
         [Test]
         public void ApplyTo_SetSettings_WrittenOthersKept()
@@ -420,7 +414,6 @@ namespace SideXP.Database.Tests
             target.SetVisibility("C", ColumnVisibility.Hidden);
             target.SetSort(new[] { new ColumnSort("A", false) });
             target.SetFolders(new[] { "Assets/Items" });
-            target.SetPageSize(PageSize);
 
             Assert.IsTrue(source.ApplyTo(target));
             CollectionAssert.AreEqual(new[] { "C", "B", "A" }, target.ColumnOrder);
@@ -431,7 +424,6 @@ namespace SideXP.Database.Tests
             Assert.IsInstanceOf<BoolCondition>(target.Filter);
             Assert.AreNotSame(filter, target.Filter);
             CollectionAssert.AreEqual(new[] { "Assets/Items" }, target.Folders);
-            Assert.AreEqual(PageSize, target.PageSize);
 
             Assert.IsFalse(new ViewSettings(TableId).ApplyTo(target));
             Assert.Throws<ArgumentNullException>(() => source.ApplyTo(null));
@@ -471,59 +463,19 @@ namespace SideXP.Database.Tests
         }
 
         /// <summary>
-        /// Resetting keeps the filters and the folder scope, which are cleared on their own, and the page size, which is not a setting
-        /// of the columns.
+        /// Resetting keeps the filters and the folder scope, which are cleared on their own.
         /// </summary>
         [Test]
-        public void Reset_FiltersFoldersAndPageSize_Kept()
+        public void Reset_FiltersAndFolders_Kept()
         {
             ViewSettings settings = new ViewSettings(TableId);
             BoolCondition filter = new BoolCondition("A", true);
             settings.SetFilter(filter);
             settings.SetFolders(new[] { "Assets/Items" });
-            settings.SetPageSize(PageSize);
 
             Assert.IsFalse(settings.Reset());
             Assert.AreSame(filter, settings.Filter);
             CollectionAssert.AreEqual(new[] { "Assets/Items" }, settings.Folders);
-            Assert.AreEqual(PageSize, settings.PageSize);
-        }
-
-        #endregion
-
-
-        #region Pages
-
-        /// <summary>
-        /// No page size is chosen by default, the page size is remembered, setting the same size again changes nothing, and 0 forgets
-        /// the chosen size.
-        /// </summary>
-        [Test]
-        public void SetPageSize_Size_Remembered()
-        {
-            ViewSettings settings = new ViewSettings(TableId);
-            Assert.AreEqual(0, settings.PageSize);
-
-            Assert.IsTrue(settings.SetPageSize(PageSize));
-            Assert.IsFalse(settings.SetPageSize(PageSize));
-            Assert.AreEqual(PageSize, settings.PageSize);
-
-            Assert.IsTrue(settings.SetPageSize(0));
-            Assert.AreEqual(0, settings.PageSize);
-        }
-
-        /// <summary>
-        /// A negative page size is stored as no chosen size.
-        /// </summary>
-        [Test]
-        public void SetPageSize_Negative_NoChosenSize()
-        {
-            ViewSettings settings = new ViewSettings(TableId);
-            settings.SetPageSize(PageSize);
-
-            Assert.IsTrue(settings.SetPageSize(-1));
-            Assert.AreEqual(0, settings.PageSize);
-            Assert.IsFalse(settings.SetPageSize(-1));
         }
 
         #endregion
@@ -543,7 +495,6 @@ namespace SideXP.Database.Tests
             settings.SetVisibility("B", ColumnVisibility.Hidden);
             settings.SetSort(new[] { new ColumnSort("A", true) });
             settings.SetFolders(new[] { "Assets/Items" });
-            settings.SetPageSize(PageSize);
             // Any enum value works: the condition only stores its number
             EnumCondition condition = new EnumCondition("C", FilterOperator.Or);
             settings.SetFilter(new FilterGroup(FilterOperator.And, condition));
@@ -555,7 +506,6 @@ namespace SideXP.Database.Tests
             Assert.AreEqual(ColumnVisibility.Hidden, copy.GetVisibility("B"));
             CollectionAssert.AreEqual(new[] { new ColumnSort("A", true) }, copy.GetSort());
             CollectionAssert.AreEqual(new[] { "Assets/Items" }, copy.Folders);
-            Assert.AreEqual(PageSize, copy.PageSize);
 
             FilterGroup copiedRoot = copy.Filter as FilterGroup;
             Assert.IsNotNull(copiedRoot);
@@ -597,7 +547,6 @@ namespace SideXP.Database.Tests
             settings.SetWidth("B", ResizedWidth);
             settings.SetVisibility("A", ColumnVisibility.Hidden);
             settings.SetSort(new[] { new ColumnSort("C", true), new ColumnSort("B", false) });
-            settings.SetPageSize(PageSize);
 
             ViewSettings copy = new ViewSettings(string.Empty);
             JsonUtility.FromJsonOverwrite(JsonUtility.ToJson(settings), copy);
@@ -611,7 +560,6 @@ namespace SideXP.Database.Tests
             CollectionAssert.AreEqual(new[] { new ColumnSort("C", true), new ColumnSort("B", false) }, copy.GetSort());
             Assert.IsFalse(copy.IsFilterSet);
             Assert.IsFalse(copy.AreFoldersSet);
-            Assert.AreEqual(PageSize, copy.PageSize);
         }
 
         /// <summary>
@@ -689,7 +637,6 @@ namespace SideXP.Database.Tests
             Assert.IsTrue(settings.IsSortSet);
             Assert.IsFalse(settings.IsFilterSet);
             Assert.IsFalse(settings.AreFoldersSet);
-            Assert.AreEqual(PageSize, settings.PageSize);
 
             // Saved in the new format, so it's not read as the settings of the first pass again
             settings.SetVisibility("C", ColumnVisibility.Unset);

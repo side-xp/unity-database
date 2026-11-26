@@ -16,8 +16,9 @@ namespace SideXP.Database.EditorOnly
     /// edits of several cells and the active cell use all the visible rows, so a range can cover rows of several pages, and the row
     /// numbers continue across the pages.
     /// <para>
-    /// The page size is remembered with the settings of the table (see <see cref="ViewSettings.PageSize"/>), and is
-    /// <see cref="DefaultPageSize"/> until the user chooses one. The page goes back to the first one when the search, the filters, the
+    /// The page size is a preference of the user, shared by all the tables and all the projects (see
+    /// <see cref="DatabasePreferences.PageSize"/>): typing a size in the status line of a table changes it for all the open tables.
+    /// The page goes back to the first one when the search, the filters, the
     /// sort or the folder scope change, and is kept otherwise (reloads and edits), in the range of the pages. Showing an asset opens
     /// the page of its row (see <see cref="ShowAsset"/>).
     /// </para>
@@ -41,18 +42,9 @@ namespace SideXP.Database.EditorOnly
         private const string PageText = "Page";
         private const string PageFieldTooltip = "The displayed page. Type the number of a page, then press Enter.";
         private const string PageSizeTooltip = "The number of rows per page. Type a number, then press Enter. The selection, the copy " +
-            "and the edits of several cells include the rows of all the pages. Remembered with the settings of the table.";
+            "and the edits of several cells include the rows of all the pages. A preference shared by all the tables and all the " +
+            "projects, also in the Preferences window (Sideways Experiments > Database).";
         private const string PageSizeText = "per page";
-
-        /// <summary>
-        /// The smallest page size the user can choose. Smaller pages would only make the user browse more pages.
-        /// </summary>
-        private const int MinPageSize = 10;
-
-        /// <summary>
-        /// The page size of a table whose settings have none yet: a few screens of rows, so the list stays short to scroll.
-        /// </summary>
-        private const int DefaultPageSize = 100;
 
         /// <summary>
         /// The visible rows of the displayed page, copied from the pipeline after each update, used as the source of the list views.
@@ -139,30 +131,18 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Displays the rows in pages of a given size, and remembers it with the settings of the table. The page that holds the first
-        /// row of the displayed page is shown, so the user doesn't lose their place.
+        /// Sets the number of rows per page of all the tables (see <see cref="DatabasePreferences.SetPageSize"/>), which all the open
+        /// table views apply. The page that holds the first row of the displayed page is shown, so the user doesn't lose their place.
         /// </summary>
-        /// <param name="pageSize">The number of rows per page. A size under <see cref="MinPageSize"/> (including 0 and negative sizes)
-        /// is raised to it.</param>
+        /// <param name="pageSize">The number of rows per page. A size under <see cref="DatabasePreferences.MinPageSize"/> (including 0
+        /// and negative sizes) is raised to it.</param>
         public void SetPageSize(int pageSize)
         {
-            if (_pipeline == null)
-                return;
-
-            pageSize = Math.Max(MinPageSize, pageSize);
-            // @todo After the views: the page size becomes a user setting of the whole package, instead of a field of the open view
-            if (_viewSettings.Top.SetPageSize(pageSize))
-                UserViews.instance.ScheduleSave();
-
-            if (pageSize == _pipeline.PageSize)
-                return;
-
-            EndEdit(true, false);
-            int firstRowIndex = _pipeline.PageStartIndex;
-            _pipeline.PageSize = pageSize;
-            _pipeline.PageIndex = firstRowIndex / pageSize;
-            Refresh();
-            ScrollToTop();
+            pageSize = Math.Max(DatabasePreferences.MinPageSize, pageSize);
+            // A changed preference is applied by OnPageSizeChanged(), in this view and the others
+            DatabasePreferences preferences = DatabasePreferences.I;
+            if (preferences == null || !preferences.SetPageSize(pageSize))
+                ApplyPageSize(pageSize);
         }
 
         #endregion
@@ -270,20 +250,54 @@ namespace SideXP.Database.EditorOnly
         #region Private API
 
         /// <summary>
-        /// Gives the remembered page size and a page to the pipeline of a table that has just been set, before its first update.
+        /// Gives the page size of the preferences and a page to the pipeline of a table that has just been set, before its first
+        /// update.
         /// </summary>
-        /// <remarks>
-        /// The remembered size is not saved again: without size, the table gets <see cref="DefaultPageSize"/>, and a size under the
-        /// minimum (from a file edited by hand) is only raised for the display.
-        /// </remarks>
         /// <param name="pageIndex">The index of the page to show, from 0, brought back in the range of the pages by the update.</param>
         private void ApplyRememberedPagination(int pageIndex)
         {
-            int pageSize = _viewSettings.Top.PageSize;
-            _pipeline.PageSize = pageSize > 0 ? Math.Max(MinPageSize, pageSize) : DefaultPageSize;
+            _pipeline.PageSize = GetPreferredPageSize();
             _pipeline.PageIndex = pageIndex;
             // The owner of the view already knows this page
             _notifiedPageIndex = pageIndex;
+        }
+
+        /// <summary>
+        /// Gets the page size of the preferences.
+        /// </summary>
+        /// <returns>Returns the page size of the preferences, or <see cref="DatabasePreferences.DefaultPageSize"/> if they can't be
+        /// loaded.</returns>
+        private static int GetPreferredPageSize()
+        {
+            DatabasePreferences preferences = DatabasePreferences.I;
+            return preferences != null ? preferences.PageSize : DatabasePreferences.DefaultPageSize;
+        }
+
+        /// <summary>
+        /// Called after the page size of the preferences changed, from this view, another table view or the Preferences window.
+        /// Applies it to the displayed table.
+        /// </summary>
+        private void OnPageSizeChanged()
+        {
+            ApplyPageSize(GetPreferredPageSize());
+        }
+
+        /// <summary>
+        /// Displays the rows in pages of a given size. The page that holds the first row of the displayed page is shown, so the user
+        /// doesn't lose their place.
+        /// </summary>
+        /// <param name="pageSize">The number of rows per page, at least <see cref="DatabasePreferences.MinPageSize"/>.</param>
+        private void ApplyPageSize(int pageSize)
+        {
+            if (_pipeline == null || pageSize == _pipeline.PageSize)
+                return;
+
+            EndEdit(true, false);
+            int firstRowIndex = _pipeline.PageStartIndex;
+            _pipeline.PageSize = pageSize;
+            _pipeline.PageIndex = firstRowIndex / pageSize;
+            Refresh();
+            ScrollToTop();
         }
 
         /// <summary>

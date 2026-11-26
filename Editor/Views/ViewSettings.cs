@@ -119,16 +119,6 @@ namespace SideXP.Database.EditorOnly
         [SerializeField]
         private List<string> _folders = new List<string>();
 
-        /// <summary>
-        /// The number of rows per page, or 0 if the user hasn't chosen one yet: the table view then uses its default size.
-        /// </summary>
-        /// <remarks>
-        /// @todo After the views: the page size becomes a user setting of the whole package, chosen by the user. It's not a layered
-        /// setting of the views.
-        /// </remarks>
-        [SerializeField]
-        private int _pageSize = 0;
-
         #endregion
 
 
@@ -151,7 +141,7 @@ namespace SideXP.Database.EditorOnly
 
         /// <summary>
         /// Checks if the layer sets no setting of the view: no column order, width or visibility, no sort, no filters and no folder
-        /// scope. The page size doesn't count, since it's not a setting of the views (see <see cref="PageSize"/>).
+        /// scope.
         /// </summary>
         public bool IsEmpty => !IsColumnOrderSet && GetColumnsWithSettings().Count == 0 && !_isSortSet && !_isFilterSet && !_areFoldersSet;
 
@@ -171,7 +161,6 @@ namespace SideXP.Database.EditorOnly
             copy._filter = _filter?.Clone();
             copy._areFoldersSet = _areFoldersSet;
             copy._folders = new List<string>(_folders);
-            copy._pageSize = _pageSize;
             return copy;
         }
 
@@ -181,8 +170,7 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         /// <remarks>
         /// The filters and the folder scope are kept: they are cleared on their own (see <see cref="SetFilter"/> and
-        /// <see cref="SetFolders"/>), so resetting the columns doesn't lose a filter built by hand. The page size is kept too, since
-        /// it's not a setting of the columns (see <see cref="SetPageSize"/>).
+        /// <see cref="SetFolders"/>), so resetting the columns doesn't lose a filter built by hand.
         /// </remarks>
         /// <returns>Returns true if there were settings to unset.</returns>
         public bool Reset()
@@ -300,8 +288,7 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Unsets all the settings of the view, so they all come from the layer below. The page size is kept, since it's not a setting
-        /// of the views (see <see cref="PageSize"/>).
+        /// Unsets all the settings of the view, so they all come from the layer below.
         /// </summary>
         /// <returns>Returns true if the layer did set at least one setting.</returns>
         public bool UnsetAll()
@@ -315,7 +302,7 @@ namespace SideXP.Database.EditorOnly
 
         /// <summary>
         /// Writes the settings this layer sets to another layer, replacing them there. The settings this layer doesn't set are not
-        /// changed in the other layer, nor the page size.
+        /// changed in the other layer.
         /// </summary>
         /// <remarks>
         /// The widths and the visibility are written per column, so the other columns keep their settings in the other layer. The
@@ -608,37 +595,6 @@ namespace SideXP.Database.EditorOnly
             _areFoldersSet = false;
             _folders.Clear();
             return wasSet;
-        }
-
-        #endregion
-
-
-        #region Pages
-
-        /// <summary>
-        /// Gets the number of rows per page, or 0 if the user hasn't chosen one yet. A negative size (from a file edited by hand) is
-        /// read as 0.
-        /// </summary>
-        /// <remarks>
-        /// The settings don't check the minimum size: the table view applies its own limits (see
-        /// <see cref="TableView.SetPageSize(int)"/>).
-        /// </remarks>
-        public int PageSize => Mathf.Max(0, _pageSize);
-
-        /// <summary>
-        /// Sets the number of rows per page.
-        /// </summary>
-        /// <param name="pageSize">The number of rows per page, or 0 or less to forget the chosen size, so the table view uses its default
-        /// size.</param>
-        /// <returns>Returns true if the page size has changed.</returns>
-        public bool SetPageSize(int pageSize)
-        {
-            pageSize = Mathf.Max(0, pageSize);
-            if (pageSize == PageSize)
-                return false;
-
-            _pageSize = pageSize;
-            return true;
         }
 
         #endregion

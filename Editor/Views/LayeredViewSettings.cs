@@ -81,8 +81,7 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         /// <remarks>
         /// Each setting is set if a layer sets it, with the value of the first layer that sets it. The defaults of the table are not
-        /// written: a column that no layer hides keeps an unset visibility. The filter tree is copied, and the page size is the page
-        /// size of the top layer.
+        /// written: a column that no layer hides keeps an unset visibility. The filter tree is copied.
         /// </remarks>
         /// <returns>Returns the resolved settings, for the table of the top layer.</returns>
         public ViewSettings Flatten()
@@ -115,7 +114,6 @@ namespace SideXP.Database.EditorOnly
             if (foldersLayer != null)
                 flattened.SetFolders(foldersLayer.Folders);
 
-            flattened.SetPageSize(Top.PageSize);
             return flattened;
         }
 

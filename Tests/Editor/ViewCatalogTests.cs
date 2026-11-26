@@ -20,7 +20,6 @@ namespace SideXP.Database.Tests
         private const string TableId = "Tests.TableId";
         private const string OtherTableId = "Tests.OtherTableId";
         private const float ResizedWidth = 150;
-        private const int PageSize = 50;
 
         /// <summary>
         /// The data of the views of the user, new for each test.
@@ -220,10 +219,6 @@ namespace SideXP.Database.Tests
             LayeredViewSettings settings = new LayeredViewSettings(_catalog.GetLayers(projectView));
             Assert.AreEqual(ViewStatus.Project, _catalog.GetStatus(projectView));
 
-            // The page size is not a setting of the views
-            settings.Top.SetPageSize(PageSize);
-            Assert.AreEqual(ViewStatus.Project, _catalog.GetStatus(projectView));
-
             settings.SetWidth("A", ResizedWidth);
             Assert.IsTrue(_catalog.HasOverrides(projectView));
             Assert.AreEqual(ViewStatus.OverriddenProject, _catalog.GetStatus(projectView));
@@ -408,8 +403,7 @@ namespace SideXP.Database.Tests
         #region Share
 
         /// <summary>
-        /// Sharing a personal view moves it to the project views, with the same id, name and settings, and keeps it open. The page
-        /// size stays a setting of the user, in the overrides.
+        /// Sharing a personal view moves it to the project views, with the same id, name and settings, and keeps it open.
         /// </summary>
         [Test]
         public void ShareView_PersonalView_MovedToProjectViews()
@@ -417,7 +411,6 @@ namespace SideXP.Database.Tests
             _catalog.GetOpenView(TableId);
             PersonalView view = _catalog.CreateView(TableId, "Balancing");
             view.Settings.SetSort(new[] { new ColumnSort("A", true) });
-            view.Settings.SetPageSize(PageSize);
             _catalog.SetOpenView(view);
             _personalChangeCount = 0;
 
@@ -429,8 +422,6 @@ namespace SideXP.Database.Tests
             Assert.AreEqual(1, _catalog.GetPersonalViews(TableId).Count);
             Assert.AreSame(projectView, _catalog.GetOpenView(TableId));
 
-            Assert.AreEqual(0, projectView.Settings.PageSize);
-            Assert.AreEqual(PageSize, _personalViews.FindOverride(projectView.Id).Settings.PageSize);
             CollectionAssert.AreEqual(new[] { new ColumnSort("A", true) },
                 new LayeredViewSettings(_catalog.GetLayers(projectView)).GetSort());
             Assert.AreEqual(1, _personalChangeCount);
@@ -457,7 +448,7 @@ namespace SideXP.Database.Tests
 
         /// <summary>
         /// Saving the overrides writes the settings the user changed to the project view, keeps its other settings, then removes the
-        /// overrides. The page size stays in the overrides. Both files change.
+        /// overrides. Both files change.
         /// </summary>
         [Test]
         public void SaveOverrides_Overrides_WrittenToProjectView()
@@ -468,7 +459,6 @@ namespace SideXP.Database.Tests
             LayeredViewSettings settings = new LayeredViewSettings(_catalog.GetLayers(view));
             settings.SetWidth("B", ResizedWidth);
             settings.SetSort(new[] { new ColumnSort("B", true) });
-            settings.Top.SetPageSize(PageSize);
             _personalChangeCount = 0;
 
             Assert.IsTrue(_catalog.SaveOverrides(view));
@@ -476,7 +466,6 @@ namespace SideXP.Database.Tests
             Assert.AreEqual(ResizedWidth, view.Settings.GetWidth("B"));
             CollectionAssert.AreEqual(new[] { new ColumnSort("B", true) }, view.Settings.GetSort());
             Assert.IsTrue(_catalog.GetOverrides(view).IsEmpty);
-            Assert.AreEqual(PageSize, _catalog.GetOverrides(view).PageSize);
             Assert.AreEqual(ViewStatus.Project, _catalog.GetStatus(view));
             Assert.AreEqual(1, _personalChangeCount);
             Assert.AreEqual(1, _projectChangeCount);
@@ -497,7 +486,7 @@ namespace SideXP.Database.Tests
         }
 
         /// <summary>
-        /// Resetting the overrides discards all of them, keeps the project view and the page size, and doesn't write the project file.
+        /// Resetting the overrides discards all of them, keeps the project view, and doesn't write the project file.
         /// </summary>
         [Test]
         public void ResetOverrides_Overrides_Discarded()
@@ -507,13 +496,11 @@ namespace SideXP.Database.Tests
             LayeredViewSettings settings = new LayeredViewSettings(_catalog.GetLayers(view));
             settings.SetWidth("A", ResizedWidth);
             settings.SetFolders(new[] { "Assets/Items" });
-            settings.Top.SetPageSize(PageSize);
 
             Assert.IsTrue(_catalog.ResetOverrides(view));
             Assert.IsFalse(_catalog.ResetOverrides(view));
             Assert.AreEqual(100, settings.GetWidth("A"));
             Assert.IsEmpty(settings.Folders);
-            Assert.AreEqual(PageSize, _catalog.GetOverrides(view).PageSize);
             Assert.AreEqual(ViewStatus.Project, _catalog.GetStatus(view));
             Assert.AreEqual(0, _projectChangeCount);
         }
