@@ -82,6 +82,17 @@ namespace SideXP.Database.EditorOnly
         public const string OverriddenProjectView = "eye-bolt";
 
         /// <summary>
+        /// A cloud with an arrow pointing up, for the buttons that write the overrides of the user to the project view, for the whole
+        /// team (<i>Save for Everyone</i>).
+        /// </summary>
+        public const string SaveOverrides = "cloud-upload";
+
+        /// <summary>
+        /// An arrow turning back, for the buttons that discard the overrides of the user on a project view, all of them or one kind.
+        /// </summary>
+        public const string ResetOverrides = "arrow-back-up";
+
+        /// <summary>
         /// A chevron pointing down, after the name of the open view, to show that the button opens a menu.
         /// </summary>
         public const string MenuArrow = "chevron-down";

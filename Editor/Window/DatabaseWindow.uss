@@ -44,9 +44,64 @@
     -unity-font-style: bold;
     -unity-text-align: middle-left;
     font-size: 13px;
-    flex-grow: 1;
     padding-left: 0;
     margin-left: 0;
+}
+
+/* Between the title (and its mark) and the other elements of the header of a section, so they're on the right */
+.database-view-panel__section-spacer {
+    flex-grow: 1;
+}
+
+/* After the title of a section whose setting is overridden in a project view (ViewPanel) */
+.database-view-panel__override-mark {
+    --sxp-icon-size: 14;
+    margin-left: 2px;
+    opacity: 0.6;
+}
+
+/* The list of the overrides of a project view, under its name in the View section (ViewPanel) */
+.database-view-panel__overrides {
+    margin-top: 6px;
+}
+
+.database-view-panel__overrides-title {
+    -unity-font-style: bold;
+    font-size: 11px;
+    opacity: 0.6;
+    padding-left: 0;
+    margin-left: 0;
+    margin-bottom: 2px;
+}
+
+.database-view-panel__override {
+    flex-direction: row;
+    align-items: center;
+    height: 20px;
+}
+
+.database-view-panel__override-text {
+    flex-grow: 1;
+    -unity-text-align: middle-left;
+    padding-left: 0;
+    margin-left: 0;
+}
+
+.database-view-panel__override-reset {
+    flex-shrink: 0;
+    padding-left: 1px;
+    padding-right: 1px;
+    margin-right: 0;
+}
+
+.database-view-panel__override-reset > .sxp-icon {
+    --sxp-icon-size: 14;
+}
+
+.database-view-panel__override-actions {
+    flex-direction: row;
+    justify-content: flex-end;
+    margin-top: 4px;
 }
 
 .database-view-panel__section-button {
@@ -59,6 +114,7 @@
     flex-direction: row;
     align-items: center;
     flex-shrink: 1;
+    min-width: 0;
     opacity: 0.6;
 }
 

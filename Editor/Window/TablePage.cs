@@ -69,6 +69,10 @@ namespace SideXP.Database.EditorOnly
         private const string DeleteText = "Delete";
         private const string ShareViewTitle = "Share as Project View";
         private const string ShareText = "Share";
+        private const string SaveOverridesText = "Save My Changes for Everyone...";
+        private const string ResetOverridesText = "Reset My Changes";
+        private const string SaveOverridesTitle = "Save for Everyone";
+        private const string SaveText = "Save";
         private const string CancelText = "Cancel";
 
         private const string SearchTooltip = "Shows the rows that contain each word of the search, in their asset name or in their " +
@@ -244,6 +248,9 @@ namespace SideXP.Database.EditorOnly
             content.Add(_tableView);
             _viewPanel = new ViewPanel(_tableView);
             _viewPanel.ViewRenamed += OnViewRenamed;
+            _viewPanel.OverridesSaveRequested += SaveOverrides;
+            _viewPanel.OverridesResetRequested += ResetOverrides;
+            _viewPanel.OverrideResetRequested += ResetOverride;
             _tableView.ViewSettingsChanged += OnViewSettingsChanged;
             content.Add(_viewPanel);
             Add(content);
@@ -372,20 +379,28 @@ namespace SideXP.Database.EditorOnly
             // The label is added at the end of the button the first time it's set
             _viewMenuArrow.BringToFront();
             _viewPanel.SetView(view.Name, iconName, statusText, statusTooltip);
+            _viewPanel.SetOverrides(ViewCatalog.Current.GetOverrides(view));
         }
 
         /// <summary>
         /// Called after the table view changed a setting of the open view. Shows the new status of the view if it changed, for
-        /// example a project view that gets its first override, or loses its last one.
+        /// example a project view that gets its first override, or loses its last one, and the overrides of the user.
         /// </summary>
         /// <remarks>
-        /// Called on each move of the pointer while a column is resized, so the controls are only updated when the status changes.
+        /// Called on each move of the pointer while a column is resized, so the button is only updated when the status changes, and
+        /// the list of the overrides when their kinds or counts change (see <see cref="ViewPanel.SetOverrides"/>).
         /// </remarks>
         private void OnViewSettingsChanged()
         {
             SavedView view = GetOpenView();
-            if (view != null && ViewCatalog.Current.GetStatus(view) != _shownViewStatus)
+            if (view == null)
+                return;
+
+            ViewCatalog catalog = ViewCatalog.Current;
+            if (catalog.GetStatus(view) != _shownViewStatus)
                 UpdateViewControls();
+            else
+                _viewPanel.SetOverrides(catalog.GetOverrides(view));
         }
 
         /// <summary>
@@ -435,6 +450,21 @@ namespace SideXP.Database.EditorOnly
                 menu.AddItem(new GUIContent(DeleteViewText), false, DeleteView);
             else
                 menu.AddDisabledItem(new GUIContent(DeleteViewText));
+
+            if (openView is ProjectView)
+            {
+                menu.AddSeparator(string.Empty);
+                if (catalog.HasOverrides(openView))
+                {
+                    menu.AddItem(new GUIContent(SaveOverridesText), false, SaveOverrides);
+                    menu.AddItem(new GUIContent(ResetOverridesText), false, ResetOverrides);
+                }
+                else
+                {
+                    menu.AddDisabledItem(new GUIContent(SaveOverridesText));
+                    menu.AddDisabledItem(new GUIContent(ResetOverridesText));
+                }
+            }
 
             menu.AddSeparator(string.Empty);
             menu.AddItem(new GUIContent(TableView.ResetViewText), false, _tableView.ResetView);
@@ -548,6 +578,56 @@ namespace SideXP.Database.EditorOnly
 
             if (ViewCatalog.Current.DeleteView(view))
                 ShowOpenView();
+        }
+
+        /// <summary>
+        /// Writes the overrides of the user to the open project view, for the whole team, after a confirmation.
+        /// </summary>
+        private void SaveOverrides()
+        {
+            if (GetOpenView() is not ProjectView view)
+                return;
+
+            string message = $"Save your changes to the project view \"{view.Name}\" of the table {_table.Name} for the whole team? " +
+                $"They're written to {ProjectViews.RelativeFilePath}: commit this file so the others get them. The settings you didn't " +
+                "change are kept as they are in the project view.";
+            if (!EditorUtility.DisplayDialog(SaveOverridesTitle, message, SaveText, CancelText))
+                return;
+
+            if (ViewCatalog.Current.SaveOverrides(view))
+                ReloadOpenView();
+        }
+
+        /// <summary>
+        /// Discards all the overrides of the user on the open project view, so they see it as saved in the project again.
+        /// </summary>
+        private void ResetOverrides()
+        {
+            if (GetOpenView() is ProjectView view && ViewCatalog.Current.ResetOverrides(view))
+                ReloadOpenView();
+        }
+
+        /// <summary>
+        /// Discards one kind of override of the user on the open project view.
+        /// </summary>
+        /// <param name="kind">The kind of setting to discard.</param>
+        private void ResetOverride(ViewSettingKind kind)
+        {
+            if (GetOpenView() is ProjectView view && ViewCatalog.Current.ResetOverride(view, kind))
+                ReloadOpenView();
+        }
+
+        /// <summary>
+        /// Shows the table with the settings of its open view again, after they changed outside of the table view (the overrides were
+        /// saved or reset). The search and the page are kept, like after a reload.
+        /// </summary>
+        /// <remarks>
+        /// The table is set again, since the layers of the view changed, and the table view holds an editable copy of the filter tree
+        /// (see <see cref="LayeredViewSettings.GetEditableFilter"/>).
+        /// </remarks>
+        private void ReloadOpenView()
+        {
+            SetTable(_table, _searchField.value, _tableView.PageIndex);
         }
 
         /// <summary>

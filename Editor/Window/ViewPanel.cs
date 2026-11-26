@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 using UnityEngine.UIElements;
 
@@ -33,6 +34,27 @@ namespace SideXP.Database.EditorOnly
         private const string ViewStatusClass = "database-view-panel__view-status";
         private const string ViewStatusIconClass = "database-view-panel__view-status-icon";
         private const string ViewStatusLabelClass = "database-view-panel__view-status-label";
+        private const string SectionSpacerClass = "database-view-panel__section-spacer";
+        private const string OverrideMarkClass = "database-view-panel__override-mark";
+        private const string OverridesClass = "database-view-panel__overrides";
+        private const string OverridesTitleClass = "database-view-panel__overrides-title";
+        private const string OverrideClass = "database-view-panel__override";
+        private const string OverrideTextClass = "database-view-panel__override-text";
+        private const string OverrideResetClass = "database-view-panel__override-reset";
+        private const string OverrideActionsClass = "database-view-panel__override-actions";
+
+        private const string OverridesTitle = "Overrides";
+        private const string OverrideResetTooltip = "Discards this change, so this setting comes from the project view again.";
+        private const string SaveOverridesText = "Save for Everyone";
+        private const string SaveOverridesTooltip = "Writes your overrides to the project view, for the whole team. They're saved in " +
+            "the project file, which must be committed so the others get them.";
+        private const string ResetOverridesText = "Reset All";
+        private const string ResetOverridesTooltip = "Discards all your overrides to this project view, so you see it as saved in the " +
+            "project again.";
+        private const string FoldersOverrideTooltip = "You changed the folders of this project view: your folders are a personal " +
+            "override, saved for you only.";
+        private const string FiltersOverrideTooltip = "You changed the filters of this project view: your filters are a personal " +
+            "override, saved for you only.";
 
         private const string ViewTitle = "View";
         private const string ViewNameTooltip = "The name of the view, unique among the views of the table. Applied with Enter, or when " +
@@ -94,10 +116,52 @@ namespace SideXP.Database.EditorOnly
         private Label _viewStatusLabel = null;
 
         /// <summary>
+        /// The list of the overrides of the user on the open project view, with the buttons to save and reset them, hidden while the
+        /// view has no override.
+        /// </summary>
+        private VisualElement _overrides = null;
+
+        /// <summary>
+        /// The rows of <see cref="_overrides"/>, one per kind of setting the user changed.
+        /// </summary>
+        private VisualElement _overrideRows = null;
+
+        /// <summary>
+        /// The kinds and counts of the overrides shown by <see cref="_overrides"/>, so the list is only built again when they change
+        /// (see <see cref="SetOverrides"/>). Null when no override is shown.
+        /// </summary>
+        private string _shownOverridesKey = null;
+
+        /// <summary>
+        /// The mark after the title of the <i>Folders</i> section, shown while the folders are overridden.
+        /// </summary>
+        private VisualElement _foldersOverrideMark = null;
+
+        /// <summary>
+        /// The mark after the title of the <i>Filters</i> section, shown while the filters are overridden.
+        /// </summary>
+        private VisualElement _filtersOverrideMark = null;
+
+        /// <summary>
         /// Called when the user confirms a new name for the open view, with the typed name. The owner renames the view, then shows
         /// its actual name with <see cref="SetView"/>.
         /// </summary>
         public event Action<string> ViewRenamed;
+
+        /// <summary>
+        /// Called when the user asks to write their overrides to the open project view, for the whole team.
+        /// </summary>
+        public event Action OverridesSaveRequested;
+
+        /// <summary>
+        /// Called when the user asks to discard all their overrides of the open project view.
+        /// </summary>
+        public event Action OverridesResetRequested;
+
+        /// <summary>
+        /// Called when the user asks to discard one kind of override of the open project view, with that kind.
+        /// </summary>
+        public event Action<ViewSettingKind> OverrideResetRequested;
 
         #endregion
 
@@ -130,8 +194,9 @@ namespace SideXP.Database.EditorOnly
             _viewStatusLabel.AddToClassList(ViewStatusLabelClass);
             _viewStatus.Add(_viewStatusLabel);
 
-            VisualElement viewSection = CreateSection(content, ViewTitle, _viewStatus);
+            VisualElement viewSection = CreateSection(content, ViewTitle, null, _viewStatus);
             viewSection.Add(_viewNameField);
+            viewSection.Add(CreateOverrides());
 
             // The folders first: they limit the assets of the table, which the filters then filter
             _folderScopeEditor = new FolderScopeEditor();
@@ -141,12 +206,15 @@ namespace SideXP.Database.EditorOnly
             DatabaseElements.SetIcon(addFolderButton, DatabaseIcons.AddFolder, AddFolderText);
             _clearFoldersButton = new Button(_folderScopeEditor.ClearFolders) { tooltip = ClearFoldersTooltip };
             DatabaseElements.SetIcon(_clearFoldersButton, DatabaseIcons.ClearFolders, ClearFoldersText);
-            VisualElement foldersSection = CreateSection(content, FoldersTitle, addFolderButton, _clearFoldersButton);
+            _foldersOverrideMark = CreateOverrideMark(FoldersOverrideTooltip);
+            VisualElement foldersSection = CreateSection(content, FoldersTitle, _foldersOverrideMark, addFolderButton,
+                _clearFoldersButton);
             foldersSection.Add(_folderScopeEditor);
 
             _clearFiltersButton = new Button(ClearFilters) { tooltip = ClearFiltersTooltip };
             DatabaseElements.SetIcon(_clearFiltersButton, DatabaseIcons.ClearFilters, ClearFiltersText);
-            VisualElement filtersSection = CreateSection(content, FiltersTitle, _clearFiltersButton);
+            _filtersOverrideMark = CreateOverrideMark(FiltersOverrideTooltip);
+            VisualElement filtersSection = CreateSection(content, FiltersTitle, _filtersOverrideMark, _clearFiltersButton);
 
             _filterEditor = new FilterEditor();
             _filterEditor.Changed += OnFilterChanged;
@@ -192,6 +260,40 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
+        /// Shows the overrides of the user on the open project view: the list of the kinds of settings they changed, each with a reset
+        /// button, the buttons to save and reset all of them, and the marks of the <i>Folders</i> and <i>Filters</i> sections.
+        /// </summary>
+        /// <remarks>
+        /// The list is only built again when the kinds or the counts of the overrides change, since the owner calls this method on
+        /// each change of the settings of the view, including each move of the pointer while a column is resized.
+        /// </remarks>
+        /// <param name="overrides">The layer of the overrides of the user, or null for a personal view. A layer that sets nothing hides
+        /// the list.</param>
+        public void SetOverrides(ViewSettings overrides)
+        {
+            bool hasOverrides = overrides != null && !overrides.IsEmpty;
+            _foldersOverrideMark.SetDisplayed(hasOverrides && overrides.IsSet(ViewSettingKind.Folders));
+            _filtersOverrideMark.SetDisplayed(hasOverrides && overrides.IsSet(ViewSettingKind.Filters));
+
+            string key = hasOverrides ? GetOverridesKey(overrides) : null;
+            if (key == _shownOverridesKey)
+                return;
+
+            _shownOverridesKey = key;
+            _overrideRows.Clear();
+            _overrides.SetDisplayed(hasOverrides);
+            if (!hasOverrides)
+                return;
+
+            foreach (ViewSettingKind kind in ViewSettings.AllKinds)
+            {
+                int count = overrides.GetSetCount(kind);
+                if (count > 0)
+                    _overrideRows.Add(CreateOverrideRow(kind, count));
+            }
+        }
+
+        /// <summary>
         /// Gives the focus to the name of the open view, with its text selected, so the user can type a new name.
         /// </summary>
         public void FocusViewName()
@@ -224,10 +326,12 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         /// <param name="parent">The element to which the section is added.</param>
         /// <param name="title">The title of the section.</param>
-        /// <param name="headerItems">The elements shown on the right of the title. The buttons get the style of the buttons of the
+        /// <param name="titleMark">An element shown right after the title (for example the mark of an override), or null.</param>
+        /// <param name="headerItems">The elements shown on the right of the header. The buttons get the style of the buttons of the
         /// sections.</param>
         /// <returns>Returns the element that holds the content of the section.</returns>
-        private static VisualElement CreateSection(VisualElement parent, string title, params VisualElement[] headerItems)
+        private static VisualElement CreateSection(VisualElement parent, string title, VisualElement titleMark,
+            params VisualElement[] headerItems)
         {
             VisualElement section = new VisualElement();
             section.AddToClassList(SectionClass);
@@ -237,6 +341,14 @@ namespace SideXP.Database.EditorOnly
             Label titleLabel = new Label(title);
             titleLabel.AddToClassList(SectionTitleClass);
             header.Add(titleLabel);
+            if (titleMark != null)
+                header.Add(titleMark);
+
+            // Pushes the other elements to the right, so the mark stays next to the title
+            VisualElement spacer = new VisualElement();
+            spacer.AddToClassList(SectionSpacerClass);
+            header.Add(spacer);
+
             foreach (VisualElement item in headerItems)
             {
                 if (item is Button)
@@ -248,6 +360,123 @@ namespace SideXP.Database.EditorOnly
             section.Add(header);
             parent.Add(section);
             return section;
+        }
+
+        /// <summary>
+        /// Creates the list of the overrides of the open project view, empty and hidden: a title, the rows (see
+        /// <see cref="SetOverrides"/>), then the buttons that save and reset all the overrides.
+        /// </summary>
+        /// <returns>Returns the created list.</returns>
+        private VisualElement CreateOverrides()
+        {
+            _overrides = new VisualElement();
+            _overrides.AddToClassList(OverridesClass);
+            _overrides.SetDisplayed(false);
+
+            Label title = new Label(OverridesTitle);
+            title.AddToClassList(OverridesTitleClass);
+            _overrides.Add(title);
+
+            _overrideRows = new VisualElement();
+            _overrides.Add(_overrideRows);
+
+            VisualElement actions = new VisualElement();
+            actions.AddToClassList(OverrideActionsClass);
+            Button saveButton = new Button(() => OverridesSaveRequested?.Invoke()) { tooltip = SaveOverridesTooltip };
+            DatabaseElements.SetIcon(saveButton, DatabaseIcons.SaveOverrides, SaveOverridesText);
+            actions.Add(saveButton);
+            Button resetButton = new Button(() => OverridesResetRequested?.Invoke()) { tooltip = ResetOverridesTooltip };
+            DatabaseElements.SetIcon(resetButton, DatabaseIcons.ResetOverrides, ResetOverridesText);
+            actions.Add(resetButton);
+            _overrides.Add(actions);
+            return _overrides;
+        }
+
+        /// <summary>
+        /// Creates the row of a kind of override: what the user changed, and a button that discards it.
+        /// </summary>
+        /// <param name="kind">The kind of setting the user changed.</param>
+        /// <param name="count">The number of columns for the widths and the visibility, or 1.</param>
+        /// <returns>Returns the created row.</returns>
+        private VisualElement CreateOverrideRow(ViewSettingKind kind, int count)
+        {
+            VisualElement row = new VisualElement();
+            row.AddToClassList(OverrideClass);
+
+            Label text = new Label(GetOverrideText(kind, count));
+            text.AddToClassList(OverrideTextClass);
+            row.Add(text);
+
+            Button resetButton = new Button(() => OverrideResetRequested?.Invoke(kind)) { tooltip = OverrideResetTooltip };
+            DatabaseElements.SetIcon(resetButton, DatabaseIcons.ResetOverrides);
+            resetButton.AddToClassList(OverrideResetClass);
+            row.Add(resetButton);
+            return row;
+        }
+
+        /// <summary>
+        /// Creates the mark shown after the title of a section while its setting is overridden: the icon of the overridden project
+        /// views, hidden by default.
+        /// </summary>
+        /// <param name="tooltip">The tooltip of the mark, which says what the user changed.</param>
+        /// <returns>Returns the created mark.</returns>
+        private static VisualElement CreateOverrideMark(string tooltip)
+        {
+            Icon mark = new Icon(DatabaseIcons.OverriddenProjectView) { tooltip = tooltip };
+            mark.AddToClassList(OverrideMarkClass);
+            mark.SetDisplayed(false);
+            return mark;
+        }
+
+        /// <summary>
+        /// Gets the text of a kind of override in the list of the overrides.
+        /// </summary>
+        /// <param name="kind">The kind of setting the user changed.</param>
+        /// <param name="count">The number of columns for the widths and the visibility, or 1.</param>
+        /// <returns>Returns the text, for example <c>Widths of 2 columns</c>.</returns>
+        private static string GetOverrideText(ViewSettingKind kind, int count)
+        {
+            switch (kind)
+            {
+                case ViewSettingKind.ColumnOrder:
+                    return "Column order";
+
+                case ViewSettingKind.ColumnWidths:
+                    return count == 1 ? "Width of 1 column" : $"Widths of {count} columns";
+
+                case ViewSettingKind.ColumnVisibility:
+                    return count == 1 ? "Visibility of 1 column" : $"Visibility of {count} columns";
+
+                case ViewSettingKind.Sort:
+                    return "Sort";
+
+                case ViewSettingKind.Filters:
+                    return "Filters";
+
+                case ViewSettingKind.Folders:
+                    return "Folders";
+
+                default:
+                    return kind.ToString();
+            }
+        }
+
+        /// <summary>
+        /// Gets a key of the kinds and the counts of the overrides of a layer, to know if the shown list is still right.
+        /// </summary>
+        /// <param name="overrides">The layer of the overrides.</param>
+        /// <returns>Returns the key, for example <c>ColumnWidths:2;Sort:1;</c>.</returns>
+        private static string GetOverridesKey(ViewSettings overrides)
+        {
+            StringBuilder key = new StringBuilder();
+            foreach (ViewSettingKind kind in ViewSettings.AllKinds)
+            {
+                int count = overrides.GetSetCount(kind);
+                if (count > 0)
+                    key.Append($"{kind}:{count};");
+            }
+
+            return key.ToString();
         }
 
         /// <summary>
