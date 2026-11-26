@@ -100,7 +100,7 @@ namespace SideXP.Database.EditorOnly
                 return;
 
             // Always saved, since the nodes of the same tree may have changed
-            _viewSettings.Filter = filter;
+            _viewSettings.SetFilter(filter);
             UserViews.instance.ScheduleSave();
 
             ResetPage();

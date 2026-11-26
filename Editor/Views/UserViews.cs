@@ -12,8 +12,9 @@ namespace SideXP.Database.EditorOnly
     /// versioned).
     /// </summary>
     /// <remarks>
-    /// Until views are implemented, it holds the default view of each table: the settings the tool remembers for the user (see
-    /// <see cref="ViewSettings"/>).
+    /// It holds the personal views of the tables, and the view open for each table (see <see cref="PersonalViews"/>). Before the views,
+    /// it held a single view per table (the settings the tool remembered for the user): these settings are moved to a personal view
+    /// when the file is loaded (see <see cref="OnAfterDeserialize"/>).
     /// <para>
     /// Saves are grouped: <see cref="ScheduleSave"/> writes the file once no change has been made for <see cref="SaveDelay"/>, so
     /// resizing a column doesn't write it on every frame. A scheduled save is written right away before a domain reload and when the
@@ -21,7 +22,7 @@ namespace SideXP.Database.EditorOnly
     /// </para>
     /// </remarks>
     [FilePath(UserViews.RelativeFilePath, FilePathAttribute.Location.ProjectFolder)]
-    internal class UserViews : ScriptableSingleton<UserViews>
+    internal class UserViews : ScriptableSingleton<UserViews>, ISerializationCallbackReceiver
     {
 
         #region Fields
@@ -37,14 +38,23 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         private const double SaveDelay = 1;
 
+        /// <inheritdoc cref="PersonalViews"/>
+        [SerializeField]
+        private PersonalViews _personalViews = new PersonalViews();
+
         /// <summary>
-        /// The default view of each table that has been opened.
+        /// The single view of each table, saved before the views. Only read, to move them to <see cref="_personalViews"/> (see
+        /// <see cref="OnAfterDeserialize"/>).
         /// </summary>
-        /// <remarks>
-        /// A list, since Unity can't serialize dictionaries. The number of tables of a project is small enough for a linear search.
-        /// </remarks>
         [SerializeField]
         private List<ViewSettings> _defaultViews = new List<ViewSettings>();
+
+        /// <summary>
+        /// Checks if the views saved before the views have been moved to the personal views when the file was loaded, so the file must
+        /// be saved in the new format.
+        /// </summary>
+        [NonSerialized]
+        private bool _hasImportedDefaultViews = false;
 
         /// <summary>
         /// The time at which the scheduled save is written (see <see cref="EditorApplication.timeSinceStartup"/>), or a negative value
@@ -65,6 +75,13 @@ namespace SideXP.Database.EditorOnly
         {
             AssemblyReloadEvents.beforeAssemblyReload += SaveNow;
             EditorApplication.quitting += SaveNow;
+
+            // Saved in the new format, so the views moved from the settings of the first pass keep their ids
+            if (_hasImportedDefaultViews)
+            {
+                _hasImportedDefaultViews = false;
+                ScheduleSave();
+            }
         }
 
         /// <summary>
@@ -83,28 +100,12 @@ namespace SideXP.Database.EditorOnly
         #region Public API
 
         /// <summary>
-        /// Gets the default view of a table, and creates it if the table has none yet.
+        /// The personal views of the tables, and the view open for each table.
         /// </summary>
         /// <remarks>
-        /// The view is modified directly: call <see cref="ScheduleSave"/> after changing it.
+        /// The views are modified directly: call <see cref="ScheduleSave"/> after changing them.
         /// </remarks>
-        /// <param name="tableId">The stable identifier of the table (see <see cref="TableDefinition.Id"/>).</param>
-        /// <returns>Returns the default view of the table.</returns>
-        /// <exception cref="ArgumentException">Thrown if the identifier is null or empty.</exception>
-        public ViewSettings GetDefaultView(string tableId)
-        {
-            if (string.IsNullOrEmpty(tableId))
-                throw new ArgumentException("The identifier of the table can't be null or empty.", nameof(tableId));
-
-            ViewSettings view = _defaultViews.Find(item => item != null && item.TableId == tableId);
-            if (view == null)
-            {
-                view = new ViewSettings(tableId);
-                _defaultViews.Add(view);
-            }
-
-            return view;
-        }
+        public PersonalViews PersonalViews => _personalViews;
 
         /// <summary>
         /// Writes the file once no change has been made for <see cref="SaveDelay"/>. Each call postpones the save.
@@ -129,6 +130,33 @@ namespace SideXP.Database.EditorOnly
             _saveTime = -1;
             // As text, so the file can be read and merged like the other settings of the project
             Save(true);
+        }
+
+        #endregion
+
+
+        #region Serialization
+
+        /// <summary>
+        /// Called before the views are saved. Nothing to prepare: the views saved before the views are moved when the file is loaded.
+        /// </summary>
+        public void OnBeforeSerialize()
+        {
+        }
+
+        /// <summary>
+        /// Called after the views are loaded. Moves the single view of each table saved before the views to a personal view named
+        /// <see cref="PersonalViews.DefaultViewName"/>, open, so the settings of the first pass are not lost.
+        /// </summary>
+        public void OnAfterDeserialize()
+        {
+            if (_defaultViews.Count == 0)
+                return;
+
+            _personalViews ??= new PersonalViews();
+            _personalViews.ImportDefaultViews(_defaultViews);
+            _defaultViews.Clear();
+            _hasImportedDefaultViews = true;
         }
 
         #endregion

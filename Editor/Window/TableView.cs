@@ -315,7 +315,8 @@ namespace SideXP.Database.EditorOnly
 
             // The scope applies to the first load, so the assets outside of it are never loaded. The columns are then validated
             // against the first asset of the scope
-            _viewSettings = UserViews.instance.GetDefaultView(table.Id);
+            PersonalView view = UserViews.instance.PersonalViews.GetOpenView(table.Id);
+            _viewSettings = new LayeredViewSettings(new[] { view.Settings }, IsHiddenByDefault);
             _folderScope = new FolderScope(_viewSettings.Folders);
             _source = new ProjectAssetSource(table.Type) { Scope = _folderScope };
             IReadOnlyList<Object> assets = _source.LoadAssets();

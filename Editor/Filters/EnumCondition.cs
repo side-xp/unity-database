@@ -112,6 +112,14 @@ namespace SideXP.Database.EditorOnly
             };
         }
 
+        /// <inheritdoc/>
+        public override FilterNode Clone()
+        {
+            EnumCondition copy = (EnumCondition)base.Clone();
+            copy._values = new List<long>(_values);
+            return copy;
+        }
+
         #endregion
 
     }

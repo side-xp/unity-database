@@ -7,8 +7,9 @@ namespace SideXP.Database.EditorOnly
 {
 
     /// <summary>
-    /// The remembered settings of the table view: the order, the widths and the visibility of the columns, and the sort, stored as
-    /// the user's default view of the table (see <see cref="UserViews"/>).
+    /// The remembered settings of the table view: the order, the widths and the visibility of the columns, and the sort, stored in the
+    /// open view of the table (see <see cref="PersonalViews.GetOpenView"/>), resolved from its layers (see
+    /// <see cref="LayeredViewSettings"/>).
     /// </summary>
     /// <remarks>
     /// The list views have no public event for a reordered column, so the order is read from the headers after each click in the
@@ -33,9 +34,10 @@ namespace SideXP.Database.EditorOnly
         private const string ResetViewText = "Reset View";
 
         /// <summary>
-        /// The remembered settings of the displayed table, or null if no table is displayed.
+        /// The settings of the open view of the displayed table, resolved from its layers, or null if no table is displayed. The
+        /// changes are written to the open view.
         /// </summary>
-        private ViewSettings _viewSettings = null;
+        private LayeredViewSettings _viewSettings = null;
 
         /// <summary>
         /// The indices in the pipeline of the columns that are not hidden, in their display order.
@@ -202,13 +204,23 @@ namespace SideXP.Database.EditorOnly
         /// <returns>Returns the indices of the columns in the pipeline, in their display order.</returns>
         private List<int> GetColumnOrder()
         {
-            List<string> columnIds = _columns.ConvertAll(column => column.Id);
-            List<string> order = _viewSettings.GetColumnOrder(columnIds, IsHiddenByDefault);
+            List<string> columnIds = GetColumnIds();
+            List<string> order = _viewSettings.GetColumnOrder(columnIds);
             return order.ConvertAll(columnId => columnIds.IndexOf(columnId));
         }
 
         /// <summary>
-        /// Checks if a column is hidden until the user shows it: the <i>Asset Name</i> column of a table that hides it.
+        /// Gets the identifiers of all the columns of the table, hidden ones included.
+        /// </summary>
+        /// <returns>Returns the identifiers of the columns, in their default order (the order of the pipeline).</returns>
+        private List<string> GetColumnIds()
+        {
+            return _columns.ConvertAll(column => column.Id);
+        }
+
+        /// <summary>
+        /// Checks if a column is hidden until the user shows it: the <i>Asset Name</i> column of a table that hides it. Given to the
+        /// settings of the view as the default visibility of the columns.
         /// </summary>
         /// <param name="columnId">The identifier of the column.</param>
         /// <returns>Returns true if the column is hidden by default.</returns>
@@ -324,7 +336,7 @@ namespace SideXP.Database.EditorOnly
             if (order.Count != _listView.columns.Count)
                 return;
 
-            if (_viewSettings.SetColumnOrder(order))
+            if (_viewSettings.SetColumnOrder(GetColumnIds(), order))
                 UserViews.instance.ScheduleSave();
         }
 

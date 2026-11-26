@@ -91,6 +91,14 @@ namespace SideXP.Database.EditorOnly
                 : row => MatchesAll(row, compiledConditions);
         }
 
+        /// <inheritdoc/>
+        public override FilterNode Clone()
+        {
+            FilterGroup copy = (FilterGroup)base.Clone();
+            copy._nodes = _nodes.ConvertAll(node => node?.Clone());
+            return copy;
+        }
+
         #endregion
 
 

@@ -150,7 +150,8 @@ namespace SideXP.Database.EditorOnly
                 return;
 
             pageSize = Math.Max(MinPageSize, pageSize);
-            if (_viewSettings.SetPageSize(pageSize))
+            // @todo After the views: the page size becomes a user setting of the whole package, instead of a field of the open view
+            if (_viewSettings.Top.SetPageSize(pageSize))
                 UserViews.instance.ScheduleSave();
 
             if (pageSize == _pipeline.PageSize)
@@ -278,7 +279,7 @@ namespace SideXP.Database.EditorOnly
         /// <param name="pageIndex">The index of the page to show, from 0, brought back in the range of the pages by the update.</param>
         private void ApplyRememberedPagination(int pageIndex)
         {
-            int pageSize = _viewSettings.PageSize;
+            int pageSize = _viewSettings.Top.PageSize;
             _pipeline.PageSize = pageSize > 0 ? Math.Max(MinPageSize, pageSize) : DefaultPageSize;
             _pipeline.PageIndex = pageIndex;
             // The owner of the view already knows this page

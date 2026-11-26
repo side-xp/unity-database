@@ -30,6 +30,20 @@ namespace SideXP.Database.EditorOnly
         /// </returns>
         public abstract Predicate<TableRow> Compile(IReadOnlyDictionary<string, FilterColumn> columns);
 
+        /// <summary>
+        /// Gets a copy of this node, its child nodes included, so the copy can be edited without changing this node (for example in a
+        /// duplicated view).
+        /// </summary>
+        /// <remarks>
+        /// The default copy is a shallow copy of the fields: the nodes that hold lists or child nodes must override it. The assets the
+        /// conditions refer to are shared, not copied.
+        /// </remarks>
+        /// <returns>Returns the copied node.</returns>
+        public virtual FilterNode Clone()
+        {
+            return (FilterNode)MemberwiseClone();
+        }
+
         #endregion
 
     }
