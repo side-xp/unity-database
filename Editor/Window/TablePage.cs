@@ -108,6 +108,9 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         public event Action<string> SearchChanged;
 
+        /// <inheritdoc cref="TableView.PageChanged"/>
+        public event Action<int> PageChanged;
+
         #endregion
 
 
@@ -138,6 +141,7 @@ namespace SideXP.Database.EditorOnly
 
             _tableView = new TableView();
             _tableView.SearchReset += OnSearchReset;
+            _tableView.PageChanged += pageIndex => PageChanged?.Invoke(pageIndex);
 
             _searchField = new ToolbarSearchField { tooltip = SearchTooltip };
             _searchField.AddToClassList(RowSearchClass);
@@ -186,14 +190,15 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         /// <param name="table">The table to display.</param>
         /// <param name="search">The search that filters the rows, or null to show all the rows.</param>
-        public void SetTable(TableDefinition table, string search = null)
+        /// <param name="pageIndex">The page to show, from 0.</param>
+        public void SetTable(TableDefinition table, string search = null, int pageIndex = 0)
         {
             _table = table;
             _titleLabel.text = table.Name;
             _titleLabel.tooltip = table.Type.FullName;
             _obsoleteMark.SetDisplayed(table.IsObsolete);
             _searchField.SetValueWithoutNotify(search ?? string.Empty);
-            _tableView.SetTable(table, search);
+            _tableView.SetTable(table, search, pageIndex);
             _tableView.UpdateCreateButton(_createButton, CreateText);
             _viewPanel.Refresh();
         }

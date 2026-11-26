@@ -68,8 +68,8 @@ namespace SideXP.Database.EditorOnly
         /// Shows only the rows that contain each word of a search, in their asset name or in the text of their cells, ignoring case.
         /// </summary>
         /// <remarks>
-        /// The active cell is cleared if its row is hidden. Setting another table replaces the search with the one given to
-        /// <see cref="SetTable(TableDefinition, string)"/>.
+        /// The active cell is cleared if its row is hidden, and the first page is shown. Setting another table replaces the search with
+        /// the one given to <see cref="SetTable(TableDefinition, string, int)"/>.
         /// </remarks>
         /// <param name="search">The text of the search. If null or blank, all the rows are visible.</param>
         public void SetSearch(string search)
@@ -78,6 +78,7 @@ namespace SideXP.Database.EditorOnly
             if (_pipeline == null)
                 return;
 
+            ResetPage();
             ApplyRowFilter();
             Refresh();
         }

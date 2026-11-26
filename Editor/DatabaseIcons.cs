@@ -99,6 +99,26 @@ namespace SideXP.Database.EditorOnly
         public const string Remove = "x";
 
         /// <summary>
+        /// A left chevron before a bar, for the button that shows the first page of the rows.
+        /// </summary>
+        public const string FirstPage = "chevron-left-pipe";
+
+        /// <summary>
+        /// A left chevron, for the button that shows the previous page of the rows.
+        /// </summary>
+        public const string PreviousPage = "chevron-left";
+
+        /// <summary>
+        /// A right chevron, for the button that shows the next page of the rows.
+        /// </summary>
+        public const string NextPage = "chevron-right";
+
+        /// <summary>
+        /// A right chevron before a bar, for the button that shows the last page of the rows.
+        /// </summary>
+        public const string LastPage = "chevron-right-pipe";
+
+        /// <summary>
         /// An arrow pointing up, shown in the header of a column sorted in ascending order.
         /// </summary>
         public const string SortAscending = "arrow-up";

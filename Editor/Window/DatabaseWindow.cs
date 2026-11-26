@@ -16,8 +16,8 @@ namespace SideXP.Database.EditorOnly
     /// </summary>
     /// <remarks>
     /// The window shows either the list of the tables, or an open table. The open table, the search text of the list, the search
-    /// text of the open table, the selection sync option and the view panel (open or closed) are remembered across domain reloads and
-    /// editor sessions. Open it from
+    /// text and the page of the open table, the selection sync option and the view panel (open or closed) are remembered across domain
+    /// reloads and editor sessions. Open it from
     /// <c>Tools &gt; Sideways Experiments &gt; Database</c>, or from code.
     /// </remarks>
     /// <example>
@@ -55,6 +55,12 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         [SerializeField]
         private string _rowSearch = string.Empty;
+
+        /// <summary>
+        /// The index of the displayed page of the open table, from 0, reset when another table is opened.
+        /// </summary>
+        [SerializeField]
+        private int _rowPage = 0;
 
         /// <summary>
         /// Checks if the selection of the open table is synced with the selection of Unity. Disabled by default, since it changes the
@@ -109,6 +115,7 @@ namespace SideXP.Database.EditorOnly
             _tablePage = new TablePage();
             _tablePage.BackClicked += ShowTableList;
             _tablePage.SearchChanged += search => _rowSearch = search;
+            _tablePage.PageChanged += pageIndex => _rowPage = pageIndex;
             _tablePage.SetSelectionSynced(_isSelectionSynced);
             _tablePage.SelectionSyncChanged += isSynced => _isSelectionSynced = isSynced;
             _tablePage.SetViewPanelOpen(_isViewPanelOpen);
@@ -195,9 +202,12 @@ namespace SideXP.Database.EditorOnly
         /// <param name="table">The table to open.</param>
         private void OpenTable(TableDefinition table)
         {
-            // The search of a table means nothing for another one
+            // The search and the page of a table mean nothing for another one
             if (table.Id != _openTableId)
+            {
                 _rowSearch = string.Empty;
+                _rowPage = 0;
+            }
 
             _openTableId = table.Id;
             RefreshPage();
@@ -228,7 +238,7 @@ namespace SideXP.Database.EditorOnly
             bool isTableOpen = TableRegistry.TryGet(_openTableId, out TableDefinition table);
             if (isTableOpen)
             {
-                _tablePage.SetTable(table, _rowSearch);
+                _tablePage.SetTable(table, _rowSearch, _rowPage);
             }
             else
             {

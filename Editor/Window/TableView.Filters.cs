@@ -90,7 +90,7 @@ namespace SideXP.Database.EditorOnly
         /// <remarks>
         /// The conditions on columns that don't exist, or whose values are of a type they don't support, are ignored. The filter is
         /// compiled when it's set: call this method again after changing the nodes of the tree, which also saves the settings. The
-        /// active cell is cleared if its row is hidden.
+        /// active cell is cleared if its row is hidden, and the first page is shown.
         /// </remarks>
         /// <param name="filter">The root of the filter tree, or null to show all the rows that match the search.</param>
         public void SetRowFilter(FilterNode filter)
@@ -103,6 +103,7 @@ namespace SideXP.Database.EditorOnly
             _viewSettings.Filter = filter;
             UserViews.instance.ScheduleSave();
 
+            ResetPage();
             CompileFilter();
             ApplyRowFilter();
             UpdateFilterIcons();
@@ -133,7 +134,7 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         /// <remarks>
         /// The folders that don't exist are ignored: if none of them exists, the table has no row. The active cell and the selected
-        /// cells of the assets that leave the table are cleared.
+        /// cells of the assets that leave the table are cleared, and the first page is shown.
         /// </remarks>
         /// <param name="folders">The paths of the folders, relative to the project (for example <c>Assets/Items</c>), or null or empty
         /// for the whole project.</param>
@@ -146,6 +147,7 @@ namespace SideXP.Database.EditorOnly
             if (_viewSettings.SetFolders(_folderScope.Folders))
                 UserViews.instance.ScheduleSave();
 
+            ResetPage();
             ApplyFolderScope();
             _pipeline.InvalidateSource();
             Refresh();

@@ -7,12 +7,16 @@ namespace SideXP.Database.EditorOnly
 {
 
     /// <summary>
-    /// Computes the rows of a table through separate stages: source, value cache, filter and sort.
+    /// Computes the rows of a table through separate stages: source, value cache, filter, sort and paginate.
     /// </summary>
     /// <remarks>
     /// Each stage only reruns when its input changes: invalidating the source reloads the assets and reads all the values again,
-    /// invalidating a row reads its values again, and both rerun the filter and the sort. Changing the filter reruns the filter and the
-    /// sort, changing the sort only reruns the sort. Invalidations are deferred: call <see cref="Update"/> to apply them.
+    /// invalidating a row reads its values again, and both rerun the filter, the sort and the paginate stage. Changing the filter
+    /// reruns the filter and the next stages, changing the sort reruns the sort and the paginate stage, changing the page or its size
+    /// only reruns the paginate stage. Invalidations are deferred: call <see cref="Update"/> to apply them.
+    /// <para>
+    /// The pages only split the visible rows for the display: <see cref="VisibleRows"/> always holds the rows of all the pages.
+    /// </para>
     /// </remarks>
     internal class TablePipeline
     {
@@ -56,6 +60,27 @@ namespace SideXP.Database.EditorOnly
         private List<SortKey> _sortKeys = new List<SortKey>();
 
         /// <summary>
+        /// The number of rows per page, or 0 to show all the visible rows on a single page.
+        /// </summary>
+        private int _pageSize = 0;
+
+        /// <summary>
+        /// The index of the displayed page, from 0. Kept in the range of the pages when the paginate stage reruns.
+        /// </summary>
+        private int _pageIndex = 0;
+
+        /// <summary>
+        /// The visible rows of the displayed page, in the order of the sort. All the visible rows if the rows are not paginated.
+        /// </summary>
+        private List<TableRow> _pageRows = new List<TableRow>();
+
+        /// <summary>
+        /// The index in <see cref="VisibleRows"/> of the first row of <see cref="PageRows"/>, as of the last update. Kept apart from
+        /// the page index, which can be set before the next update.
+        /// </summary>
+        private int _pageStartIndex = 0;
+
+        /// <summary>
         /// The number of times the source has been loaded, so the users of the pipeline can tell when its rows have been replaced.
         /// </summary>
         private int _sourceVersion = 0;
@@ -79,6 +104,11 @@ namespace SideXP.Database.EditorOnly
         /// Checks if the visible rows match the sort.
         /// </summary>
         private bool _isSortValid = false;
+
+        /// <summary>
+        /// Checks if the rows of the page match the visible rows, the page and its size.
+        /// </summary>
+        private bool _isPageValid = false;
 
         #endregion
 
@@ -127,6 +157,77 @@ namespace SideXP.Database.EditorOnly
                 _filter = value;
                 InvalidateFilter();
             }
+        }
+
+        /// <inheritdoc cref="_pageRows"/>
+        public IReadOnlyList<TableRow> PageRows => _pageRows;
+
+        /// <summary>
+        /// The number of rows per page, or 0 to show all the visible rows on a single page. A negative size is read as 0. Setting it
+        /// invalidates the page.
+        /// </summary>
+        /// <remarks>
+        /// The page keeps its index when the size changes, and is brought back in the range of the pages on the next update.
+        /// </remarks>
+        public int PageSize
+        {
+            get => _pageSize;
+            set
+            {
+                int pageSize = Math.Max(0, value);
+                if (pageSize == _pageSize)
+                    return;
+
+                _pageSize = pageSize;
+                _isPageValid = false;
+            }
+        }
+
+        /// <summary>
+        /// Checks if the visible rows are split into pages.
+        /// </summary>
+        public bool IsPaginated => _pageSize > 0;
+
+        /// <summary>
+        /// The index of the displayed page, from 0. Setting it invalidates the page.
+        /// </summary>
+        /// <remarks>
+        /// An index out of the range of the pages is accepted, and brought back in the range on the next update: the last page for an
+        /// index too large, the first page for a negative index.
+        /// </remarks>
+        public int PageIndex
+        {
+            get => _pageIndex;
+            set
+            {
+                if (value == _pageIndex)
+                    return;
+
+                _pageIndex = value;
+                _isPageValid = false;
+            }
+        }
+
+        /// <summary>
+        /// Gets the number of pages of the visible rows: 1 if the rows are not paginated, or if no row is visible.
+        /// </summary>
+        public int PageCount => GetPageCount(_visibleRows.Count, _pageSize);
+
+        /// <inheritdoc cref="_pageStartIndex"/>
+        public int PageStartIndex => _pageStartIndex;
+
+        /// <summary>
+        /// Gets the page that displays a row: its position in the visible rows of the last update, with the current page size.
+        /// </summary>
+        /// <param name="row">The row to find.</param>
+        /// <returns>Returns the index of the page, from 0, or -1 if the row is not visible.</returns>
+        public int GetPageOf(TableRow row)
+        {
+            int index = row != null ? _visibleRows.IndexOf(row) : -1;
+            if (index < 0)
+                return -1;
+
+            return IsPaginated ? index / _pageSize : 0;
         }
 
         /// <summary>
@@ -259,6 +360,12 @@ namespace SideXP.Database.EditorOnly
                 hasChanged = true;
             }
 
+            if (!_isPageValid)
+            {
+                ApplyPage();
+                hasChanged = true;
+            }
+
             return hasChanged;
         }
 
@@ -354,6 +461,44 @@ namespace SideXP.Database.EditorOnly
             });
 
             _isSortValid = true;
+            _isPageValid = false;
+        }
+
+        /// <summary>
+        /// Brings the page back in the range of the pages, and selects the visible rows of the page.
+        /// </summary>
+        private void ApplyPage()
+        {
+            _pageIndex = Math.Max(0, Math.Min(_pageIndex, PageCount - 1));
+            _pageStartIndex = _pageIndex * _pageSize;
+            _pageRows.Clear();
+            if (IsPaginated)
+            {
+                int count = Math.Min(_pageSize, _visibleRows.Count - _pageStartIndex);
+                if (count > 0)
+                    _pageRows.AddRange(_visibleRows.GetRange(_pageStartIndex, count));
+            }
+            else
+            {
+                _pageRows.AddRange(_visibleRows);
+            }
+
+            _isPageValid = true;
+        }
+
+        /// <summary>
+        /// Gets the number of pages of some rows.
+        /// </summary>
+        /// <param name="rowCount">The number of rows.</param>
+        /// <param name="pageSize">The number of rows per page, or 0 or less to show all the rows on a single page.</param>
+        /// <returns>Returns the number of pages, at least 1, so a table without visible row still has an (empty) page.</returns>
+        private static int GetPageCount(int rowCount, int pageSize)
+        {
+            if (pageSize <= 0 || rowCount <= 0)
+                return 1;
+
+            // Rounded up, so the last rows get a page even if it's not full
+            return ((rowCount - 1) / pageSize) + 1;
         }
 
         #endregion

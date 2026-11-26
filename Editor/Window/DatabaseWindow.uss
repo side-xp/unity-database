@@ -557,21 +557,77 @@
     padding-right: 0;
 }
 
-/* A translucent border works with both the light and the dark editor themes */
+/* A translucent border works with both the light and the dark editor themes. Tall enough for the page controls and the page size
+   field, which keep the height of Unity's fields */
 .database-status-bar {
     flex-direction: row;
     align-items: center;
     flex-shrink: 0;
-    height: 20px;
+    height: 22px;
     padding-left: 6px;
     padding-right: 6px;
     border-top-width: 1px;
     border-top-color: rgba(0, 0, 0, 0.3);
 }
 
+/* Shrinks with an ellipsis before the page controls in a narrow window */
 .database-status-bar__label {
     -unity-text-align: middle-left;
     opacity: 0.8;
+    flex-shrink: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Pushes the page controls and the page size to the right */
+.database-status-bar__spacer {
+    flex-grow: 1;
+}
+
+/* The page controls (TableView.Pagination) */
+.database-status-bar__pages {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-left: 6px;
+}
+
+.database-status-bar__page-button {
+    padding-left: 1px;
+    padding-right: 1px;
+    margin-left: 1px;
+    margin-right: 1px;
+    cursor: link;
+}
+
+.database-status-bar__page-button > .sxp-icon {
+    --sxp-icon-size: 14;
+}
+
+.database-status-bar__page-text {
+    -unity-text-align: middle-left;
+    opacity: 0.8;
+    padding-left: 3px;
+    padding-right: 3px;
+}
+
+/* Room for four digits, the number of a page of a large table, or a page size */
+.database-status-bar__page-field,
+.database-status-bar__page-size {
+    width: 40px;
+    flex-shrink: 0;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.database-status-bar__page-field > .unity-base-field__input,
+.database-status-bar__page-size > .unity-base-field__input {
+    -unity-text-align: middle-center;
+}
+
+/* Apart from the page controls, since it's a setting of the view rather than a way to browse the pages */
+.database-status-bar__page-size {
+    margin-left: 8px;
 }
 
 /* The toolbar of both pages. Taller than Unity's toolbars, so its items get some room around them */

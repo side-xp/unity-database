@@ -517,7 +517,8 @@ namespace SideXP.Database.EditorOnly
         /// Shows the number of a row in its handle, and gives the handle the width of the largest number.
         /// </summary>
         /// <param name="container">The container created by <see cref="WrapWithRowHandle(VisualElement)"/>.</param>
-        /// <param name="rowIndex">The index of the row in the visible rows.</param>
+        /// <param name="rowIndex">The index of the row in the visible rows of all the pages, so the numbers continue across the pages.
+        /// </param>
         private void BindRowHandle(VisualElement container, int rowIndex)
         {
             VisualElement handle = container[0];

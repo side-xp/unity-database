@@ -8,7 +8,7 @@ namespace SideXP.Database.EditorOnly
 
     /// <summary>
     /// The display settings of a table, remembered for the user: column order, widths, hidden columns, the sort on one or several
-    /// columns, the filters and the folder scope.
+    /// columns, the filters, the folder scope and the page size.
     /// </summary>
     /// <remarks>
     /// The tool stores one per table, as the user's default view of the table (see <see cref="UserViews"/>), so it becomes a regular
@@ -71,6 +71,12 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         [SerializeField]
         private List<string> _folders = new List<string>();
+
+        /// <summary>
+        /// The number of rows per page, or 0 if the user hasn't chosen one yet: the table view then uses its default size.
+        /// </summary>
+        [SerializeField]
+        private int _pageSize = 0;
 
         #endregion
 
@@ -234,7 +240,8 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         /// <remarks>
         /// The filters and the folder scope are kept: they are cleared on their own (see <see cref="Filter"/> and
-        /// <see cref="SetFolders"/>), so resetting the columns doesn't lose a filter built by hand.
+        /// <see cref="SetFolders"/>), so resetting the columns doesn't lose a filter built by hand. The page size is kept too, since
+        /// it's not a setting of the columns (see <see cref="SetPageSize"/>).
         /// </remarks>
         /// <returns>Returns true if there were settings to remove.</returns>
         public bool Reset()
@@ -345,6 +352,32 @@ namespace SideXP.Database.EditorOnly
                 return false;
 
             _folders = newFolders;
+            return true;
+        }
+
+        /// <summary>
+        /// Gets the number of rows per page, or 0 if the user hasn't chosen one yet. A negative size (from a file edited by hand) is
+        /// read as 0.
+        /// </summary>
+        /// <remarks>
+        /// The settings don't check the minimum size: the table view applies its own limits (see
+        /// <see cref="TableView.SetPageSize(int)"/>).
+        /// </remarks>
+        public int PageSize => Mathf.Max(0, _pageSize);
+
+        /// <summary>
+        /// Sets the number of rows per page.
+        /// </summary>
+        /// <param name="pageSize">The number of rows per page, or 0 or less to forget the chosen size, so the table view uses its default
+        /// size.</param>
+        /// <returns>Returns true if the page size has changed.</returns>
+        public bool SetPageSize(int pageSize)
+        {
+            pageSize = Mathf.Max(0, pageSize);
+            if (pageSize == PageSize)
+                return false;
+
+            _pageSize = pageSize;
             return true;
         }
 

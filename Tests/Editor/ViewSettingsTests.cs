@@ -10,8 +10,8 @@ namespace SideXP.Database.Tests
 {
 
     /// <summary>
-    /// Tests for the remembered settings of the tables (<see cref="ViewSettings"/>): column order, widths, visibility and sort on one
-    /// or several columns.
+    /// Tests for the remembered settings of the tables (<see cref="ViewSettings"/>): column order, widths, visibility, sort on one or
+    /// several columns, filters, folders and page size.
     /// </summary>
     public class ViewSettingsTests
     {
@@ -20,6 +20,7 @@ namespace SideXP.Database.Tests
 
         private const string TableId = "Tests.TableId";
         private const float ResizedWidth = 150;
+        private const int PageSize = 50;
 
         #endregion
 
@@ -261,6 +262,82 @@ namespace SideXP.Database.Tests
             Assert.IsFalse(settings.Reset());
             Assert.AreSame(filter, settings.Filter);
             CollectionAssert.AreEqual(new[] { "Assets/Items" }, settings.Folders);
+        }
+
+        /// <summary>
+        /// Resetting keeps the page size, which is not a setting of the columns.
+        /// </summary>
+        [Test]
+        public void Reset_PageSize_Kept()
+        {
+            ViewSettings settings = new ViewSettings(TableId);
+            settings.SetPageSize(PageSize);
+
+            Assert.IsFalse(settings.Reset());
+            Assert.AreEqual(PageSize, settings.PageSize);
+        }
+
+        #endregion
+
+
+        #region Pages
+
+        /// <summary>
+        /// No page size is chosen by default, the page size is remembered, setting the same size again changes nothing, and 0 forgets
+        /// the chosen size.
+        /// </summary>
+        [Test]
+        public void SetPageSize_Size_Remembered()
+        {
+            ViewSettings settings = new ViewSettings(TableId);
+            Assert.AreEqual(0, settings.PageSize);
+
+            Assert.IsTrue(settings.SetPageSize(PageSize));
+            Assert.IsFalse(settings.SetPageSize(PageSize));
+            Assert.AreEqual(PageSize, settings.PageSize);
+
+            Assert.IsTrue(settings.SetPageSize(0));
+            Assert.AreEqual(0, settings.PageSize);
+        }
+
+        /// <summary>
+        /// A negative page size is stored as no chosen size.
+        /// </summary>
+        [Test]
+        public void SetPageSize_Negative_NoChosenSize()
+        {
+            ViewSettings settings = new ViewSettings(TableId);
+            settings.SetPageSize(PageSize);
+
+            Assert.IsTrue(settings.SetPageSize(-1));
+            Assert.AreEqual(0, settings.PageSize);
+            Assert.IsFalse(settings.SetPageSize(-1));
+        }
+
+        /// <summary>
+        /// The page size survives Unity's serialization, which <see cref="UserViews"/> uses to store it.
+        /// </summary>
+        [Test]
+        public void Serialization_PageSize_Kept()
+        {
+            ViewSettingsTestSO holder = ScriptableObject.CreateInstance<ViewSettingsTestSO>();
+            ViewSettingsTestSO copy = null;
+            try
+            {
+                holder.settings = new ViewSettings(TableId);
+                holder.settings.SetPageSize(PageSize);
+
+                // Instantiating copies the object through its serialized data
+                copy = Object.Instantiate(holder);
+
+                Assert.AreEqual(PageSize, copy.settings.PageSize);
+            }
+            finally
+            {
+                Object.DestroyImmediate(holder);
+                if (copy != null)
+                    Object.DestroyImmediate(copy);
+            }
         }
 
         #endregion

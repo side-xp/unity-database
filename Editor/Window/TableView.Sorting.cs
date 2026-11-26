@@ -156,7 +156,7 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Sorts the rows by the given columns, shows the sort in the headers, remembers it and refreshes the view.
+        /// Sorts the rows by the given columns, shows the sort in the headers, remembers it and refreshes the view, on the first page.
         /// </summary>
         /// <param name="sort">The columns used to sort the rows, by priority. If empty, the rows are in the order of the source.</param>
         private void ChangeSort(IReadOnlyList<ColumnSort> sort)
@@ -164,6 +164,8 @@ namespace SideXP.Database.EditorOnly
             if (_pipeline == null)
                 return;
 
+            // The rows of the displayed page are other rows once sorted again
+            ResetPage();
             SetPipelineSort(sort);
             ShowSortInHeaders();
             UpdateSortIcons();

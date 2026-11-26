@@ -156,11 +156,20 @@ namespace SideXP.Database.EditorOnly
         /// <summary>
         /// Called when a cell of the frozen column changes size, for example when the column is resized.
         /// </summary>
+        /// <remarks>
+        /// The list view hides the elements of the rows it doesn't need, for example when it's scrolled to its last row, and a hidden
+        /// element has no width. That width is ignored: it's not the width of the column, and the visible cells, whose size doesn't
+        /// change, would never give the width back to the frozen list.
+        /// </remarks>
         /// <param name="evt">The emitted event.</param>
         private void OnCellGeometryChanged(GeometryChangedEvent evt)
         {
-            if (evt.currentTarget is VisualElement cell && cell.parent != null)
-                SetColumnWidth(cell.parent.layout.width);
+            if (evt.currentTarget is not VisualElement cell || cell.parent == null)
+                return;
+
+            float width = cell.parent.layout.width;
+            if (!float.IsNaN(width) && width > 0)
+                SetColumnWidth(width);
         }
 
         #endregion

@@ -25,6 +25,10 @@ namespace SideXP.Database.EditorOnly
     /// <para>
     /// The order of the columns, their widths and the sort are remembered for each table (see <see cref="ViewSettings"/>).
     /// </para>
+    /// <para>
+    /// The rows are displayed in pages: the list views display the rows of the page only, while the selection and its operations use
+    /// all the visible rows (see <see cref="SetPageSize(int)"/>).
+    /// </para>
     /// </remarks>
     internal partial class TableView : VisualElement
     {
@@ -121,7 +125,8 @@ namespace SideXP.Database.EditorOnly
         private List<TableViewColumn> _columns = new List<TableViewColumn>();
 
         /// <summary>
-        /// The visible rows of the pipeline, copied after each update, used as the source of the list view.
+        /// The visible rows of the pipeline, of all the pages, copied after each update. The selection is built on them. The list views
+        /// display the rows of the page only (see <see cref="_pageRows"/>).
         /// </summary>
         private List<TableRow> _rows = new List<TableRow>();
 
@@ -233,6 +238,7 @@ namespace SideXP.Database.EditorOnly
             _statusLabel = new Label();
             _statusLabel.AddToClassList(StatusLabelClass);
             statusBar.Add(_statusLabel);
+            CreatePageControls(statusBar);
             Add(statusBar);
 
             RegisterCallback<AttachToPanelEvent>(OnAttachToPanel);
@@ -289,12 +295,14 @@ namespace SideXP.Database.EditorOnly
 
         /// <summary>
         /// Displays a table: loads its assets, and builds its columns and its pipeline, with the remembered order, widths, hidden
-        /// columns, sort, filters and folder scope of the table.
+        /// columns, sort, filters, folder scope and page size of the table.
         /// </summary>
         /// <param name="table">The table to display.</param>
         /// <param name="search">The search that filters the rows (see <see cref="SetSearch(string)"/>), or null to show all the rows.
         /// </param>
-        public void SetTable(TableDefinition table, string search = null)
+        /// <param name="pageIndex">The page to show, from 0 (see <see cref="SetPage(int)"/>), for example the page shown before a
+        /// domain reload. An index out of the range of the pages shows the first or the last page.</param>
+        public void SetTable(TableDefinition table, string search = null, int pageIndex = 0)
         {
             // Leaving a table confirms its edit, like clicking outside of the edited cell
             EndEdit(true, false);
@@ -325,6 +333,7 @@ namespace SideXP.Database.EditorOnly
             CompileFilter();
             ApplyRowFilter();
             ApplyRememberedSort();
+            ApplyRememberedPagination(pageIndex);
 
             _changeTracker = new TableChangeTracker(table.Type, _pipeline);
             _changeTracker.Changed += ScheduleRefresh;
@@ -357,6 +366,8 @@ namespace SideXP.Database.EditorOnly
             _displayedColumns = new List<int>();
             _isColumnDisplayed = Array.Empty<bool>();
             _rows.Clear();
+            _pageRows.Clear();
+            _notifiedPageIndex = 0;
             ClearSelection();
             _hoveredRow = null;
             _noMatchLabel = null;
@@ -389,8 +400,8 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Shows the row of an asset: clears the search if it hides the row, selects a cell of the asset and makes it the active cell
-        /// (see <see cref="GetShownAssetColumnId"/>), scrolls to its row, and focuses the view.
+        /// Shows the row of an asset: clears the search if it hides the row, opens the page of the row, selects a cell of the asset and
+        /// makes it the active cell (see <see cref="GetShownAssetColumnId"/>), scrolls to its row, and focuses the view.
         /// </summary>
         /// <remarks>
         /// The asset must already be in the table: call <see cref="Reload"/> first if it has just been created. Works on a table that
@@ -419,6 +430,8 @@ namespace SideXP.Database.EditorOnly
 
             // The user just asked for that asset: it must not stay hidden by the search
             ResetSearchIfHidden(asset);
+            // After the search, which goes back to the first page when it's cleared
+            ShowPageOf(row);
 
             SelectCell(new CellId(asset, GetShownAssetColumnId()));
             ScrollToAsset(asset);
@@ -458,6 +471,8 @@ namespace SideXP.Database.EditorOnly
                 _changeTracker.UpdateIndex();
                 _rows.Clear();
                 _rows.AddRange(_pipeline.VisibleRows);
+                _pageRows.Clear();
+                _pageRows.AddRange(_pipeline.PageRows);
                 // Before the list views bind their rows again, so the handles get the width of the new largest number
                 UpdateRowHandleWidth();
 
@@ -482,6 +497,7 @@ namespace SideXP.Database.EditorOnly
                 _noMatchLabel.text = GetNoMatchMessage();
 
             _statusLabel.text = GetStatusText();
+            UpdatePageControls();
         }
 
         #endregion
@@ -581,14 +597,14 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Creates a list view that displays the rows, without columns.
+        /// Creates a list view that displays the rows of the page, without columns.
         /// </summary>
         /// <returns>Returns the created list view.</returns>
         private MultiColumnListView CreateListView()
         {
             MultiColumnListView listView = new MultiColumnListView
             {
-                itemsSource = _rows,
+                itemsSource = _pageRows,
                 fixedItemHeight = RowHeight,
                 selectionType = SelectionType.None,
                 // The header only reports the sort: the pipeline sorts the rows
@@ -634,9 +650,10 @@ namespace SideXP.Database.EditorOnly
                 },
                 bindCell = (element, rowIndex) =>
                 {
-                    BindCell(GetCellElement(element), column, columnIndex, _rows[rowIndex]);
+                    // The index of the item is its index in the page
+                    BindCell(GetCellElement(element), column, columnIndex, _pageRows[rowIndex]);
                     if (hasRowHandle)
-                        BindRowHandle(element, rowIndex);
+                        BindRowHandle(element, _pipeline.PageStartIndex + rowIndex);
                 },
                 unbindCell = (element, rowIndex) => UnbindCell(GetCellElement(element)),
             };
@@ -932,7 +949,7 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Scrolls the table so the row of an asset is visible. Does nothing if the asset has no visible row.
+        /// Scrolls the table so the row of an asset is visible. Does nothing if the asset has no row on the displayed page.
         /// </summary>
         /// <remarks>
         /// Only the main list is scrolled: the frozen list follows it (see <see cref="FrozenColumnLink"/>).
@@ -943,7 +960,7 @@ namespace SideXP.Database.EditorOnly
             if (_pipeline == null || _listView == null || !_pipeline.TryGetRow(asset, out TableRow row))
                 return;
 
-            int index = _rows.IndexOf(row);
+            int index = _pageRows.IndexOf(row);
             if (index < 0)
                 return;
 
@@ -951,7 +968,7 @@ namespace SideXP.Database.EditorOnly
             Action scrollToRow = () =>
             {
                 // The list may have been rebuilt, or the rows may have changed in the meantime
-                if (_listView == listView && index < _rows.Count && _rows[index] == row)
+                if (_listView == listView && index < _pageRows.Count && _pageRows[index] == row)
                     _listView.ScrollToItem(index);
             };
 
