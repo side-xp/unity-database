@@ -31,7 +31,12 @@ namespace SideXP.Database.EditorOnly
         private const string WidthPropertyName = nameof(Column.width);
 
         private const string ShowAllColumnsText = "Show All Columns";
-        private const string ResetViewText = "Reset View";
+
+        /// <summary>
+        /// The text of the items that reset the open view (see <see cref="ResetView"/>), in the menu of the headers and in the menu of
+        /// the views.
+        /// </summary>
+        public const string ResetViewText = "Reset View";
 
         /// <summary>
         /// The settings of the open view of the displayed table, resolved from its layers, or null if no table is displayed. The
@@ -130,10 +135,14 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Gives the columns their default order, widths and visibility, and removes the sort.
+        /// Gives the columns their default order, widths and visibility, and removes the sort, in the open view (see
+        /// <see cref="LayeredViewSettings.Reset"/>). The filters and the folder scope are kept.
         /// </summary>
-        private void ResetView()
+        public void ResetView()
         {
+            if (_viewSettings == null)
+                return;
+
             _viewSettings.Reset();
             ApplyColumnChanges();
         }

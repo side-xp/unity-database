@@ -64,6 +64,16 @@ namespace SideXP.Database.EditorOnly
         public const string ViewPanel = "layout-sidebar-right";
 
         /// <summary>
+        /// An eye, for the button that shows the name of the open view and the menu of the views.
+        /// </summary>
+        public const string View = "eye";
+
+        /// <summary>
+        /// A chevron pointing down, after the name of the open view, to show that the button opens a menu.
+        /// </summary>
+        public const string MenuArrow = "chevron-down";
+
+        /// <summary>
         /// A funnel, shown in the header of a column that the filters use.
         /// </summary>
         public const string Filter = "filter";

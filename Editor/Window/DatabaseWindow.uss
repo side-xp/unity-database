@@ -701,6 +701,34 @@
     margin-left: 4px;
 }
 
+/* The button of the views, right of the search field (TablePage). It shrinks with the search field, and a long view name ends with
+   an ellipsis */
+.database-toolbar > .database-toolbar__view {
+    flex-shrink: 1;
+    min-width: 60px;
+}
+
+.database-toolbar__view > .database-icon-button__label {
+    flex-shrink: 1;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Smaller than the icon of the view, like the arrows of Unity's dropdowns */
+.database-toolbar__view > .database-toolbar__view-arrow {
+    --sxp-icon-size: 12;
+    flex-shrink: 0;
+    margin-left: 2px;
+    opacity: 0.7;
+}
+
+/* The name field of the View section of the view panel (ViewPanel) */
+.database-view-panel__view-name {
+    margin-left: 0;
+    margin-right: 0;
+}
+
 .database-table-list {
     flex-grow: 1;
 }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 using UnityEngine.UIElements;
@@ -6,16 +7,14 @@ namespace SideXP.Database.EditorOnly
 {
 
     /// <summary>
-    /// The panel of the view, on the right of the table: the settings of the view that don't fit in the headers, by section. For now,
-    /// the folder scope (see <see cref="FolderScopeEditor"/>), then the filters (see <see cref="FilterEditor"/>).
+    /// The panel of the view, on the right of the table: the settings of the open view that don't fit in the headers, by section. The
+    /// name of the view, the folder scope (see <see cref="FolderScopeEditor"/>), then the filters (see <see cref="FilterEditor"/>).
     /// </summary>
     /// <remarks>
     /// The panel stays open while the user edits and sees the result, unlike a popup, which would close when another window takes the
     /// focus (for example Unity's object picker). Each change is applied to the table right away, and remembered with the settings of
-    /// the table (see <see cref="TableView.SetRowFilter(FilterNode)"/> and <see cref="TableView.SetFolderScope"/>).
-    /// <para>
-    /// @todo Step 23: the section of the views.
-    /// </para>
+    /// the table (see <see cref="TableView.SetRowFilter(FilterNode)"/> and <see cref="TableView.SetFolderScope"/>). The name of the view
+    /// is renamed by the owner of the panel (see <see cref="ViewRenamed"/>), which also handles the other operations on the views.
     /// </remarks>
     internal class ViewPanel : VisualElement
     {
@@ -28,7 +27,11 @@ namespace SideXP.Database.EditorOnly
         private const string SectionHeaderClass = "database-view-panel__section-header";
         private const string SectionTitleClass = "database-view-panel__section-title";
         private const string SectionButtonClass = "database-view-panel__section-button";
+        private const string ViewNameClass = "database-view-panel__view-name";
 
+        private const string ViewTitle = "View";
+        private const string ViewNameTooltip = "The name of the view, unique among the views of the table. Applied with Enter, or when " +
+            "the field loses the focus. A name taken by another view gets a number.";
         private const string FiltersTitle = "Filters";
         private const string ClearFiltersText = "Clear";
         private const string ClearFiltersTooltip = "Removes all the conditions, so the filters show all the rows again.";
@@ -64,6 +67,17 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         private Button _clearFoldersButton = null;
 
+        /// <summary>
+        /// The field that shows and renames the open view.
+        /// </summary>
+        private TextField _viewNameField = null;
+
+        /// <summary>
+        /// Called when the user confirms a new name for the open view, with the typed name. The owner renames the view, then shows
+        /// its actual name with <see cref="SetViewName"/>.
+        /// </summary>
+        public event Action<string> ViewRenamed;
+
         #endregion
 
 
@@ -79,6 +93,13 @@ namespace SideXP.Database.EditorOnly
             ScrollView content = new ScrollView(ScrollViewMode.Vertical);
             content.AddToClassList(ContentClass);
             Add(content);
+
+            // Delayed, so the view is renamed once, not on each typed character (a taken name would get a number on the way)
+            _viewNameField = new TextField { isDelayed = true, tooltip = ViewNameTooltip };
+            _viewNameField.AddToClassList(ViewNameClass);
+            _viewNameField.RegisterValueChangedCallback(evt => ViewRenamed?.Invoke(evt.newValue));
+            VisualElement viewSection = CreateSection(content, ViewTitle);
+            viewSection.Add(_viewNameField);
 
             // The folders first: they limit the assets of the table, which the filters then filter
             _folderScopeEditor = new FolderScopeEditor();
@@ -121,6 +142,28 @@ namespace SideXP.Database.EditorOnly
 
             _folderScopeEditor.SetFolders(_tableView.FolderScope.Folders);
             UpdateClearFoldersButton();
+        }
+
+        /// <summary>
+        /// Shows the name of the open view, without notifying <see cref="ViewRenamed"/>.
+        /// </summary>
+        /// <param name="name">The name of the open view.</param>
+        public void SetViewName(string name)
+        {
+            _viewNameField.SetValueWithoutNotify(name);
+        }
+
+        /// <summary>
+        /// Gives the focus to the name of the open view, with its text selected, so the user can type a new name.
+        /// </summary>
+        public void FocusViewName()
+        {
+            // On the next frame, since the panel may have just been displayed and the field can't take the focus before its layout
+            schedule.Execute(() =>
+            {
+                _viewNameField.Focus();
+                _viewNameField.SelectAll();
+            });
         }
 
         /// <summary>
