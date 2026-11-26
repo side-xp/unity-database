@@ -197,6 +197,173 @@ namespace SideXP.Database.EditorOnly
         #endregion
 
 
+        #region Kinds of settings
+
+        /// <summary>
+        /// All the kinds of settings of a view, in the order they are listed.
+        /// </summary>
+        public static readonly ViewSettingKind[] AllKinds =
+        {
+            ViewSettingKind.ColumnOrder,
+            ViewSettingKind.ColumnWidths,
+            ViewSettingKind.ColumnVisibility,
+            ViewSettingKind.Sort,
+            ViewSettingKind.Filters,
+            ViewSettingKind.Folders,
+        };
+
+        /// <summary>
+        /// Checks if the layer sets a kind of setting.
+        /// </summary>
+        /// <param name="kind">The kind of setting to check.</param>
+        /// <returns>Returns true if the layer sets it, for at least one column for the widths and the visibility.</returns>
+        public bool IsSet(ViewSettingKind kind)
+        {
+            return GetSetCount(kind) > 0;
+        }
+
+        /// <summary>
+        /// Gets how many times the layer sets a kind of setting.
+        /// </summary>
+        /// <param name="kind">The kind of setting to count.</param>
+        /// <returns>Returns the number of columns whose width or visibility the layer sets, or 1 if the layer sets another kind of
+        /// setting, or 0.</returns>
+        public int GetSetCount(ViewSettingKind kind)
+        {
+            switch (kind)
+            {
+                case ViewSettingKind.ColumnOrder:
+                    return IsColumnOrderSet ? 1 : 0;
+
+                case ViewSettingKind.ColumnWidths:
+                    return GetColumnsWithSettings().FindAll(columnId => GetWidth(columnId) > 0).Count;
+
+                case ViewSettingKind.ColumnVisibility:
+                    return GetColumnsWithSettings().FindAll(columnId => GetVisibility(columnId) != ColumnVisibility.Unset).Count;
+
+                case ViewSettingKind.Sort:
+                    return _isSortSet ? 1 : 0;
+
+                case ViewSettingKind.Filters:
+                    return _isFilterSet ? 1 : 0;
+
+                case ViewSettingKind.Folders:
+                    return _areFoldersSet ? 1 : 0;
+
+                default:
+                    return 0;
+            }
+        }
+
+        /// <summary>
+        /// Unsets a kind of setting, so it comes from the layer below: the widths and the visibility of all the columns at once.
+        /// </summary>
+        /// <param name="kind">The kind of setting to unset.</param>
+        /// <returns>Returns true if the layer did set it.</returns>
+        public bool Unset(ViewSettingKind kind)
+        {
+            switch (kind)
+            {
+                case ViewSettingKind.ColumnOrder:
+                    return SetColumnOrder(null);
+
+                case ViewSettingKind.ColumnWidths:
+                {
+                    bool hasChanged = false;
+                    foreach (string columnId in GetColumnsWithSettings())
+                        hasChanged |= SetWidth(columnId, 0);
+
+                    return hasChanged;
+                }
+
+                case ViewSettingKind.ColumnVisibility:
+                {
+                    bool hasChanged = false;
+                    foreach (string columnId in GetColumnsWithSettings())
+                        hasChanged |= SetVisibility(columnId, ColumnVisibility.Unset);
+
+                    return hasChanged;
+                }
+
+                case ViewSettingKind.Sort:
+                    return UnsetSort();
+
+                case ViewSettingKind.Filters:
+                    return UnsetFilter();
+
+                case ViewSettingKind.Folders:
+                    return UnsetFolders();
+
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
+        /// Unsets all the settings of the view, so they all come from the layer below. The page size is kept, since it's not a setting
+        /// of the views (see <see cref="PageSize"/>).
+        /// </summary>
+        /// <returns>Returns true if the layer did set at least one setting.</returns>
+        public bool UnsetAll()
+        {
+            bool hasChanged = false;
+            foreach (ViewSettingKind kind in AllKinds)
+                hasChanged |= Unset(kind);
+
+            return hasChanged;
+        }
+
+        /// <summary>
+        /// Writes the settings this layer sets to another layer, replacing them there. The settings this layer doesn't set are not
+        /// changed in the other layer, nor the page size.
+        /// </summary>
+        /// <remarks>
+        /// The widths and the visibility are written per column, so the other columns keep their settings in the other layer. The
+        /// filter tree is copied, so the two layers never share it.
+        /// </remarks>
+        /// <param name="target">The layer to which the settings are written, for example the settings of a project view under the
+        /// overrides of the user.</param>
+        /// <returns>Returns true if the other layer has changed.</returns>
+        /// <exception cref="ArgumentNullException">Thrown if the other layer is null.</exception>
+        public bool ApplyTo(ViewSettings target)
+        {
+            if (target == null)
+                throw new ArgumentNullException(nameof(target));
+
+            bool hasChanged = false;
+            if (IsColumnOrderSet)
+                hasChanged |= target.SetColumnOrder(_columnOrder);
+
+            foreach (string columnId in GetColumnsWithSettings())
+            {
+                float width = GetWidth(columnId);
+                if (width > 0)
+                    hasChanged |= target.SetWidth(columnId, width);
+
+                ColumnVisibility visibility = GetVisibility(columnId);
+                if (visibility != ColumnVisibility.Unset)
+                    hasChanged |= target.SetVisibility(columnId, visibility);
+            }
+
+            if (_isSortSet)
+                hasChanged |= target.SetSort(_sort);
+
+            if (_isFilterSet)
+            {
+                // The trees are not compared: a set filter is always a change
+                target.SetFilter(_filter?.Clone());
+                hasChanged = true;
+            }
+
+            if (_areFoldersSet)
+                hasChanged |= target.SetFolders(_folders);
+
+            return hasChanged;
+        }
+
+        #endregion
+
+
         #region Columns
 
         /// <summary>

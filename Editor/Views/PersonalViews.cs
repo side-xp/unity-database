@@ -160,6 +160,16 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
+        /// Gets the overrides of the project views of a table.
+        /// </summary>
+        /// <param name="tableId">The stable identifier of the table (see <see cref="TableDefinition.Id"/>).</param>
+        /// <returns>Returns the overrides of the project views of the table, existing or deleted.</returns>
+        public List<ViewOverride> GetOverrides(string tableId)
+        {
+            return _overrides.FindAll(item => item != null && item.Settings != null && item.Settings.TableId == tableId);
+        }
+
+        /// <summary>
         /// Gets the overrides of a project view, and creates them, without any setting, if the user has none yet.
         /// </summary>
         /// <param name="view">The project view.</param>

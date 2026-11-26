@@ -453,6 +453,141 @@ namespace SideXP.Database.Tests
         #endregion
 
 
+        #region Overrides
+
+        /// <summary>
+        /// Saving the overrides writes the settings the user changed to the project view, keeps its other settings, then removes the
+        /// overrides. The page size stays in the overrides. Both files change.
+        /// </summary>
+        [Test]
+        public void SaveOverrides_Overrides_WrittenToProjectView()
+        {
+            ProjectView view = AddProjectView("Shared");
+            view.Settings.SetWidth("A", 100);
+            view.Settings.SetSort(new[] { new ColumnSort("A", false) });
+            LayeredViewSettings settings = new LayeredViewSettings(_catalog.GetLayers(view));
+            settings.SetWidth("B", ResizedWidth);
+            settings.SetSort(new[] { new ColumnSort("B", true) });
+            settings.Top.SetPageSize(PageSize);
+            _personalChangeCount = 0;
+
+            Assert.IsTrue(_catalog.SaveOverrides(view));
+            Assert.AreEqual(100, view.Settings.GetWidth("A"));
+            Assert.AreEqual(ResizedWidth, view.Settings.GetWidth("B"));
+            CollectionAssert.AreEqual(new[] { new ColumnSort("B", true) }, view.Settings.GetSort());
+            Assert.IsTrue(_catalog.GetOverrides(view).IsEmpty);
+            Assert.AreEqual(PageSize, _catalog.GetOverrides(view).PageSize);
+            Assert.AreEqual(ViewStatus.Project, _catalog.GetStatus(view));
+            Assert.AreEqual(1, _personalChangeCount);
+            Assert.AreEqual(1, _projectChangeCount);
+        }
+
+        /// <summary>
+        /// Saving a project view without overrides changes nothing, and doesn't write the project file.
+        /// </summary>
+        [Test]
+        public void SaveOverrides_NoOverrides_NothingWritten()
+        {
+            ProjectView view = AddProjectView("Shared");
+            Assert.IsFalse(_catalog.SaveOverrides(view));
+
+            _catalog.GetLayers(view);
+            Assert.IsFalse(_catalog.SaveOverrides(view));
+            Assert.AreEqual(0, _projectChangeCount);
+        }
+
+        /// <summary>
+        /// Resetting the overrides discards all of them, keeps the project view and the page size, and doesn't write the project file.
+        /// </summary>
+        [Test]
+        public void ResetOverrides_Overrides_Discarded()
+        {
+            ProjectView view = AddProjectView("Shared");
+            view.Settings.SetWidth("A", 100);
+            LayeredViewSettings settings = new LayeredViewSettings(_catalog.GetLayers(view));
+            settings.SetWidth("A", ResizedWidth);
+            settings.SetFolders(new[] { "Assets/Items" });
+            settings.Top.SetPageSize(PageSize);
+
+            Assert.IsTrue(_catalog.ResetOverrides(view));
+            Assert.IsFalse(_catalog.ResetOverrides(view));
+            Assert.AreEqual(100, settings.GetWidth("A"));
+            Assert.IsEmpty(settings.Folders);
+            Assert.AreEqual(PageSize, _catalog.GetOverrides(view).PageSize);
+            Assert.AreEqual(ViewStatus.Project, _catalog.GetStatus(view));
+            Assert.AreEqual(0, _projectChangeCount);
+        }
+
+        /// <summary>
+        /// Resetting one kind of override keeps the others.
+        /// </summary>
+        [Test]
+        public void ResetOverride_Kind_OtherOverridesKept()
+        {
+            ProjectView view = AddProjectView("Shared");
+            LayeredViewSettings settings = new LayeredViewSettings(_catalog.GetLayers(view));
+            settings.SetWidth("A", ResizedWidth);
+            settings.SetSort(new[] { new ColumnSort("A", true) });
+
+            Assert.IsTrue(_catalog.ResetOverride(view, ViewSettingKind.Sort));
+            Assert.IsFalse(_catalog.ResetOverride(view, ViewSettingKind.Sort));
+            Assert.IsEmpty(settings.GetSort());
+            Assert.AreEqual(ResizedWidth, settings.GetWidth("A"));
+            Assert.AreEqual(ViewStatus.OverriddenProject, _catalog.GetStatus(view));
+        }
+
+        /// <summary>
+        /// The overrides of a personal view, or of a project view never opened, are refused or missing.
+        /// </summary>
+        [Test]
+        public void Overrides_PersonalOrUnopenedView_None()
+        {
+            SavedView personalView = _catalog.GetOpenView(TableId);
+            ProjectView projectView = AddProjectView("Shared");
+
+            Assert.IsNull(_catalog.GetOverrides(personalView));
+            Assert.IsNull(_catalog.GetOverrides(projectView));
+            Assert.IsFalse(_catalog.ResetOverrides(projectView));
+            Assert.IsFalse(_catalog.ResetOverride(projectView, ViewSettingKind.Sort));
+            Assert.Throws<ArgumentException>(() => _catalog.SaveOverrides(new ProjectView("Unknown", new ViewSettings(TableId))));
+        }
+
+        /// <summary>
+        /// The overrides of a project view deleted from the project file (for example by a teammate) are removed silently when the
+        /// table opens, and its table opens another view. The overrides of the other views and tables are kept.
+        /// </summary>
+        [Test]
+        public void RemoveDeletedOverrides_DeletedProjectView_OverridesRemoved()
+        {
+            SavedView personalView = _catalog.GetOpenView(TableId);
+            ProjectView deletedView = AddProjectView("Deleted");
+            ProjectView keptView = AddProjectView("Kept");
+            ProjectView otherTableView = AddProjectView("Other", OtherTableId);
+            new LayeredViewSettings(_catalog.GetLayers(deletedView)).SetWidth("A", ResizedWidth);
+            new LayeredViewSettings(_catalog.GetLayers(keptView)).SetWidth("A", ResizedWidth);
+            _catalog.GetLayers(otherTableView);
+            _catalog.SetOpenView(deletedView);
+
+            // Like a project file pulled without the view
+            _projectViews.Remove(deletedView);
+            _projectViews.Remove(otherTableView);
+            _personalChangeCount = 0;
+
+            Assert.AreEqual(1, _catalog.RemoveDeletedOverrides(TableId));
+            // Checked before opening a view, which is another change (the table has no open view anymore)
+            Assert.AreEqual(1, _personalChangeCount);
+            Assert.IsNull(_personalViews.FindOverride(deletedView.Id));
+            Assert.IsNotNull(_personalViews.FindOverride(keptView.Id));
+            Assert.IsNotNull(_personalViews.FindOverride(otherTableView.Id));
+            Assert.IsFalse(_personalViews.IsOpen(deletedView.Id));
+            Assert.AreSame(personalView, _catalog.GetOpenView(TableId));
+
+            Assert.AreEqual(0, _catalog.RemoveDeletedOverrides(TableId));
+        }
+
+        #endregion
+
+
         #region Checks
 
         /// <summary>

@@ -154,6 +154,17 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
+        /// Gets the overrides of the user on a project view: the settings they changed in it.
+        /// </summary>
+        /// <param name="view">The view of which to get the overrides.</param>
+        /// <returns>Returns the layer of the overrides, or null for a personal view or a project view the user hasn't opened yet. Read
+        /// it only: change the overrides through the operations of the catalog, or through the layers of the view.</returns>
+        public ViewSettings GetOverrides(SavedView view)
+        {
+            return view is ProjectView ? _personalViews.FindOverride(view.Id)?.Settings : null;
+        }
+
+        /// <summary>
         /// Gets the kind of a view, and whether the user changed it.
         /// </summary>
         /// <param name="view">The view of which to get the status.</param>
@@ -369,6 +380,98 @@ namespace SideXP.Database.EditorOnly
             _personalViewsChanged?.Invoke();
             _projectViewsChanged?.Invoke();
             return projectView;
+        }
+
+        /// <summary>
+        /// Writes the overrides of the user to their project view, so the team gets them (<i>Save for everyone</i>), then removes them.
+        /// Changes the project views.
+        /// </summary>
+        /// <remarks>
+        /// Only the settings the user changed are written: the other settings of the project view are kept. The page size stays in the
+        /// overrides, since it's a setting of the user.
+        /// </remarks>
+        /// <param name="view">The project view.</param>
+        /// <returns>Returns true if the view had overrides to save.</returns>
+        /// <exception cref="ArgumentException">Thrown if the view is not one of the project views of the catalog.</exception>
+        public bool SaveOverrides(ProjectView view)
+        {
+            CheckContains(view);
+            ViewSettings overrides = GetOverrides(view);
+            if (overrides == null || overrides.IsEmpty)
+                return false;
+
+            overrides.ApplyTo(view.Settings);
+            overrides.UnsetAll();
+            _personalViewsChanged?.Invoke();
+            _projectViewsChanged?.Invoke();
+            return true;
+        }
+
+        /// <summary>
+        /// Discards the overrides of the user on a project view, so they see it as saved in the project again. The page size stays in
+        /// the overrides, since it's a setting of the user.
+        /// </summary>
+        /// <param name="view">The project view.</param>
+        /// <returns>Returns true if the view had overrides to discard.</returns>
+        /// <exception cref="ArgumentException">Thrown if the view is not one of the project views of the catalog.</exception>
+        public bool ResetOverrides(ProjectView view)
+        {
+            CheckContains(view);
+            ViewSettings overrides = GetOverrides(view);
+            if (overrides == null || !overrides.UnsetAll())
+                return false;
+
+            _personalViewsChanged?.Invoke();
+            return true;
+        }
+
+        /// <summary>
+        /// Discards one kind of override of the user on a project view, for example the widths of all the columns, so it comes from the
+        /// project view again.
+        /// </summary>
+        /// <param name="view">The project view.</param>
+        /// <param name="kind">The kind of setting to discard.</param>
+        /// <returns>Returns true if the view had overrides of that kind.</returns>
+        /// <exception cref="ArgumentException">Thrown if the view is not one of the project views of the catalog.</exception>
+        public bool ResetOverride(ProjectView view, ViewSettingKind kind)
+        {
+            CheckContains(view);
+            ViewSettings overrides = GetOverrides(view);
+            if (overrides == null || !overrides.Unset(kind))
+                return false;
+
+            _personalViewsChanged?.Invoke();
+            return true;
+        }
+
+        /// <summary>
+        /// Removes the overrides of the user on the project views of a table that don't exist anymore, for example after a teammate
+        /// deleted one and the project file was pulled. Call it when the table opens.
+        /// </summary>
+        /// <remarks>
+        /// The overrides are removed silently: a deleted project view is not kept as a personal view (chosen by the user), since its
+        /// name and its settings are gone with the project file, and the team knows why it was deleted.
+        /// </remarks>
+        /// <param name="tableId">The stable identifier of the table (see <see cref="TableDefinition.Id"/>).</param>
+        /// <returns>Returns the number of removed overrides.</returns>
+        public int RemoveDeletedOverrides(string tableId)
+        {
+            HashSet<string> viewIds = new HashSet<string>(GetProjectViews(tableId).ConvertAll(view => view.Id));
+            int count = 0;
+            foreach (ViewOverride viewOverride in _personalViews.GetOverrides(tableId))
+            {
+                if (viewIds.Contains(viewOverride.ViewId))
+                    continue;
+
+                _personalViews.RemoveOverride(viewOverride.ViewId);
+                _personalViews.RemoveOpen(viewOverride.ViewId);
+                count++;
+            }
+
+            if (count > 0)
+                _personalViewsChanged?.Invoke();
+
+            return count;
         }
 
         /// <summary>

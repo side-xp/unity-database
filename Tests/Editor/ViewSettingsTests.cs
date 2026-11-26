@@ -329,6 +329,117 @@ namespace SideXP.Database.Tests
         #endregion
 
 
+        #region Kinds of settings
+
+        /// <summary>
+        /// The count of a kind of setting is the number of columns for the widths and the visibility, and 1 or 0 for the others.
+        /// </summary>
+        [Test]
+        public void GetSetCount_EachKind_Counted()
+        {
+            ViewSettings settings = new ViewSettings(TableId);
+            foreach (ViewSettingKind kind in ViewSettings.AllKinds)
+                Assert.AreEqual(0, settings.GetSetCount(kind), kind.ToString());
+
+            settings.SetColumnOrder(new[] { "B", "A" });
+            settings.SetWidth("A", ResizedWidth);
+            settings.SetWidth("B", ResizedWidth);
+            settings.SetVisibility("B", ColumnVisibility.Hidden);
+            settings.SetSort(new ColumnSort[0]);
+            settings.SetFilter(null);
+            settings.SetFolders(null);
+
+            Assert.AreEqual(1, settings.GetSetCount(ViewSettingKind.ColumnOrder));
+            Assert.AreEqual(2, settings.GetSetCount(ViewSettingKind.ColumnWidths));
+            Assert.AreEqual(1, settings.GetSetCount(ViewSettingKind.ColumnVisibility));
+            Assert.AreEqual(1, settings.GetSetCount(ViewSettingKind.Sort));
+            Assert.AreEqual(1, settings.GetSetCount(ViewSettingKind.Filters));
+            Assert.AreEqual(1, settings.GetSetCount(ViewSettingKind.Folders));
+            Assert.IsTrue(settings.IsSet(ViewSettingKind.ColumnWidths));
+        }
+
+        /// <summary>
+        /// Unsetting a kind of setting keeps the other kinds, the other settings of the same columns included.
+        /// </summary>
+        [Test]
+        public void Unset_Kind_OtherKindsKept()
+        {
+            ViewSettings settings = new ViewSettings(TableId);
+            settings.SetColumnOrder(new[] { "B", "A" });
+            settings.SetWidth("A", ResizedWidth);
+            settings.SetVisibility("A", ColumnVisibility.Hidden);
+
+            Assert.IsTrue(settings.Unset(ViewSettingKind.ColumnWidths));
+            Assert.IsFalse(settings.Unset(ViewSettingKind.ColumnWidths));
+            Assert.AreEqual(0, settings.GetWidth("A"));
+            Assert.AreEqual(ColumnVisibility.Hidden, settings.GetVisibility("A"));
+            Assert.IsTrue(settings.IsColumnOrderSet);
+
+            Assert.IsTrue(settings.Unset(ViewSettingKind.ColumnVisibility));
+            Assert.AreEqual(ColumnVisibility.Unset, settings.GetVisibility("A"));
+            Assert.IsFalse(settings.Unset(ViewSettingKind.Sort));
+        }
+
+        /// <summary>
+        /// Unsetting all the settings leaves an empty layer, and keeps the page size.
+        /// </summary>
+        [Test]
+        public void UnsetAll_Settings_EmptyAndPageSizeKept()
+        {
+            ViewSettings settings = new ViewSettings(TableId);
+            settings.SetColumnOrder(new[] { "B", "A" });
+            settings.SetWidth("A", ResizedWidth);
+            settings.SetSort(new ColumnSort[0]);
+            settings.SetFilter(new BoolCondition("A", true));
+            settings.SetFolders(null);
+            settings.SetPageSize(PageSize);
+
+            Assert.IsTrue(settings.UnsetAll());
+            Assert.IsTrue(settings.IsEmpty);
+            Assert.AreEqual(PageSize, settings.PageSize);
+            Assert.IsFalse(settings.UnsetAll());
+        }
+
+        /// <summary>
+        /// Applying a layer to another one writes the settings it sets, per column for the widths and the visibility, and keeps the
+        /// other settings of the other layer and its page size. The filter tree is copied.
+        /// </summary>
+        [Test]
+        public void ApplyTo_SetSettings_WrittenOthersKept()
+        {
+            ViewSettings source = new ViewSettings(TableId);
+            source.SetWidth("B", ResizedWidth);
+            source.SetVisibility("C", ColumnVisibility.Visible);
+            source.SetSort(new[] { new ColumnSort("B", true) });
+            BoolCondition filter = new BoolCondition("A", false);
+            source.SetFilter(filter);
+
+            ViewSettings target = new ViewSettings(TableId);
+            target.SetColumnOrder(new[] { "C", "B", "A" });
+            target.SetWidth("A", 100);
+            target.SetVisibility("C", ColumnVisibility.Hidden);
+            target.SetSort(new[] { new ColumnSort("A", false) });
+            target.SetFolders(new[] { "Assets/Items" });
+            target.SetPageSize(PageSize);
+
+            Assert.IsTrue(source.ApplyTo(target));
+            CollectionAssert.AreEqual(new[] { "C", "B", "A" }, target.ColumnOrder);
+            Assert.AreEqual(100, target.GetWidth("A"));
+            Assert.AreEqual(ResizedWidth, target.GetWidth("B"));
+            Assert.AreEqual(ColumnVisibility.Visible, target.GetVisibility("C"));
+            CollectionAssert.AreEqual(new[] { new ColumnSort("B", true) }, target.GetSort());
+            Assert.IsInstanceOf<BoolCondition>(target.Filter);
+            Assert.AreNotSame(filter, target.Filter);
+            CollectionAssert.AreEqual(new[] { "Assets/Items" }, target.Folders);
+            Assert.AreEqual(PageSize, target.PageSize);
+
+            Assert.IsFalse(new ViewSettings(TableId).ApplyTo(target));
+            Assert.Throws<ArgumentNullException>(() => source.ApplyTo(null));
+        }
+
+        #endregion
+
+
         #region Reset
 
         /// <summary>

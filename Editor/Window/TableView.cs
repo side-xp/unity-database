@@ -316,6 +316,7 @@ namespace SideXP.Database.EditorOnly
             // The scope applies to the first load, so the assets outside of it are never loaded. The columns are then validated
             // against the first asset of the scope
             ViewCatalog catalog = ViewCatalog.Current;
+            catalog.RemoveDeletedOverrides(table.Id);
             _viewSettings = new LayeredViewSettings(catalog.GetLayers(catalog.GetOpenView(table.Id)), IsHiddenByDefault);
             _folderScope = new FolderScope(_viewSettings.Folders);
             _source = new ProjectAssetSource(table.Type) { Scope = _folderScope };
