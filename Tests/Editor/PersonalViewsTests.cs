@@ -13,8 +13,9 @@ namespace SideXP.Database.Tests
 {
 
     /// <summary>
-    /// Tests for the personal views of the tables (<see cref="PersonalViews"/>): the open view of each table, creating, duplicating,
-    /// renaming and deleting views, the settings saved before the views, and the serialization.
+    /// Tests for the data of the views of the user (<see cref="PersonalViews"/>): the personal views, the open views, the overrides of
+    /// the project views, the settings saved before the views, and the serialization. The rules of the views are tested by
+    /// <see cref="ViewCatalogTests"/>.
     /// </summary>
     public class PersonalViewsTests
     {
@@ -28,214 +29,117 @@ namespace SideXP.Database.Tests
         #endregion
 
 
-        #region Open view
+        #region Views
 
         /// <summary>
-        /// A table without view gets the default view, open, and keeps it.
+        /// Views are added at the end, or right after another view, and listed per table.
         /// </summary>
         [Test]
-        public void GetOpenView_NoView_DefaultViewCreated()
+        public void Add_Views_ListedPerTable()
         {
             PersonalViews views = new PersonalViews();
-            PersonalView view = views.GetOpenView(TableId);
+            PersonalView first = views.Add(new PersonalView("First", new ViewSettings(TableId)));
+            PersonalView other = views.Add(new PersonalView("Other", new ViewSettings(OtherTableId)));
+            PersonalView last = views.Add(new PersonalView("Last", new ViewSettings(TableId)));
+            PersonalView second = views.Add(new PersonalView("Second", new ViewSettings(TableId)), first);
 
-            Assert.AreEqual(PersonalViews.DefaultViewName, view.Name);
-            Assert.AreEqual(TableId, view.TableId);
-            Assert.IsFalse(string.IsNullOrEmpty(view.Id));
-            Assert.IsTrue(views.IsOpen(view));
-            Assert.AreSame(view, views.GetOpenView(TableId));
-            CollectionAssert.AreEqual(new[] { view }, views.GetViews(TableId));
+            CollectionAssert.AreEqual(new[] { first, second, last }, views.GetViews(TableId));
+            CollectionAssert.AreEqual(new[] { other }, views.GetViews(OtherTableId));
+            Assert.IsTrue(views.Contains(second));
         }
 
         /// <summary>
-        /// A null or empty table identifier is refused.
+        /// A view without table, or already added, is refused.
         /// </summary>
         [Test]
-        public void GetOpenView_NoTable_Throws()
+        public void Add_InvalidView_Throws()
         {
-            Assert.Throws<ArgumentException>(() => new PersonalViews().GetOpenView(null));
-            Assert.Throws<ArgumentException>(() => new PersonalViews().GetOpenView(string.Empty));
+            PersonalViews views = new PersonalViews();
+            PersonalView view = views.Add(new PersonalView("View", new ViewSettings(TableId)));
+
+            Assert.Throws<ArgumentException>(() => views.Add(view));
+            Assert.Throws<ArgumentException>(() => views.Add(new PersonalView("View", new ViewSettings(string.Empty))));
+            Assert.Throws<ArgumentException>(() => views.Add(null));
         }
 
         /// <summary>
-        /// Each table has its own views and its own open view.
+        /// A removed view is no longer listed.
         /// </summary>
         [Test]
-        public void GetOpenView_SeveralTables_OneOpenViewEach()
+        public void Remove_View_NotListed()
         {
             PersonalViews views = new PersonalViews();
-            PersonalView view = views.GetOpenView(TableId);
-            PersonalView otherView = views.GetOpenView(OtherTableId);
+            PersonalView view = views.Add(new PersonalView("View", new ViewSettings(TableId)));
 
-            Assert.AreNotSame(view, otherView);
-            Assert.IsTrue(views.IsOpen(view));
-            Assert.IsTrue(views.IsOpen(otherView));
-            CollectionAssert.AreEqual(new[] { otherView }, views.GetViews(OtherTableId));
-        }
-
-        /// <summary>
-        /// Opening another view of a table closes the view that was open, and opening it again changes nothing.
-        /// </summary>
-        [Test]
-        public void SetOpenView_OtherView_Opened()
-        {
-            PersonalViews views = new PersonalViews();
-            PersonalView defaultView = views.GetOpenView(TableId);
-            PersonalView otherTableView = views.GetOpenView(OtherTableId);
-            PersonalView view = views.CreateView(TableId);
-
-            Assert.IsTrue(views.SetOpenView(view));
-            Assert.IsFalse(views.SetOpenView(view));
-            Assert.IsFalse(views.IsOpen(defaultView));
-            Assert.AreSame(view, views.GetOpenView(TableId));
-            Assert.IsTrue(views.IsOpen(otherTableView));
+            Assert.IsTrue(views.Remove(view));
+            Assert.IsFalse(views.Remove(view));
+            Assert.IsEmpty(views.GetViews(TableId));
+            Assert.IsFalse(views.Contains(view));
         }
 
         #endregion
 
 
-        #region Create, duplicate, rename
+        #region Open views
 
         /// <summary>
-        /// A new view has the defaults of the table, comes after the other views, isn't opened, and gets a name no other view of its
-        /// table has, ignoring case.
+        /// Opening a view closes the other given views of its table, and opening it again changes nothing.
         /// </summary>
         [Test]
-        public void CreateView_Names_Unique()
+        public void SetOpen_View_OthersClosed()
         {
             PersonalViews views = new PersonalViews();
-            PersonalView defaultView = views.GetOpenView(TableId);
+            views.SetOpen("A", Array.Empty<string>());
+            views.SetOpen("Other", Array.Empty<string>());
 
-            PersonalView view = views.CreateView(TableId);
-            Assert.AreEqual(PersonalViews.NewViewName, view.Name);
-            Assert.AreEqual($"{PersonalViews.NewViewName} 2", views.CreateView(TableId).Name);
-            Assert.AreEqual("Balancing", views.CreateView(TableId, " Balancing ").Name);
-            Assert.AreEqual("balancing 2", views.CreateView(TableId, "balancing").Name);
-            Assert.AreEqual(PersonalViews.NewViewName, views.CreateView(OtherTableId, "  ").Name);
+            Assert.IsTrue(views.SetOpen("B", new[] { "A", "B" }));
+            Assert.IsFalse(views.SetOpen("B", new[] { "A", "B" }));
+            Assert.IsFalse(views.IsOpen("A"));
+            Assert.IsTrue(views.IsOpen("B"));
+            Assert.IsTrue(views.IsOpen("Other"));
 
-            Assert.IsFalse(view.Settings.IsColumnOrderSet);
-            Assert.AreEqual(5, views.GetViews(TableId).Count);
-            Assert.AreSame(defaultView, views.GetViews(TableId)[0]);
-            Assert.AreSame(defaultView, views.GetOpenView(TableId));
-        }
-
-        /// <summary>
-        /// A copy of a view comes right after it, with a copy of its settings, and isn't opened.
-        /// </summary>
-        [Test]
-        public void DuplicateView_View_CopyAfterIt()
-        {
-            PersonalViews views = new PersonalViews();
-            PersonalView view = views.GetOpenView(TableId);
-            PersonalView secondView = views.CreateView(TableId, "Second");
-            view.Settings.SetWidth("A", ResizedWidth);
-
-            PersonalView copy = views.DuplicateView(view);
-            Assert.AreEqual($"{PersonalViews.DefaultViewName} Copy", copy.Name);
-            Assert.AreNotEqual(view.Id, copy.Id);
-            CollectionAssert.AreEqual(new[] { view, copy, secondView }, views.GetViews(TableId));
-            Assert.IsFalse(views.IsOpen(copy));
-
-            Assert.AreEqual(ResizedWidth, copy.Settings.GetWidth("A"));
-            copy.Settings.SetWidth("A", 0);
-            Assert.AreEqual(ResizedWidth, view.Settings.GetWidth("A"));
-
-            Assert.AreEqual($"{PersonalViews.DefaultViewName} Copy 2", views.DuplicateView(view).Name);
-        }
-
-        /// <summary>
-        /// A view is renamed with a trimmed name, a name taken by another view of the table gets a number, and a blank or same name
-        /// changes nothing.
-        /// </summary>
-        [Test]
-        public void RenameView_Name_Renamed()
-        {
-            PersonalViews views = new PersonalViews();
-            PersonalView view = views.GetOpenView(TableId);
-            PersonalView otherView = views.CreateView(TableId, "Balancing");
-
-            Assert.IsTrue(views.RenameView(view, " Prices "));
-            Assert.AreEqual("Prices", view.Name);
-            Assert.IsFalse(views.RenameView(view, "Prices"));
-            Assert.IsFalse(views.RenameView(view, "  "));
-            Assert.AreEqual("Prices", view.Name);
-
-            Assert.IsTrue(views.RenameView(otherView, "PRICES"));
-            Assert.AreEqual("PRICES 2", otherView.Name);
+            Assert.IsTrue(views.RemoveOpen("B"));
+            Assert.IsFalse(views.IsOpen("B"));
+            Assert.IsFalse(views.IsOpen(null));
         }
 
         #endregion
 
 
-        #region Delete
+        #region Overrides
 
         /// <summary>
-        /// The last view of a table can't be deleted.
+        /// The overrides of a project view are created without any setting, for the table of the view, and found again.
         /// </summary>
         [Test]
-        public void DeleteView_LastView_Refused()
+        public void GetOrCreateOverride_ProjectView_CreatedOnce()
         {
             PersonalViews views = new PersonalViews();
-            PersonalView view = views.GetOpenView(TableId);
-            views.GetOpenView(OtherTableId);
+            ProjectView projectView = new ProjectView("Shared", new ViewSettings(TableId));
+            Assert.IsNull(views.FindOverride(projectView.Id));
 
-            Assert.IsFalse(views.CanDeleteView(view));
-            Assert.IsFalse(views.DeleteView(view));
-            CollectionAssert.AreEqual(new[] { view }, views.GetViews(TableId));
+            ViewSettings viewOverride = views.GetOrCreateOverride(projectView);
+            Assert.AreEqual(TableId, viewOverride.TableId);
+            Assert.IsFalse(viewOverride.IsColumnOrderSet);
+            Assert.IsFalse(viewOverride.IsSortSet);
+            Assert.AreSame(viewOverride, views.GetOrCreateOverride(projectView));
+            Assert.AreSame(viewOverride, views.FindOverride(projectView.Id).Settings);
+
+            Assert.IsTrue(views.RemoveOverride(projectView.Id));
+            Assert.IsFalse(views.RemoveOverride(projectView.Id));
+            Assert.IsNull(views.FindOverride(projectView.Id));
         }
 
         /// <summary>
-        /// Deleting the open view opens the next view of the table, or the previous one if it was the last.
+        /// A project view without table is refused.
         /// </summary>
         [Test]
-        public void DeleteView_OpenView_NextViewOpened()
+        public void GetOrCreateOverride_InvalidView_Throws()
         {
             PersonalViews views = new PersonalViews();
-            PersonalView firstView = views.GetOpenView(TableId);
-            PersonalView secondView = views.CreateView(TableId);
-            PersonalView thirdView = views.CreateView(TableId);
-            views.SetOpenView(secondView);
 
-            Assert.IsTrue(views.CanDeleteView(secondView));
-            Assert.IsTrue(views.DeleteView(secondView));
-            Assert.AreSame(thirdView, views.GetOpenView(TableId));
-
-            Assert.IsTrue(views.DeleteView(thirdView));
-            Assert.AreSame(firstView, views.GetOpenView(TableId));
-            CollectionAssert.AreEqual(new[] { firstView }, views.GetViews(TableId));
-        }
-
-        /// <summary>
-        /// Deleting a view that is not open keeps the open view.
-        /// </summary>
-        [Test]
-        public void DeleteView_OtherView_OpenViewKept()
-        {
-            PersonalViews views = new PersonalViews();
-            PersonalView openView = views.GetOpenView(TableId);
-            PersonalView view = views.CreateView(TableId);
-
-            Assert.IsTrue(views.DeleteView(view));
-            Assert.IsTrue(views.IsOpen(openView));
-        }
-
-        /// <summary>
-        /// The operations on a view refuse a view that is not one of the views.
-        /// </summary>
-        [Test]
-        public void Operations_UnknownView_Throw()
-        {
-            PersonalViews views = new PersonalViews();
-            views.GetOpenView(TableId);
-            PersonalView unknownView = new PersonalView("Unknown", new ViewSettings(TableId));
-
-            Assert.Throws<ArgumentException>(() => views.SetOpenView(unknownView));
-            Assert.Throws<ArgumentException>(() => views.DuplicateView(unknownView));
-            Assert.Throws<ArgumentException>(() => views.RenameView(unknownView, "Name"));
-            Assert.Throws<ArgumentException>(() => views.DeleteView(unknownView));
-            Assert.Throws<ArgumentException>(() => views.SetOpenView(null));
-            Assert.IsFalse(views.CanDeleteView(unknownView));
-            Assert.IsFalse(views.IsOpen(unknownView));
+            Assert.Throws<ArgumentException>(() => views.GetOrCreateOverride(null));
+            Assert.Throws<ArgumentException>(() => views.GetOrCreateOverride(new ProjectView("View", new ViewSettings(null))));
         }
 
         #endregion
@@ -251,7 +155,7 @@ namespace SideXP.Database.Tests
         public void ImportDefaultViews_SettingsOfFirstPass_DefaultViewsOpen()
         {
             PersonalViews views = new PersonalViews();
-            PersonalView existingView = views.GetOpenView(OtherTableId);
+            PersonalView existingView = views.Add(new PersonalView("Existing", new ViewSettings(OtherTableId)));
             ViewSettings settings = new ViewSettings(TableId);
             List<ViewSettings> defaultViews = new List<ViewSettings>
             {
@@ -264,10 +168,11 @@ namespace SideXP.Database.Tests
 
             Assert.AreEqual(1, views.ImportDefaultViews(defaultViews));
 
-            PersonalView view = views.GetOpenView(TableId);
-            Assert.AreEqual(PersonalViews.DefaultViewName, view.Name);
-            Assert.AreSame(settings, view.Settings);
-            Assert.AreEqual(1, views.GetViews(TableId).Count);
+            List<PersonalView> tableViews = views.GetViews(TableId);
+            Assert.AreEqual(1, tableViews.Count);
+            Assert.AreEqual(ViewCatalog.DefaultViewName, tableViews[0].Name);
+            Assert.AreSame(settings, tableViews[0].Settings);
+            Assert.IsTrue(views.IsOpen(tableViews[0].Id));
             CollectionAssert.AreEqual(new[] { existingView }, views.GetViews(OtherTableId));
         }
 
@@ -277,34 +182,72 @@ namespace SideXP.Database.Tests
         #region Serialization
 
         /// <summary>
-        /// The views, their names, ids and settings, and the open views, survive Unity's serialization, which <see cref="UserViews"/>
-        /// uses to store them.
+        /// The views, their names, ids and settings, the open views and the overrides survive Unity's serialization, which
+        /// <see cref="UserViews"/> uses to store them.
         /// </summary>
         [Test]
-        public void Serialization_Views_Kept()
+        public void Serialization_ViewsAndOverrides_Kept()
         {
             ViewSettingsTestSO holder = ScriptableObject.CreateInstance<ViewSettingsTestSO>();
             ViewSettingsTestSO copy = null;
             try
             {
                 holder.personalViews = new PersonalViews();
-                holder.personalViews.GetOpenView(TableId);
-                PersonalView view = holder.personalViews.CreateView(TableId, "Balancing");
+                holder.personalViews.Add(new PersonalView("Default", new ViewSettings(TableId)));
+                PersonalView view = holder.personalViews.Add(new PersonalView("Balancing", new ViewSettings(TableId)));
                 view.Settings.SetWidth("A", ResizedWidth);
                 view.Settings.SetFilter(new TextCondition("B", "sword"));
-                holder.personalViews.SetOpenView(view);
+                holder.personalViews.SetOpen(view.Id, Array.Empty<string>());
+                ProjectView projectView = new ProjectView("Shared", new ViewSettings(TableId));
+                holder.personalViews.GetOrCreateOverride(projectView).SetSort(new[] { new ColumnSort("A", true) });
 
                 // Instantiating copies the object through its serialized data
                 copy = Object.Instantiate(holder);
 
                 List<PersonalView> copiedViews = copy.personalViews.GetViews(TableId);
                 Assert.AreEqual(2, copiedViews.Count);
-                PersonalView copiedView = copy.personalViews.GetOpenView(TableId);
-                Assert.AreSame(copiedViews[1], copiedView);
+                PersonalView copiedView = copiedViews[1];
                 Assert.AreEqual(view.Id, copiedView.Id);
                 Assert.AreEqual("Balancing", copiedView.Name);
+                Assert.IsTrue(copy.personalViews.IsOpen(copiedView.Id));
                 Assert.AreEqual(ResizedWidth, copiedView.Settings.GetWidth("A"));
                 Assert.AreEqual("sword", ((TextCondition)copiedView.Settings.Filter).Text);
+
+                ViewOverride copiedOverride = copy.personalViews.FindOverride(projectView.Id);
+                Assert.IsNotNull(copiedOverride);
+                CollectionAssert.AreEqual(new[] { new ColumnSort("A", true) }, copiedOverride.Settings.GetSort());
+            }
+            finally
+            {
+                Object.DestroyImmediate(holder);
+                if (copy != null)
+                    Object.DestroyImmediate(copy);
+            }
+        }
+
+        /// <summary>
+        /// The project views, their names, ids and settings, survive Unity's serialization, which <see cref="ProjectViews"/> uses to
+        /// store them.
+        /// </summary>
+        [Test]
+        public void Serialization_ProjectViews_Kept()
+        {
+            ViewSettingsTestSO holder = ScriptableObject.CreateInstance<ViewSettingsTestSO>();
+            ViewSettingsTestSO copy = null;
+            try
+            {
+                holder.projectViews = new ProjectViewList();
+                ProjectView view = holder.projectViews.Add(new ProjectView("Shared", new ViewSettings(TableId)));
+                view.Settings.SetFolders(new[] { "Assets/Items" });
+
+                copy = Object.Instantiate(holder);
+
+                List<ProjectView> copiedViews = copy.projectViews.GetViews(TableId);
+                Assert.AreEqual(1, copiedViews.Count);
+                Assert.AreEqual(view.Id, copiedViews[0].Id);
+                Assert.AreEqual("Shared", copiedViews[0].Name);
+                Assert.IsTrue(copiedViews[0].IsProjectView);
+                CollectionAssert.AreEqual(new[] { "Assets/Items" }, copiedViews[0].Settings.Folders);
             }
             finally
             {

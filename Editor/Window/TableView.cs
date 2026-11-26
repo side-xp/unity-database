@@ -315,8 +315,8 @@ namespace SideXP.Database.EditorOnly
 
             // The scope applies to the first load, so the assets outside of it are never loaded. The columns are then validated
             // against the first asset of the scope
-            PersonalView view = UserViews.instance.PersonalViews.GetOpenView(table.Id);
-            _viewSettings = new LayeredViewSettings(new[] { view.Settings }, IsHiddenByDefault);
+            ViewCatalog catalog = ViewCatalog.Current;
+            _viewSettings = new LayeredViewSettings(catalog.GetLayers(catalog.GetOpenView(table.Id)), IsHiddenByDefault);
             _folderScope = new FolderScope(_viewSettings.Folders);
             _source = new ProjectAssetSource(table.Type) { Scope = _folderScope };
             IReadOnlyList<Object> assets = _source.LoadAssets();
@@ -330,7 +330,8 @@ namespace SideXP.Database.EditorOnly
             // Before the first update, so the rows are filtered and sorted once, on the displayed columns
             UpdateDisplayedColumns();
             StoreSearch(search);
-            _filter = _viewSettings.Filter;
+            // The filter editor changes the tree in place: a tree of a project view is copied, so only the overrides change
+            _filter = _viewSettings.GetEditableFilter();
             CompileFilter();
             ApplyRowFilter();
             ApplyRememberedSort();

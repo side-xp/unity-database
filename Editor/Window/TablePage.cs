@@ -234,7 +234,7 @@ namespace SideXP.Database.EditorOnly
         public TableDefinition Table => _table;
 
         /// <summary>
-        /// Sets the displayed table, and loads its assets, with the open view of the table (see <see cref="PersonalViews.GetOpenView"/>).
+        /// Sets the displayed table, and loads its assets, with the open view of the table (see <see cref="ViewCatalog.GetOpenView"/>).
         /// </summary>
         /// <param name="table">The table to display.</param>
         /// <param name="search">The search that filters the rows, or null to show all the rows.</param>
@@ -298,17 +298,12 @@ namespace SideXP.Database.EditorOnly
         #region Views
 
         /// <summary>
-        /// The personal views of the tables.
-        /// </summary>
-        private static PersonalViews Views => UserViews.instance.PersonalViews;
-
-        /// <summary>
         /// Gets the open view of the displayed table.
         /// </summary>
-        /// <returns>Returns the open view, or null if no table is displayed.</returns>
-        private PersonalView GetOpenView()
+        /// <returns>Returns the open view, personal or project view, or null if no table is displayed.</returns>
+        private SavedView GetOpenView()
         {
-            return _table != null ? Views.GetOpenView(_table.Id) : null;
+            return _table != null ? ViewCatalog.Current.GetOpenView(_table.Id) : null;
         }
 
         /// <summary>
@@ -316,7 +311,7 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         private void UpdateViewControls()
         {
-            PersonalView view = GetOpenView();
+            SavedView view = GetOpenView();
             if (view == null)
                 return;
 
@@ -330,14 +325,19 @@ namespace SideXP.Database.EditorOnly
         /// Called when the button of the views is clicked. Opens the menu of the views under it: the views of the table (the open one
         /// checked), then the operations on the open view.
         /// </summary>
+        /// <remarks>
+        /// @todo Step 23b2: the personal and the project views in two groups, <i>Share as Project View</i> and <i>Duplicate as
+        /// Personal View</i>.
+        /// </remarks>
         private void ShowViewMenu()
         {
-            PersonalView openView = GetOpenView();
+            SavedView openView = GetOpenView();
             if (openView == null)
                 return;
 
+            ViewCatalog catalog = ViewCatalog.Current;
             GenericMenu menu = new GenericMenu();
-            foreach (PersonalView view in Views.GetViews(_table.Id))
+            foreach (SavedView view in catalog.GetViews(_table.Id))
             {
                 string text = view.Name.Replace(MenuPathSeparator, MenuSlashReplacement);
                 menu.AddItem(new GUIContent(text), view == openView, () => OpenView(view));
@@ -348,7 +348,7 @@ namespace SideXP.Database.EditorOnly
             menu.AddItem(new GUIContent(DuplicateViewText), false, DuplicateView);
             menu.AddItem(new GUIContent(RenameViewText), false, StartRenameView);
             // The last view of a table can't be deleted: Reset View clears it instead
-            if (Views.CanDeleteView(openView))
+            if (catalog.CanDeleteView(openView))
                 menu.AddItem(new GUIContent(DeleteViewText), false, DeleteView);
             else
                 menu.AddDisabledItem(new GUIContent(DeleteViewText));
@@ -362,34 +362,29 @@ namespace SideXP.Database.EditorOnly
         /// Opens another view of the table, and shows the table with its settings.
         /// </summary>
         /// <param name="view">The view to open.</param>
-        private void OpenView(PersonalView view)
+        private void OpenView(SavedView view)
         {
-            if (!Views.SetOpenView(view))
-                return;
-
-            UserViews.instance.ScheduleSave();
-            ShowOpenView();
+            if (ViewCatalog.Current.SetOpenView(view))
+                ShowOpenView();
         }
 
         /// <summary>
-        /// Creates a view with the defaults of the table, and opens it.
+        /// Creates a personal view with the defaults of the table, and opens it.
         /// </summary>
         private void CreateView()
         {
-            PersonalView view = Views.CreateView(_table.Id);
-            Views.SetOpenView(view);
-            UserViews.instance.ScheduleSave();
+            ViewCatalog catalog = ViewCatalog.Current;
+            catalog.SetOpenView(catalog.CreateView(_table.Id));
             ShowOpenView();
         }
 
         /// <summary>
-        /// Creates a copy of the open view, and opens it.
+        /// Creates a personal copy of the open view, and opens it.
         /// </summary>
         private void DuplicateView()
         {
-            PersonalView copy = Views.DuplicateView(GetOpenView());
-            Views.SetOpenView(copy);
-            UserViews.instance.ScheduleSave();
+            ViewCatalog catalog = ViewCatalog.Current;
+            catalog.SetOpenView(catalog.DuplicateView(GetOpenView()));
             ShowOpenView();
         }
 
@@ -414,13 +409,11 @@ namespace SideXP.Database.EditorOnly
         /// <param name="name">The typed name.</param>
         private void OnViewRenamed(string name)
         {
-            PersonalView view = GetOpenView();
+            SavedView view = GetOpenView();
             if (view == null)
                 return;
 
-            if (Views.RenameView(view, name))
-                UserViews.instance.ScheduleSave();
-
+            ViewCatalog.Current.RenameView(view, name);
             UpdateViewControls();
         }
 
@@ -429,17 +422,14 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         private void DeleteView()
         {
-            PersonalView view = GetOpenView();
+            SavedView view = GetOpenView();
             string message = $"Delete the view \"{view.Name}\" of the table {_table.Name}? Its settings (the columns, the sort, the " +
                 "filters and the folders) are lost. This can't be undone.";
             if (!EditorUtility.DisplayDialog(DeleteViewTitle, message, DeleteText, CancelText))
                 return;
 
-            if (!Views.DeleteView(view))
-                return;
-
-            UserViews.instance.ScheduleSave();
-            ShowOpenView();
+            if (ViewCatalog.Current.DeleteView(view))
+                ShowOpenView();
         }
 
         /// <summary>

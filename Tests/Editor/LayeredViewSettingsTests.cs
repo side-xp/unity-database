@@ -508,6 +508,91 @@ namespace SideXP.Database.Tests
         #endregion
 
 
+        #region Editable filter
+
+        /// <summary>
+        /// The filter tree to edit is the tree of the top layer if it sets the filters, or a copy of the tree of a lower layer, which
+        /// isn't stored in the top layer until it's set.
+        /// </summary>
+        [Test]
+        public void GetEditableFilter_Layers_CopyOfLowerTree()
+        {
+            ViewSettings top = new ViewSettings(TableId);
+            ViewSettings lower = new ViewSettings(TableId);
+            FilterGroup lowerFilter = new FilterGroup(FilterOperator.And, new BoolCondition("A", true));
+            lower.SetFilter(lowerFilter);
+            LayeredViewSettings settings = Create(top, lower);
+
+            FilterGroup editableFilter = settings.GetEditableFilter() as FilterGroup;
+            Assert.IsNotNull(editableFilter);
+            Assert.AreNotSame(lowerFilter, editableFilter);
+            Assert.IsFalse(top.IsFilterSet);
+
+            editableFilter.Nodes.Clear();
+            Assert.AreEqual(1, lowerFilter.Nodes.Count);
+
+            settings.SetFilter(editableFilter);
+            Assert.AreSame(editableFilter, settings.GetEditableFilter());
+            Assert.IsNull(Create(new ViewSettings(TableId)).GetEditableFilter());
+        }
+
+        #endregion
+
+
+        #region Flatten
+
+        /// <summary>
+        /// A flattened copy has each setting of the first layer that sets it, and no setting that no layer sets.
+        /// </summary>
+        [Test]
+        public void Flatten_Layers_FirstSetSettings()
+        {
+            ViewSettings top = new ViewSettings(TableId);
+            ViewSettings lower = new ViewSettings(TableId);
+            lower.SetColumnOrder(new[] { "B", "A" });
+            lower.SetWidth("A", LowerWidth);
+            lower.SetWidth("B", LowerWidth);
+            lower.SetVisibility("C", ColumnVisibility.Hidden);
+            lower.SetSort(new[] { new ColumnSort("A", true) });
+            lower.SetFilter(new BoolCondition("A", true));
+            top.SetWidth("B", ResizedWidth);
+            top.SetVisibility("C", ColumnVisibility.Visible);
+            top.SetFolders(null);
+            LayeredViewSettings settings = Create(columnId => columnId == "D", top, lower);
+
+            ViewSettings flattened = settings.Flatten();
+            Assert.AreEqual(TableId, flattened.TableId);
+            CollectionAssert.AreEqual(new[] { "B", "A" }, flattened.ColumnOrder);
+            Assert.AreEqual(LowerWidth, flattened.GetWidth("A"));
+            Assert.AreEqual(ResizedWidth, flattened.GetWidth("B"));
+            Assert.AreEqual(ColumnVisibility.Visible, flattened.GetVisibility("C"));
+            // The default visibility of the table isn't written
+            Assert.AreEqual(ColumnVisibility.Unset, flattened.GetVisibility("D"));
+            CollectionAssert.AreEqual(new[] { new ColumnSort("A", true) }, flattened.GetSort());
+            Assert.IsInstanceOf<BoolCondition>(flattened.Filter);
+            Assert.AreNotSame(lower.Filter, flattened.Filter);
+            Assert.IsTrue(flattened.AreFoldersSet);
+            Assert.IsEmpty(flattened.Folders);
+        }
+
+        /// <summary>
+        /// A flattened copy of layers that set nothing sets nothing.
+        /// </summary>
+        [Test]
+        public void Flatten_NothingSet_NothingSet()
+        {
+            ViewSettings flattened = Create(new ViewSettings(TableId), new ViewSettings(TableId)).Flatten();
+
+            Assert.IsFalse(flattened.IsColumnOrderSet);
+            Assert.IsEmpty(flattened.GetColumnsWithSettings());
+            Assert.IsFalse(flattened.IsSortSet);
+            Assert.IsFalse(flattened.IsFilterSet);
+            Assert.IsFalse(flattened.AreFoldersSet);
+        }
+
+        #endregion
+
+
         #region Private API
 
         /// <summary>

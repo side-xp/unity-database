@@ -218,6 +218,22 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
+        /// Gets the columns whose width or visibility the layer sets.
+        /// </summary>
+        /// <returns>Returns the identifiers of the columns, columns that don't exist anymore included.</returns>
+        public List<string> GetColumnsWithSettings()
+        {
+            List<string> columnIds = new List<string>(_columns.Count);
+            foreach (ColumnSettings column in _columns)
+            {
+                if (column != null && !column.IsEmpty && !columnIds.Contains(column.Id))
+                    columnIds.Add(column.Id);
+            }
+
+            return columnIds;
+        }
+
+        /// <summary>
         /// Gets the width of a column chosen by the user.
         /// </summary>
         /// <param name="columnId">The identifier of the column.</param>

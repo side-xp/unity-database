@@ -75,6 +75,50 @@ namespace SideXP.Database.EditorOnly
             return Top.Reset();
         }
 
+        /// <summary>
+        /// Gets a single layer with the settings resolved from all the layers, for example to copy a project view with the overrides of
+        /// the user as a personal view.
+        /// </summary>
+        /// <remarks>
+        /// Each setting is set if a layer sets it, with the value of the first layer that sets it. The defaults of the table are not
+        /// written: a column that no layer hides keeps an unset visibility. The filter tree is copied, and the page size is the page
+        /// size of the top layer.
+        /// </remarks>
+        /// <returns>Returns the resolved settings, for the table of the top layer.</returns>
+        public ViewSettings Flatten()
+        {
+            ViewSettings flattened = new ViewSettings(Top.TableId);
+
+            ViewSettings orderLayer = FindLayer(0, item => item.IsColumnOrderSet);
+            if (orderLayer != null)
+                flattened.SetColumnOrder(orderLayer.ColumnOrder);
+
+            HashSet<string> columnIds = new HashSet<string>();
+            foreach (ViewSettings layer in _layers)
+                columnIds.UnionWith(layer.GetColumnsWithSettings());
+
+            foreach (string columnId in columnIds)
+            {
+                flattened.SetWidth(columnId, GetWidth(columnId));
+                flattened.SetVisibility(columnId, GetVisibility(columnId));
+            }
+
+            ViewSettings sortLayer = FindLayer(0, item => item.IsSortSet);
+            if (sortLayer != null)
+                flattened.SetSort(sortLayer.GetSort());
+
+            ViewSettings filterLayer = FindLayer(0, item => item.IsFilterSet);
+            if (filterLayer != null)
+                flattened.SetFilter(filterLayer.Filter?.Clone());
+
+            ViewSettings foldersLayer = FindLayer(0, item => item.AreFoldersSet);
+            if (foldersLayer != null)
+                flattened.SetFolders(foldersLayer.Folders);
+
+            flattened.SetPageSize(Top.PageSize);
+            return flattened;
+        }
+
         #endregion
 
 
@@ -250,15 +294,25 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
+        /// Gets the filter tree to give to an editor that changes it in place (see <see cref="FilterEditor"/>): the tree of the top
+        /// layer, or a copy of the tree of a lower layer, so editing it never changes a lower layer (for example a project view).
+        /// </summary>
+        /// <remarks>
+        /// The copy is not stored: the top layer only sets the filters when the edited tree is given to <see cref="SetFilter"/>.
+        /// </remarks>
+        /// <returns>Returns the root of the filter tree to edit, or null if the rows are not filtered.</returns>
+        public FilterNode GetEditableFilter()
+        {
+            return Top.IsFilterSet ? Top.Filter : Filter?.Clone();
+        }
+
+        /// <summary>
         /// Sets the filters in the top layer, replacing the current ones.
         /// </summary>
         /// <remarks>
         /// The filters are always set, never unset: the trees of two layers are not compared, and the given tree may be the current
-        /// one, edited in place.
-        /// <para>
-        /// @todo Step 23b: the filter editor edits the tree in place, so the tree of a project view must be copied into the top layer
-        /// (see <see cref="FilterNode.Clone"/>) before it's edited, or the project view would change.
-        /// </para>
+        /// one, edited in place. Edit the tree given by <see cref="GetEditableFilter"/>, never the tree of <see cref="Filter"/>, which
+        /// may belong to a lower layer.
         /// </remarks>
         /// <param name="filter">The root of the filter tree, or null to show all the rows.</param>
         public void SetFilter(FilterNode filter)
@@ -366,6 +420,23 @@ namespace SideXP.Database.EditorOnly
             }
 
             return _isHiddenByDefault != null && _isHiddenByDefault(columnId);
+        }
+
+        /// <summary>
+        /// Gets the visibility of a column from the first layer that sets it, without the default visibility of the table.
+        /// </summary>
+        /// <param name="columnId">The identifier of the column.</param>
+        /// <returns>Returns the visibility of the first layer that sets it, or <see cref="ColumnVisibility.Unset"/>.</returns>
+        private ColumnVisibility GetVisibility(string columnId)
+        {
+            foreach (ViewSettings layer in _layers)
+            {
+                ColumnVisibility visibility = layer.GetVisibility(columnId);
+                if (visibility != ColumnVisibility.Unset)
+                    return visibility;
+            }
+
+            return ColumnVisibility.Unset;
         }
 
         /// <summary>

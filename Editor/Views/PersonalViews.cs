@@ -7,13 +7,13 @@ namespace SideXP.Database.EditorOnly
 {
 
     /// <summary>
-    /// The personal views of the tables (see <see cref="PersonalView"/>), and the view open for each table. Stored by
+    /// The data of the views that only the user sees: the personal views of the tables (see <see cref="PersonalView"/>), the open view
+    /// of each table, and the personal overrides of the project views (see <see cref="ViewOverride"/>). Stored by
     /// <see cref="UserViews"/>.
     /// </summary>
     /// <remarks>
-    /// A table that has been opened has at least one view: <see cref="GetOpenView"/> creates the <see cref="DefaultViewName"/> view of
-    /// a table that has none, and the last view of a table can't be deleted. The names of the views are unique per table, ignoring
-    /// case: a taken name gets a number.
+    /// This class only stores the data. The rules (a view per table at least, unique names, the open view after a deletion) are
+    /// applied by <see cref="ViewCatalog"/>, since they also concern the project views.
     /// <para>
     /// The changes are made in memory: the owner saves after each change (see <see cref="UserViews.ScheduleSave"/>).
     /// </para>
@@ -25,22 +25,7 @@ namespace SideXP.Database.EditorOnly
         #region Fields
 
         /// <summary>
-        /// The name of the view created for a table that has none, and of the views of the settings saved before the views.
-        /// </summary>
-        public const string DefaultViewName = "Default";
-
-        /// <summary>
-        /// The name of a new view, before the user renames it.
-        /// </summary>
-        public const string NewViewName = "New View";
-
-        /// <summary>
-        /// Added to the name of a view to name its copy.
-        /// </summary>
-        private const string CopySuffix = " Copy";
-
-        /// <summary>
-        /// The views of all the tables, in the order they are listed. Each table's views keep their relative order.
+        /// The personal views of all the tables, in the order they are listed. Each table's views keep their relative order.
         /// </summary>
         /// <remarks>
         /// A list, since Unity can't serialize dictionaries. The number of views of a project is small enough for a linear search.
@@ -49,196 +34,174 @@ namespace SideXP.Database.EditorOnly
         private List<PersonalView> _views = new List<PersonalView>();
 
         /// <summary>
-        /// The identifiers of the open views, one per table at most.
+        /// The identifiers of the open views, personal or project views, one per table at most.
         /// </summary>
         [SerializeField]
         private List<string> _openViewIds = new List<string>();
 
+        /// <summary>
+        /// The personal overrides of the project views, one per project view at most.
+        /// </summary>
+        [SerializeField]
+        private List<ViewOverride> _overrides = new List<ViewOverride>();
+
         #endregion
 
 
-        #region Public API
+        #region Views
 
         /// <summary>
-        /// Gets the views of a table.
+        /// Gets the personal views of a table.
         /// </summary>
         /// <param name="tableId">The stable identifier of the table (see <see cref="TableDefinition.Id"/>).</param>
         /// <returns>Returns the views of the table, in the order they are listed, or an empty list if it has none.</returns>
         public List<PersonalView> GetViews(string tableId)
         {
-            return _views.FindAll(view => IsValid(view) && view.TableId == tableId);
+            return _views.FindAll(view => view != null && view.IsValid && view.TableId == tableId);
         }
 
         /// <summary>
-        /// Gets the view open for a table: the view the user used last. Creates the <see cref="DefaultViewName"/> view if the table has
-        /// none, and opens the first view of the table if none is open.
-        /// </summary>
-        /// <param name="tableId">The stable identifier of the table (see <see cref="TableDefinition.Id"/>).</param>
-        /// <returns>Returns the open view of the table.</returns>
-        /// <exception cref="ArgumentException">Thrown if the identifier is null or empty.</exception>
-        public PersonalView GetOpenView(string tableId)
-        {
-            if (string.IsNullOrEmpty(tableId))
-                throw new ArgumentException("The identifier of the table can't be null or empty.", nameof(tableId));
-
-            List<PersonalView> views = GetViews(tableId);
-            PersonalView openView = views.Find(view => _openViewIds.Contains(view.Id));
-            if (openView != null)
-                return openView;
-
-            openView = views.Count > 0 ? views[0] : AddView(new PersonalView(DefaultViewName, new ViewSettings(tableId)), -1);
-            SetOpenView(openView);
-            return openView;
-        }
-
-        /// <summary>
-        /// Checks if a view is the open view of its table.
+        /// Checks if a view is one of these views.
         /// </summary>
         /// <param name="view">The view to check.</param>
+        /// <returns>Returns true if the view is one of these views and can be used.</returns>
+        public bool Contains(PersonalView view)
+        {
+            return view != null && view.IsValid && _views.Contains(view);
+        }
+
+        /// <summary>
+        /// Adds a view.
+        /// </summary>
+        /// <param name="view">The view to add.</param>
+        /// <param name="nextTo">A view of the same table after which to insert the view, or null to add it at the end.</param>
+        /// <returns>Returns the added view.</returns>
+        /// <exception cref="ArgumentException">Thrown if the view can't be used, or is already one of these views.</exception>
+        public PersonalView Add(PersonalView view, PersonalView nextTo = null)
+        {
+            if (view == null || !view.IsValid || _views.Contains(view))
+                throw new ArgumentException("The view can't be used, or is already one of the personal views.", nameof(view));
+
+            int index = nextTo != null ? _views.IndexOf(nextTo) : -1;
+            if (index >= 0)
+                _views.Insert(index + 1, view);
+            else
+                _views.Add(view);
+
+            return view;
+        }
+
+        /// <summary>
+        /// Removes a view. Its id stays in the open views: the owner opens another view of its table.
+        /// </summary>
+        /// <param name="view">The view to remove.</param>
+        /// <returns>Returns true if the view has been removed.</returns>
+        public bool Remove(PersonalView view)
+        {
+            return _views.Remove(view);
+        }
+
+        #endregion
+
+
+        #region Open views
+
+        /// <summary>
+        /// Checks if a view is open.
+        /// </summary>
+        /// <param name="viewId">The identifier of the view, personal or project view.</param>
         /// <returns>Returns true if the view is open.</returns>
-        public bool IsOpen(PersonalView view)
+        public bool IsOpen(string viewId)
         {
-            return view != null && _openViewIds.Contains(view.Id);
+            return !string.IsNullOrEmpty(viewId) && _openViewIds.Contains(viewId);
         }
 
         /// <summary>
-        /// Opens a view for its table, instead of the view that was open.
+        /// Opens a view, instead of the other views of its table.
         /// </summary>
-        /// <param name="view">The view to open.</param>
+        /// <param name="viewId">The identifier of the view to open.</param>
+        /// <param name="tableViewIds">The identifiers of all the views of the table, personal and project views, which are closed.</param>
         /// <returns>Returns true if the open view has changed.</returns>
-        /// <exception cref="ArgumentException">Thrown if the view is not one of these views.</exception>
-        public bool SetOpenView(PersonalView view)
+        public bool SetOpen(string viewId, IEnumerable<string> tableViewIds)
         {
-            CheckContains(view);
-            if (IsOpen(view))
+            if (IsOpen(viewId))
                 return false;
 
-            foreach (PersonalView tableView in GetViews(view.TableId))
-                _openViewIds.Remove(tableView.Id);
+            foreach (string tableViewId in tableViewIds)
+                _openViewIds.Remove(tableViewId);
 
-            _openViewIds.Add(view.Id);
+            _openViewIds.Add(viewId);
             return true;
         }
 
         /// <summary>
-        /// Creates a view with the defaults of a table, after its other views. The view is not opened.
+        /// Forgets that a view is open, for example after it's deleted.
         /// </summary>
-        /// <param name="tableId">The stable identifier of the table (see <see cref="TableDefinition.Id"/>).</param>
-        /// <param name="name">The name of the view, or null or blank for <see cref="NewViewName"/>. A taken name gets a number.</param>
-        /// <returns>Returns the created view.</returns>
-        /// <exception cref="ArgumentException">Thrown if the identifier is null or empty.</exception>
-        public PersonalView CreateView(string tableId, string name = null)
+        /// <param name="viewId">The identifier of the view.</param>
+        /// <returns>Returns true if the view was open.</returns>
+        public bool RemoveOpen(string viewId)
         {
-            if (string.IsNullOrEmpty(tableId))
-                throw new ArgumentException("The identifier of the table can't be null or empty.", nameof(tableId));
+            return _openViewIds.Remove(viewId);
+        }
 
-            name = string.IsNullOrWhiteSpace(name) ? NewViewName : name.Trim();
-            return AddView(new PersonalView(GetUniqueName(tableId, name), new ViewSettings(tableId)), -1);
+        #endregion
+
+
+        #region Overrides
+
+        /// <summary>
+        /// Gets the overrides of a project view.
+        /// </summary>
+        /// <param name="viewId">The identifier of the project view.</param>
+        /// <returns>Returns the overrides of the view, or null if the user has none.</returns>
+        public ViewOverride FindOverride(string viewId)
+        {
+            return _overrides.Find(item => item != null && item.Settings != null && item.ViewId == viewId);
         }
 
         /// <summary>
-        /// Creates a copy of a view, with a copy of its settings, right after it. The copy is not opened.
+        /// Gets the overrides of a project view, and creates them, without any setting, if the user has none yet.
         /// </summary>
-        /// <param name="view">The view to copy.</param>
-        /// <returns>Returns the created copy.</returns>
-        /// <exception cref="ArgumentException">Thrown if the view is not one of these views.</exception>
-        public PersonalView DuplicateView(PersonalView view)
+        /// <param name="view">The project view.</param>
+        /// <returns>Returns the settings the user changed in the project view.</returns>
+        /// <exception cref="ArgumentException">Thrown if the view can't be used.</exception>
+        public ViewSettings GetOrCreateOverride(ProjectView view)
         {
-            CheckContains(view);
-            string name = GetUniqueName(view.TableId, $"{view.Name}{CopySuffix}");
-            return AddView(new PersonalView(name, view.Settings.Clone()), _views.IndexOf(view) + 1);
-        }
+            if (view == null || !view.IsValid)
+                throw new ArgumentException("The project view can't be used.", nameof(view));
 
-        /// <summary>
-        /// Renames a view.
-        /// </summary>
-        /// <param name="view">The view to rename.</param>
-        /// <param name="name">The new name of the view, trimmed. A name taken by another view of the table gets a number.</param>
-        /// <returns>Returns true if the name has changed, or false if it's the same or blank.</returns>
-        /// <exception cref="ArgumentException">Thrown if the view is not one of these views.</exception>
-        public bool RenameView(PersonalView view, string name)
-        {
-            CheckContains(view);
-            if (string.IsNullOrWhiteSpace(name))
-                return false;
-
-            name = GetUniqueName(view.TableId, name.Trim(), view);
-            if (name == view.Name)
-                return false;
-
-            view.Name = name;
-            return true;
-        }
-
-        /// <summary>
-        /// Checks if a view can be deleted: it's not the last view of its table.
-        /// </summary>
-        /// <param name="view">The view to check.</param>
-        /// <returns>Returns true if the view can be deleted.</returns>
-        public bool CanDeleteView(PersonalView view)
-        {
-            return view != null && _views.Contains(view) && GetViews(view.TableId).Count > 1;
-        }
-
-        /// <summary>
-        /// Deletes a view. If it's the open view of its table, the next view of the table is opened instead (or the previous one if it
-        /// was the last).
-        /// </summary>
-        /// <param name="view">The view to delete.</param>
-        /// <returns>Returns true if the view has been deleted, or false if it's the last view of its table.</returns>
-        /// <exception cref="ArgumentException">Thrown if the view is not one of these views.</exception>
-        public bool DeleteView(PersonalView view)
-        {
-            CheckContains(view);
-            if (!CanDeleteView(view))
-                return false;
-
-            List<PersonalView> tableViews = GetViews(view.TableId);
-            int index = tableViews.IndexOf(view);
-            bool wasOpen = IsOpen(view);
-            _views.Remove(view);
-            _openViewIds.Remove(view.Id);
-
-            if (wasOpen)
+            ViewOverride viewOverride = FindOverride(view.Id);
+            if (viewOverride == null)
             {
-                tableViews.RemoveAt(index);
-                SetOpenView(tableViews[Mathf.Min(index, tableViews.Count - 1)]);
+                viewOverride = new ViewOverride(view.Id, new ViewSettings(view.TableId));
+                _overrides.Add(viewOverride);
             }
 
-            return true;
+            return viewOverride.Settings;
         }
 
         /// <summary>
-        /// Gets a name that no other view of a table has, ignoring case.
+        /// Removes the overrides of a project view.
         /// </summary>
-        /// <param name="tableId">The stable identifier of the table.</param>
-        /// <param name="name">The wanted name.</param>
-        /// <param name="ignoredView">A view whose name doesn't count, for example the renamed view, or null.</param>
-        /// <returns>Returns the wanted name if it's free, or the name followed by the first free number from 2 otherwise.</returns>
-        /// <example>
-        /// With the views <c>Default</c> and <c>New View</c>, <c>GetUniqueName(tableId, "new view")</c> returns <c>new view 2</c>.
-        /// </example>
-        public string GetUniqueName(string tableId, string name, PersonalView ignoredView = null)
+        /// <param name="viewId">The identifier of the project view.</param>
+        /// <returns>Returns true if the user had overrides on the view.</returns>
+        public bool RemoveOverride(string viewId)
         {
-            List<PersonalView> views = GetViews(tableId);
-            views.Remove(ignoredView);
-            if (!IsNameTaken(views, name))
-                return name;
-
-            for (int number = 2; ; number++)
-            {
-                string candidate = $"{name} {number}";
-                if (!IsNameTaken(views, candidate))
-                    return candidate;
-            }
+            return _overrides.RemoveAll(item => item != null && item.ViewId == viewId) > 0;
         }
 
+        #endregion
+
+
+        #region Settings of the first pass
+
         /// <summary>
-        /// Adds the settings saved before the views, one per table, as the <see cref="DefaultViewName"/> view of their tables, open.
+        /// Adds the settings saved before the views, one per table, as the <see cref="ViewCatalog.DefaultViewName"/> view of their
+        /// tables, open.
         /// </summary>
         /// <remarks>
-        /// The settings of a table that already has views, and the settings without table, are skipped. The settings are used as
-        /// they are, not copied.
+        /// The settings of a table that already has personal views, and the settings without table, are skipped. The settings are used
+        /// as they are, not copied. No table has project views yet when these settings are read.
         /// </remarks>
         /// <param name="defaultViews">The settings of each table saved before the views.</param>
         /// <returns>Returns the number of views added.</returns>
@@ -250,64 +213,12 @@ namespace SideXP.Database.EditorOnly
                 if (settings == null || string.IsNullOrEmpty(settings.TableId) || GetViews(settings.TableId).Count > 0)
                     continue;
 
-                SetOpenView(AddView(new PersonalView(DefaultViewName, settings), -1));
+                PersonalView view = Add(new PersonalView(ViewCatalog.DefaultViewName, settings));
+                SetOpen(view.Id, Array.Empty<string>());
                 count++;
             }
 
             return count;
-        }
-
-        #endregion
-
-
-        #region Private API
-
-        /// <summary>
-        /// Adds a view to the list.
-        /// </summary>
-        /// <param name="view">The view to add.</param>
-        /// <param name="index">The index at which to insert the view, or a negative index to add it at the end.</param>
-        /// <returns>Returns the added view.</returns>
-        private PersonalView AddView(PersonalView view, int index)
-        {
-            if (index >= 0 && index < _views.Count)
-                _views.Insert(index, view);
-            else
-                _views.Add(view);
-
-            return view;
-        }
-
-        /// <summary>
-        /// Checks if a view of a list has a name, ignoring case.
-        /// </summary>
-        /// <param name="views">The views to check.</param>
-        /// <param name="name">The name to find.</param>
-        /// <returns>Returns true if a view has the name.</returns>
-        private static bool IsNameTaken(List<PersonalView> views, string name)
-        {
-            return views.Exists(view => string.Equals(view.Name, name, StringComparison.OrdinalIgnoreCase));
-        }
-
-        /// <summary>
-        /// Checks if a view can be used: it has an id and settings with a table. A hand-edited file can contain views that can't.
-        /// </summary>
-        /// <param name="view">The view to check.</param>
-        /// <returns>Returns true if the view can be used.</returns>
-        private static bool IsValid(PersonalView view)
-        {
-            return view != null && !string.IsNullOrEmpty(view.Id) && !string.IsNullOrEmpty(view.TableId);
-        }
-
-        /// <summary>
-        /// Throws if a view is not one of these views.
-        /// </summary>
-        /// <param name="view">The view to check.</param>
-        /// <exception cref="ArgumentException">Thrown if the view is null or not one of these views.</exception>
-        private void CheckContains(PersonalView view)
-        {
-            if (!IsValid(view) || !_views.Contains(view))
-                throw new ArgumentException("The view is not one of the personal views.", nameof(view));
         }
 
         #endregion

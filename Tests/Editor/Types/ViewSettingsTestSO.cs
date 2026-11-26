@@ -25,6 +25,12 @@ namespace SideXP.Database.Tests
         [SerializeField]
         internal PersonalViews personalViews = null;
 
+        /// <summary>
+        /// The serialized project views.
+        /// </summary>
+        [SerializeField]
+        internal ProjectViewList projectViews = null;
+
     }
 
 }

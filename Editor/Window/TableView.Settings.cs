@@ -8,7 +8,7 @@ namespace SideXP.Database.EditorOnly
 
     /// <summary>
     /// The remembered settings of the table view: the order, the widths and the visibility of the columns, and the sort, stored in the
-    /// open view of the table (see <see cref="PersonalViews.GetOpenView"/>), resolved from its layers (see
+    /// open view of the table (see <see cref="ViewCatalog.GetOpenView"/>), resolved from its layers (see
     /// <see cref="LayeredViewSettings"/>).
     /// </summary>
     /// <remarks>
