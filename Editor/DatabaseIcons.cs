@@ -49,6 +49,17 @@ namespace SideXP.Database.EditorOnly
         public const string Delete = "trash";
 
         /// <summary>
+        /// A database, for the button of the Inspector header that opens the table of an asset listed by a single table.
+        /// </summary>
+        public const string OpenInDatabase = "database";
+
+        /// <summary>
+        /// A database with an arrow pointing down, for the button of the Inspector header that opens the menu of the tables of an asset
+        /// listed by several tables.
+        /// </summary>
+        public const string OpenInDatabaseWithChoice = "database-down";
+
+        /// <summary>
         /// A spreadsheet file, for the button that opens the menu of the import and the exports of CSV and TSV files.
         /// </summary>
         public const string ImportExport = "file-spreadsheet";

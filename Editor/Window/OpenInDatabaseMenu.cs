@@ -15,7 +15,7 @@ namespace SideXP.Database.EditorOnly
     /// <remarks>
     /// When several tables list the asset (the table of its type, and the tables of its base types), a menu lets the user choose one,
     /// the nearest table first. Unity has no public API to add menu items at runtime, so this menu opens after the item is clicked,
-    /// at the position of the pointer.
+    /// at the position of the pointer. The button of the Inspector header does the same (see <see cref="InspectorHeaderButton"/>).
     /// </remarks>
     internal static class OpenInDatabaseMenu
     {
@@ -55,11 +55,46 @@ namespace SideXP.Database.EditorOnly
         [MenuItem(MenuPath, false)]
         private static void OpenSelection()
         {
-            if (!TryGetSelectedAsset(out Object asset, out List<TableDefinition> tables))
-                return;
+            if (TryGetSelectedAsset(out Object asset, out List<TableDefinition> tables))
+                Open(asset, tables, null);
+        }
 
+        #endregion
+
+
+        #region Public API
+
+        /// <summary>
+        /// Gets the tables that list an asset.
+        /// </summary>
+        /// <param name="asset">The asset, main asset or sub-asset.</param>
+        /// <param name="tables">Outputs the tables that list the asset, the nearest first (see
+        /// <see cref="TableRegistry.GetTablesListing(System.Type)"/>), or null if the object is not an asset.</param>
+        /// <returns>Returns true if the object is an asset listed by at least one table.</returns>
+        public static bool TryGetTables(Object asset, out List<TableDefinition> tables)
+        {
+            tables = null;
+            // Objects of the scenes are not rows
+            if (asset == null || !AssetDatabase.Contains(asset))
+                return false;
+
+            tables = TableRegistry.GetTablesListing(asset.GetType());
+            return tables.Count > 0;
+        }
+
+        /// <summary>
+        /// Opens the table of an asset in a Database window, and shows its row. If several tables list the asset, a menu lets the user
+        /// choose the table first, the nearest first.
+        /// </summary>
+        /// <param name="asset">The asset of which to show the row.</param>
+        /// <param name="tables">The tables that list the asset, the nearest first (see <see cref="TryGetTables"/>). Not empty.</param>
+        /// <param name="menuRect">The area under which the menu of the tables opens, usually the clicked button, or null to open it at
+        /// the position of the pointer. Without area and without the event of a click (an item clicked in the main menu bar), the
+        /// nearest table is opened.</param>
+        public static void Open(Object asset, List<TableDefinition> tables, Rect? menuRect)
+        {
             // ShowAsContext() does nothing without the event of the click
-            if (tables.Count == 1 || Event.current == null)
+            if (tables.Count == 1 || (!menuRect.HasValue && Event.current == null))
             {
                 DatabaseWindow.Open(tables[0], asset);
                 return;
@@ -69,7 +104,10 @@ namespace SideXP.Database.EditorOnly
             foreach (TableDefinition table in tables)
                 menu.AddItem(new GUIContent(GetMenuText(table)), false, () => OpenTable(table, asset));
 
-            menu.ShowAsContext();
+            if (menuRect.HasValue)
+                menu.DropDown(menuRect.Value);
+            else
+                menu.ShowAsContext();
         }
 
         #endregion
@@ -84,19 +122,12 @@ namespace SideXP.Database.EditorOnly
         /// Only the active object of the selection is used, which can be a sub-asset.
         /// </remarks>
         /// <param name="asset">Outputs the selected asset.</param>
-        /// <param name="tables">Outputs the tables that list the asset, the nearest first (see
-        /// <see cref="TableRegistry.GetTablesListing(System.Type)"/>).</param>
+        /// <param name="tables">Outputs the tables that list the asset, the nearest first.</param>
         /// <returns>Returns true if the selected object is an asset listed by at least one table.</returns>
         private static bool TryGetSelectedAsset(out Object asset, out List<TableDefinition> tables)
         {
             asset = Selection.activeObject;
-            tables = null;
-            // Objects of the scenes are not rows
-            if (asset == null || !AssetDatabase.Contains(asset))
-                return false;
-
-            tables = TableRegistry.GetTablesListing(asset.GetType());
-            return tables.Count > 0;
+            return TryGetTables(asset, out tables);
         }
 
         /// <summary>
