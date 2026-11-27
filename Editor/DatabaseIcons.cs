@@ -49,6 +49,11 @@ namespace SideXP.Database.EditorOnly
         public const string Delete = "trash";
 
         /// <summary>
+        /// A spreadsheet file, for the button that opens the menu of the exports to CSV and TSV files.
+        /// </summary>
+        public const string Export = "file-spreadsheet";
+
+        /// <summary>
         /// A chain link, for the button of the selection sync while it's enabled.
         /// </summary>
         public const string SelectionSynced = "link";

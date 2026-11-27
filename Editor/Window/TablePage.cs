@@ -84,6 +84,12 @@ namespace SideXP.Database.EditorOnly
         private const string RefreshText = "Refresh";
         private const string RefreshTooltip = "Loads the assets of the table again. Use it if a change made outside of the window " +
             "doesn't show up, such as a value written by a script without notifying Unity.";
+        private const string ExportText = "Export";
+        private const string ExportViewScopeText = "View";
+        private const string ExportTableScopeText = "Whole Table";
+        private const string ExportTooltip = "Exports the rows to a CSV or TSV file, which spreadsheet apps can open: the view as " +
+            "displayed (its visible columns and the rows of all the pages), or the whole table (all the columns and all the assets). " +
+            "The first column of the file identifies the assets.";
         private const string SyncSelectionText = "Sync Selection";
         private const string SyncSelectionTooltip = "When enabled, selecting cells selects the assets of their rows in Unity, so the " +
             "Inspector shows them (and edits several of them at once). The rows of the assets selected elsewhere are highlighted. " +
@@ -132,6 +138,11 @@ namespace SideXP.Database.EditorOnly
         /// The button that creates an asset of the table, hidden if the table has no type that can be created.
         /// </summary>
         private ToolbarButton _createButton = null;
+
+        /// <summary>
+        /// The button that opens the menu of the exports to CSV and TSV files (see <see cref="TableView.Export"/>).
+        /// </summary>
+        private ToolbarButton _exportButton = null;
 
         /// <summary>
         /// The button that enables and disables the selection sync (see <see cref="TableView.SetSelectionSynced(bool)"/>). A button
@@ -232,6 +243,10 @@ namespace SideXP.Database.EditorOnly
             ToolbarButton refreshButton = new ToolbarButton(_tableView.Reload) { tooltip = RefreshTooltip };
             DatabaseElements.SetIcon(refreshButton, DatabaseIcons.Refresh, RefreshText);
             toolbar.Add(refreshButton);
+
+            _exportButton = new ToolbarButton(ShowExportMenu) { tooltip = ExportTooltip };
+            DatabaseElements.SetIcon(_exportButton, DatabaseIcons.Export, ExportText);
+            toolbar.Add(_exportButton);
 
             _syncSelectionButton = new ToolbarButton(OnSyncSelectionClicked) { tooltip = SyncSelectionTooltip };
             UpdateSyncSelectionButton();
@@ -642,6 +657,42 @@ namespace SideXP.Database.EditorOnly
             SetTable(_table, _searchField.value, 0);
             // The table view doesn't notify the page it's given
             PageChanged?.Invoke(0);
+        }
+
+        #endregion
+
+
+        #region Export
+
+        /// <summary>
+        /// Called when the button of the exports is clicked. Opens the menu of the exports under it: the view, then the whole table,
+        /// each as CSV or TSV.
+        /// </summary>
+        private void ShowExportMenu()
+        {
+            if (_table == null)
+                return;
+
+            GenericMenu menu = new GenericMenu();
+            AddExportItems(menu, false);
+            menu.AddSeparator(string.Empty);
+            AddExportItems(menu, true);
+            menu.DropDown(_exportButton.worldBound);
+        }
+
+        /// <summary>
+        /// Adds the items that export the view or the whole table to the menu of the exports, one per format.
+        /// </summary>
+        /// <param name="menu">The menu of the exports.</param>
+        /// <param name="isWholeTable">If enabled, the items export the whole table. Otherwise, they export the view.</param>
+        private void AddExportItems(GenericMenu menu, bool isWholeTable)
+        {
+            string scopeText = isWholeTable ? ExportTableScopeText : ExportViewScopeText;
+            foreach (DelimitedFormat format in new[] { DelimitedFormat.Csv, DelimitedFormat.Tsv })
+            {
+                string text = $"Export {scopeText} as {TableExport.GetFormatName(format)}...";
+                menu.AddItem(new GUIContent(text), false, () => _tableView.Export(isWholeTable, format));
+            }
         }
 
         #endregion

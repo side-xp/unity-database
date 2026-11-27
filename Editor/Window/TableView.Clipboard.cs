@@ -64,7 +64,7 @@ namespace SideXP.Database.EditorOnly
 
                 List<string> rowValues = new List<string>(columnIndices.Count);
                 foreach (int columnIndex in columnIndices)
-                    rowValues.Add(ToCellText(_columns[columnIndex], row.GetValue(columnIndex), "to copy it") ?? string.Empty);
+                    rowValues.Add(_columns[columnIndex].ToText(row.GetValue(columnIndex), "to copy it") ?? string.Empty);
 
                 values.Add(rowValues);
             }
@@ -247,35 +247,6 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Converts the value of a cell to text through the handler of its column.
-        /// </summary>
-        /// <remarks>
-        /// An error of the handler is logged once per column, so a broken custom handler doesn't break the table.
-        /// </remarks>
-        /// <param name="column">The column of the cell.</param>
-        /// <param name="value">The cached value of the cell.</param>
-        /// <param name="purpose">Why the value is converted, at the end of the error message (for example "for the search").</param>
-        /// <returns>Returns the text of the cell, or null if the handler failed.</returns>
-        private static string ToCellText(TableViewColumn column, object value, string purpose)
-        {
-            try
-            {
-                return column.Handler.ToText(value);
-            }
-            catch (Exception exception)
-            {
-                if (!column.HasLoggedError)
-                {
-                    column.HasLoggedError = true;
-                    Debug.LogError($"{DatabaseConstants.LogPrefix}The cell handler {column.Handler.GetType()} failed to convert a " +
-                        $"value of the column \"{column.Name}\" to text {purpose}. The next errors of this column are not logged.");
-                    Debug.LogException(exception);
-                }
-                return null;
-            }
-        }
-
-        /// <summary>
         /// Shows the reason why an operation is refused: as a notification in the Database window if it has the focus, and in the
         /// console.
         /// </summary>
@@ -284,7 +255,15 @@ namespace SideXP.Database.EditorOnly
         private void ShowMessage(string message, Object context = null)
         {
             Debug.LogWarning($"{DatabaseConstants.LogPrefix}{message}", context);
+            ShowNotification(message);
+        }
 
+        /// <summary>
+        /// Shows a message as a notification in the Database window, if it has the focus.
+        /// </summary>
+        /// <param name="message">The message to show.</param>
+        private void ShowNotification(string message)
+        {
             EditorWindow window = EditorWindow.focusedWindow;
             if (window != null && window.rootVisualElement.panel == panel)
                 window.ShowNotification(new GUIContent(message));

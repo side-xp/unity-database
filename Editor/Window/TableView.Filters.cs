@@ -369,15 +369,15 @@ namespace SideXP.Database.EditorOnly
         /// Converts the value of a cell to text through the handler of its column, for the text conditions of the filters.
         /// </summary>
         /// <remarks>
-        /// An error of the handler is logged once per column (see <see cref="ToCellText"/>), and the cell is then filtered as an empty
-        /// text.
+        /// An error of the handler is logged once per column (see <see cref="TableViewColumn.ToText(object, string)"/>), and the cell is
+        /// then filtered as an empty text.
         /// </remarks>
         /// <param name="column">The column of the cell.</param>
         /// <param name="value">The cached value of the cell.</param>
         /// <returns>Returns the text of the cell, or null if the handler failed.</returns>
         private static string ToFilterText(TableViewColumn column, object value)
         {
-            return ToCellText(column, value, "for the filters");
+            return column.ToText(value, "for the filters");
         }
 
         #endregion

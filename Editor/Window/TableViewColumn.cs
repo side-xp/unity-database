@@ -202,6 +202,35 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
+        /// Converts a value of the column to text through its handler, for the copy, the search, the filters and the export.
+        /// </summary>
+        /// <remarks>
+        /// An error of the handler is logged once per column (see <see cref="HasLoggedError"/>), so a broken custom handler doesn't
+        /// break the table.
+        /// </remarks>
+        /// <param name="value">The cached value of a cell of the column.</param>
+        /// <param name="purpose">Why the value is converted, at the end of the error message (for example "for the search").</param>
+        /// <returns>Returns the text of the value, or null if the handler failed.</returns>
+        public string ToText(object value, string purpose)
+        {
+            try
+            {
+                return _handler.ToText(value);
+            }
+            catch (Exception exception)
+            {
+                if (!_hasLoggedError)
+                {
+                    _hasLoggedError = true;
+                    Debug.LogError($"{DatabaseConstants.LogPrefix}The cell handler {_handler.GetType()} failed to convert a value of " +
+                        $"the column \"{_name}\" to text {purpose}. The next errors of this column are not logged.");
+                    Debug.LogException(exception);
+                }
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Creates the column that displays a column of a table definition.
         /// </summary>
         /// <param name="column">The column of the table definition.</param>

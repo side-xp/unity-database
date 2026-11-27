@@ -151,15 +151,15 @@ namespace SideXP.Database.EditorOnly
         /// Converts the value of a cell to text through the handler of its column.
         /// </summary>
         /// <remarks>
-        /// An error of the handler is logged once per column (see <see cref="ToCellText"/>), and the cell is then searched as an empty
-        /// text, so a broken custom handler doesn't break the search.
+        /// An error of the handler is logged once per column (see <see cref="TableViewColumn.ToText(object, string)"/>), and the cell is
+        /// then searched as an empty text, so a broken custom handler doesn't break the search.
         /// </remarks>
         /// <param name="column">The column of the cell.</param>
         /// <param name="value">The cached value of the cell.</param>
         /// <returns>Returns the text of the cell, or null if the handler failed.</returns>
         private static string ToSearchText(TableViewColumn column, object value)
         {
-            return ToCellText(column, value, "for the search");
+            return column.ToText(value, "for the search");
         }
 
         /// <summary>
