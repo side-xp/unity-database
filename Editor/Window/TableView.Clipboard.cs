@@ -115,7 +115,7 @@ namespace SideXP.Database.EditorOnly
                     continue;
                 }
 
-                if (!TryParsePastedText(row, column, target.Text, out object value))
+                if (!column.TryParse(target.Text, row.Asset, "to paste it", out object value))
                 {
                     rejectedCount++;
                     continue;
@@ -211,39 +211,6 @@ namespace SideXP.Database.EditorOnly
             List<string> columnIds = GetColumnIdsInOrder();
             columnIds.Remove(TableViewColumn.ControlsId);
             return columnIds;
-        }
-
-        /// <summary>
-        /// Converts a pasted text to the value of a cell, through the handler of its column.
-        /// </summary>
-        /// <remarks>
-        /// An error of the handler is logged once per column, and the cell is then skipped.
-        /// </remarks>
-        /// <param name="row">The row of the cell.</param>
-        /// <param name="column">The column of the cell.</param>
-        /// <param name="text">The pasted text.</param>
-        /// <param name="value">Outputs the converted value.</param>
-        /// <returns>Returns true if the text has been converted.</returns>
-        private static bool TryParsePastedText(TableRow row, TableViewColumn column, string text, out object value)
-        {
-            try
-            {
-                CellContext context = new CellContext(row.Asset, column.Field, column.Accessor.ValueType);
-                return column.Handler.TryParse(text, context, out value);
-            }
-            catch (Exception exception)
-            {
-                if (!column.HasLoggedError)
-                {
-                    column.HasLoggedError = true;
-                    Debug.LogError($"{DatabaseConstants.LogPrefix}The cell handler {column.Handler.GetType()} failed to convert a " +
-                        $"pasted text for the column \"{column.Name}\". The next errors of this column are not logged.");
-                    Debug.LogException(exception);
-                }
-
-                value = null;
-                return false;
-            }
         }
 
         /// <summary>

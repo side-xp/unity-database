@@ -24,9 +24,10 @@ namespace SideXP.Database.EditorOnly
         private const string IconClass = "database-cell__reference-icon";
 
         /// <summary>
-        /// The character between the path of an asset and the name of a sub-asset in the text of a reference.
+        /// The character between the path of an asset and the name of a sub-asset in the text of a reference. Also read by the import,
+        /// whose identity column accepts the same paths.
         /// </summary>
-        private const char SubAssetSeparator = '#';
+        public const char SubAssetSeparator = '#';
 
         /// <summary>
         /// The rank of empty references (<i>None</i>) in ascending order: before all the others.

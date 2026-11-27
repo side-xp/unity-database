@@ -3,6 +3,8 @@ using System.Reflection;
 
 using UnityEngine;
 
+using Object = UnityEngine.Object;
+
 namespace SideXP.Database.EditorOnly
 {
 
@@ -227,6 +229,39 @@ namespace SideXP.Database.EditorOnly
                     Debug.LogException(exception);
                 }
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// Converts a text to a value of the column through its handler, for the paste and the import.
+        /// </summary>
+        /// <remarks>
+        /// An error of the handler is logged once per column (see <see cref="HasLoggedError"/>), and the text is then not converted.
+        /// </remarks>
+        /// <param name="text">The text to convert.</param>
+        /// <param name="asset">The asset of the cell, or null for an asset that an import will create.</param>
+        /// <param name="purpose">Why the text is converted, at the end of the error message (for example "to paste it").</param>
+        /// <param name="value">Outputs the converted value, or null if the text can't be converted.</param>
+        /// <returns>Returns true if the text has been converted.</returns>
+        public bool TryParse(string text, Object asset, string purpose, out object value)
+        {
+            try
+            {
+                CellContext context = new CellContext(asset, _field, _accessor.ValueType);
+                return _handler.TryParse(text, context, out value);
+            }
+            catch (Exception exception)
+            {
+                if (!_hasLoggedError)
+                {
+                    _hasLoggedError = true;
+                    Debug.LogError($"{DatabaseConstants.LogPrefix}The cell handler {_handler.GetType()} failed to convert a text " +
+                        $"{purpose} in the column \"{_name}\". The next errors of this column are not logged.");
+                    Debug.LogException(exception);
+                }
+
+                value = null;
+                return false;
             }
         }
 

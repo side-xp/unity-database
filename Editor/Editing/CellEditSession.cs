@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 
 using UnityEngine;
@@ -128,6 +129,42 @@ namespace SideXP.Database.EditorOnly
 
                 SetValue(property, value);
                 return serializedObject.ApplyModifiedProperties();
+            }
+        }
+
+        /// <summary>
+        /// Writes several values to the cells of an asset, through a single serialized object, for example the values of an import.
+        /// </summary>
+        /// <remarks>
+        /// An undoable write is recorded in the current Undo group. A write without Undo is meant for an asset that has just been created,
+        /// whose creation can't be undone: undoing its values would leave it with the default values.
+        /// </remarks>
+        /// <param name="asset">The asset of the cells.</param>
+        /// <param name="values">The paths of the serialized properties of the cells, from the asset, with the values to write, of the
+        /// C# types of the fields.</param>
+        /// <param name="isUndoable">If enabled, the writes are recorded in the current Undo group.</param>
+        /// <returns>Returns true if the values have changed the asset.</returns>
+        /// <exception cref="ArgumentException">Thrown if the asset has no property at one of the paths. Nothing is written then.
+        /// </exception>
+        public static bool WriteValues(Object asset, IReadOnlyList<KeyValuePair<string, object>> values, bool isUndoable)
+        {
+            using (SerializedObject serializedObject = new SerializedObject(asset))
+            {
+                foreach (KeyValuePair<string, object> value in values)
+                {
+                    SerializedProperty property = serializedObject.FindProperty(value.Key);
+                    if (property == null)
+                    {
+                        throw new ArgumentException($"The asset {asset.name} has no serialized property at \"{value.Key}\".",
+                            nameof(values));
+                    }
+
+                    SetValue(property, value.Value);
+                }
+
+                return isUndoable
+                    ? serializedObject.ApplyModifiedProperties()
+                    : serializedObject.ApplyModifiedPropertiesWithoutUndo();
             }
         }
 

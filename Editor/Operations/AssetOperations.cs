@@ -31,9 +31,10 @@ namespace SideXP.Database.EditorOnly
 
         /// <summary>
         /// The files of the sub-assets changed by the operations, by the Undo group of the operation, so they are saved again when
-        /// the operation is undone or redone (see <see cref="StartSubAssetUndoGroup(string, string)"/>).
+        /// the operation is undone or redone (see <see cref="StartSubAssetUndoGroup(string, string)"/>). A group can change several
+        /// files, for example an import that renames sub-assets.
         /// </summary>
-        private static Dictionary<int, string> s_subAssetFilesByUndoGroup = new Dictionary<int, string>();
+        private static Dictionary<int, List<string>> s_subAssetFilesByUndoGroup = new Dictionary<int, List<string>>();
 
         /// <summary>
         /// Checks if <see cref="Undo.undoRedoEvent"/> is listened to. Static events are cleared by domain reloads, like this flag.
@@ -170,46 +171,22 @@ namespace SideXP.Database.EditorOnly
         /// <exception cref="ArgumentNullException">Thrown if the asset is null.</exception>
         public static bool TryRename(Object asset, string newName, out string error)
         {
-            if (asset == null)
-                throw new ArgumentNullException(nameof(asset));
+            return TryRename(asset, newName, null, out error);
+        }
 
-            error = null;
-            string trimmedName = newName != null ? newName.Trim() : string.Empty;
-            if (trimmedName.Length == 0)
-            {
-                error = "The name can't be empty.";
-                return false;
-            }
-
-            if (trimmedName == asset.name)
-                return false;
-
-            string path = AssetDatabase.GetAssetPath(asset);
-            if (string.IsNullOrEmpty(path))
-            {
-                error = NotAnAssetError;
-                return false;
-            }
-
-            if (AssetDatabase.IsSubAsset(asset))
-            {
-                StartSubAssetUndoGroup(RenameUndoName, path);
-                Undo.RecordObject(asset, RenameUndoName);
-                asset.name = trimmedName;
-                EditorUtility.SetDirty(asset);
-                SaveFile(path);
-                return true;
-            }
-
-            // Returns an empty string on success, and the reason of the failure otherwise
-            string renameError = AssetDatabase.RenameAsset(path, trimmedName);
-            if (!string.IsNullOrEmpty(renameError))
-            {
-                error = renameError;
-                return false;
-            }
-
-            return true;
+        /// <summary>
+        /// Renames an asset as part of an operation that has its own Undo group, such as an import. A sub-asset is renamed in that
+        /// group instead of a group of its own, and its file is saved. A main asset is renamed with its file, which can't be undone.
+        /// </summary>
+        /// <param name="asset">The asset to rename.</param>
+        /// <param name="newName">The new name of the asset, without extension. Trimmed.</param>
+        /// <param name="undoGroup">The Undo group of the operation, the current group (see <see cref="Undo.GetCurrentGroup"/>).</param>
+        /// <param name="error"><inheritdoc cref="TryRename(Object, string, out string)" path="/param[@name='error']"/></param>
+        /// <returns><inheritdoc cref="TryRename(Object, string, out string)" path="/returns"/></returns>
+        /// <exception cref="ArgumentNullException">Thrown if the asset is null.</exception>
+        public static bool TryRename(Object asset, string newName, int undoGroup, out string error)
+        {
+            return TryRename(asset, newName, (int?)undoGroup, out error);
         }
 
         /// <summary>
@@ -323,6 +300,64 @@ namespace SideXP.Database.EditorOnly
         #region Private API
 
         /// <summary>
+        /// Renames an asset, in an Undo group of its own or in the group of an operation.
+        /// </summary>
+        /// <param name="asset">The asset to rename.</param>
+        /// <param name="newName">The new name of the asset, without extension. Trimmed.</param>
+        /// <param name="undoGroup">The Undo group of the operation that renames a sub-asset, or null to rename it in a group of its own.
+        /// </param>
+        /// <param name="error"><inheritdoc cref="TryRename(Object, string, out string)" path="/param[@name='error']"/></param>
+        /// <returns><inheritdoc cref="TryRename(Object, string, out string)" path="/returns"/></returns>
+        /// <exception cref="ArgumentNullException">Thrown if the asset is null.</exception>
+        private static bool TryRename(Object asset, string newName, int? undoGroup, out string error)
+        {
+            if (asset == null)
+                throw new ArgumentNullException(nameof(asset));
+
+            error = null;
+            string trimmedName = newName != null ? newName.Trim() : string.Empty;
+            if (trimmedName.Length == 0)
+            {
+                error = "The name can't be empty.";
+                return false;
+            }
+
+            if (trimmedName == asset.name)
+                return false;
+
+            string path = AssetDatabase.GetAssetPath(asset);
+            if (string.IsNullOrEmpty(path))
+            {
+                error = NotAnAssetError;
+                return false;
+            }
+
+            if (AssetDatabase.IsSubAsset(asset))
+            {
+                if (undoGroup.HasValue)
+                    AddSubAssetFile(undoGroup.Value, path);
+                else
+                    StartSubAssetUndoGroup(RenameUndoName, path);
+
+                Undo.RecordObject(asset, RenameUndoName);
+                asset.name = trimmedName;
+                EditorUtility.SetDirty(asset);
+                SaveFile(path);
+                return true;
+            }
+
+            // Returns an empty string on success, and the reason of the failure otherwise
+            string renameError = AssetDatabase.RenameAsset(path, trimmedName);
+            if (!string.IsNullOrEmpty(renameError))
+            {
+                error = renameError;
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
         /// Starts a new Undo group for an operation on a sub-asset, so the next recorded changes form their own Undo step, never merged
         /// with a change made just before. The file of the sub-asset is saved again when the step is undone or redone.
         /// </summary>
@@ -338,7 +373,25 @@ namespace SideXP.Database.EditorOnly
         {
             Undo.IncrementCurrentGroup();
             Undo.SetCurrentGroupName(undoName);
-            s_subAssetFilesByUndoGroup[Undo.GetCurrentGroup()] = path;
+            AddSubAssetFile(Undo.GetCurrentGroup(), path);
+        }
+
+        /// <summary>
+        /// Remembers that an Undo group changes the file of a sub-asset, so the file is saved again when the group is undone or redone
+        /// (see <see cref="StartSubAssetUndoGroup(string, string)"/>).
+        /// </summary>
+        /// <param name="undoGroup">The Undo group of the operation.</param>
+        /// <param name="path">The path of the file of the sub-asset.</param>
+        private static void AddSubAssetFile(int undoGroup, string path)
+        {
+            if (!s_subAssetFilesByUndoGroup.TryGetValue(undoGroup, out List<string> paths))
+            {
+                paths = new List<string>();
+                s_subAssetFilesByUndoGroup.Add(undoGroup, paths);
+            }
+
+            if (!paths.Contains(path))
+                paths.Add(path);
 
             if (!s_isListeningToUndo)
             {
@@ -348,12 +401,15 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Called after any Undo or Redo. Saves the file of a sub-asset if the step comes from an operation on it.
+        /// Called after any Undo or Redo. Saves the files of the sub-assets if the step comes from an operation on them.
         /// </summary>
         /// <param name="undo">The undone or redone step.</param>
         private static void OnUndoRedo(in UndoRedoInfo undo)
         {
-            if (s_subAssetFilesByUndoGroup.TryGetValue(undo.undoGroup, out string path))
+            if (!s_subAssetFilesByUndoGroup.TryGetValue(undo.undoGroup, out List<string> paths))
+                return;
+
+            foreach (string path in paths)
                 SaveFile(path);
         }
 

@@ -15,7 +15,7 @@ namespace SideXP.Database.EditorOnly
         #region Fields
 
         /// <summary>
-        /// The asset of the cell's row.
+        /// The asset of the cell's row. Null when an import converts the text of an asset it will create, before the asset exists.
         /// </summary>
         public readonly Object Asset;
 
