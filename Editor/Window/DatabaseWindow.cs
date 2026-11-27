@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -15,9 +16,9 @@ namespace SideXP.Database.EditorOnly
     /// Editor window that displays assets as tables, and lets you view and edit their values like in a spreadsheet.
     /// </summary>
     /// <remarks>
-    /// The window shows either the list of the tables, or an open table. The open table, the search text of the list, the search
-    /// text and the page of the open table, the selection sync option and the view panel (open or closed) are remembered across domain
-    /// reloads and editor sessions. Open it from
+    /// The window shows either the list of the tables, or an open table. The open table, the search text and the expanded groups of
+    /// the list, the search text and the page of the open table, the selection sync option and the view panel (open or closed) are
+    /// remembered across domain reloads and editor sessions. Open it from
     /// <c>Tools &gt; Sideways Experiments &gt; Database</c>, or from code.
     /// </remarks>
     /// <example>
@@ -49,6 +50,13 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         [SerializeField]
         private string _tableSearch = string.Empty;
+
+        /// <summary>
+        /// The paths of the groups of the table list expanded by the user (see <see cref="TableTreeNode.GroupPath"/>). The other groups
+        /// are collapsed, new groups included. The paths of groups that don't exist anymore are kept.
+        /// </summary>
+        [SerializeField]
+        private List<string> _expandedTableGroups = new List<string>();
 
         /// <summary>
         /// The text of the search field of the open table, cleared when another table is opened.
@@ -107,9 +115,10 @@ namespace SideXP.Database.EditorOnly
             else
                 Debug.LogWarning($"{DatabaseConstants.LogPrefix}The style sheet of the window can't be found at \"{StyleSheetPath}\".");
 
-            _tableListPage = new TableListPage(TableRegistry.Tables, _tableSearch);
+            _tableListPage = new TableListPage(TableRegistry.Tables, _tableSearch, _expandedTableGroups);
             _tableListPage.TableChosen += OpenTable;
             _tableListPage.SearchChanged += search => _tableSearch = search;
+            _tableListPage.GroupExpandedChanged += SetTableGroupExpanded;
             rootVisualElement.Add(_tableListPage);
 
             _tablePage = new TablePage();
@@ -254,6 +263,19 @@ namespace SideXP.Database.EditorOnly
             _assetToShow = null;
             if (isTableOpen && assetToShow != null)
                 _tablePage.ShowAsset(assetToShow);
+        }
+
+        /// <summary>
+        /// Remembers that the user expanded or collapsed a group of the table list.
+        /// </summary>
+        /// <param name="groupPath">The path of the group.</param>
+        /// <param name="isExpanded">True if the group is expanded, false if it's collapsed.</param>
+        private void SetTableGroupExpanded(string groupPath, bool isExpanded)
+        {
+            // The groups are compared ignoring case, like in the table list
+            _expandedTableGroups.RemoveAll(i => string.Equals(i, groupPath, StringComparison.OrdinalIgnoreCase));
+            if (isExpanded)
+                _expandedTableGroups.Add(groupPath);
         }
 
         #endregion

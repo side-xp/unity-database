@@ -815,20 +815,33 @@
     flex-grow: 1;
 }
 
-/* The height of the items is set by TableListPage. The hand cursor says that a single click opens the table */
+/* The height of the items is set by TableListPage. The hand cursor says that a single click opens the table or toggles the group.
+   The item fills the content of the row of the tree view, after its indent and its arrow, so the whole row can be clicked */
 .database-table-list__item {
     cursor: link;
+    flex-grow: 1;
     flex-direction: row;
     align-items: center;
     padding-top: 2px;
     padding-bottom: 2px;
-    padding-left: 10px;
+    padding-left: 2px;
     padding-right: 10px;
+}
+
+.database-table-list__icon {
+    flex-shrink: 0;
+    margin-right: 6px;
+    opacity: 0.8;
 }
 
 .database-table-list__name {
     -unity-text-align: middle-left;
     font-size: 14px;
+}
+
+/* The groups are only used to navigate: their names are fainter than the tables */
+.database-table-list__item--group > .database-table-list__name {
+    opacity: 0.8;
 }
 
 .database-message {

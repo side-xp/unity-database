@@ -162,6 +162,21 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         public const string SortDescending = "arrow-down";
 
+        /// <summary>
+        /// A folder, shown before the name of a collapsed group of the table list.
+        /// </summary>
+        public const string TableGroup = "folder";
+
+        /// <summary>
+        /// An open folder, shown before the name of an expanded group of the table list.
+        /// </summary>
+        public const string ExpandedTableGroup = "folder-open";
+
+        /// <summary>
+        /// A grid, shown before the name of a table in the table list.
+        /// </summary>
+        public const string Table = "table";
+
         #endregion
 
     }
