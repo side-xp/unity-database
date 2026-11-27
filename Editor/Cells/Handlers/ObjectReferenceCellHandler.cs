@@ -122,7 +122,8 @@ namespace SideXP.Database.EditorOnly
         /// Gets the rank of a reference in ascending order.
         /// </summary>
         /// <param name="value">The reference.</param>
-        /// <returns>Returns <see cref="EmptyReferenceRank"/>, <see cref="MissingReferenceRank"/> or <see cref="ValidReferenceRank"/>.</returns>
+        /// <returns>Returns <see cref="EmptyReferenceRank"/>, <see cref="MissingReferenceRank"/> or
+        /// <see cref="ValidReferenceRank"/>.</returns>
         private static int GetCompareRank(object value)
         {
             if (value is not Object reference)

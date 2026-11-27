@@ -13,9 +13,10 @@ namespace SideXP.Database
     /// The sub-assets hidden from the Project window are not listed. The tables of types marked with <see cref="ObsoleteAttribute"/>
     /// have a mark in the window.
     /// <para>
-    /// The window remembers the layout of each table, identified by the GUID of the script file of its type: renaming the type keeps
-    /// the layout, as long as its script file is renamed from Unity. A type without a script file of its own (a nested type, a type
-    /// compiled in a DLL) is identified by its full name instead. This attribute is stripped from player builds.
+    /// The window saves the views of each table (the layout of the columns, the sort, the filters), identified by the GUID of the
+    /// script file of its type: renaming the type keeps the views, as long as its script file is renamed from Unity. A type without a
+    /// script file of its own (a nested type, a type compiled in a DLL) is identified by its full name instead. This attribute is
+    /// stripped from player builds.
     /// </para>
     /// </remarks>
     /// <example>

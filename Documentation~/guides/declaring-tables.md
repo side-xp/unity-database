@@ -2,6 +2,8 @@
 
 Tables are declared in code, with two attributes of the `SideXP.Database` namespace: `[Table]` on a `ScriptableObject` type, and `[Column]` on the fields to show. Both are stripped from player builds.
 
+Columns can also show values computed by a method, instead of a field: see [Computed columns](computed-columns.md).
+
 ## `[Table]`
 
 Makes a `ScriptableObject` type a table. The table lists every asset of the type found in the project, including the assets of its derived types and the sub-assets (except the ones hidden from the Project window).
@@ -49,7 +51,7 @@ public class WeaponSO : EquipmentSO { }
 
 ### Remembered settings and type names
 
-The window remembers the layout of each table (column order, widths, hidden columns, sort). A table is identified by the GUID of the script file of its type, so the settings are kept when you rename the type, as long as you rename its script file from Unity. A type without a script file of its own (a nested type, a type in a DLL) is identified by its full name instead.
+The window saves the [views](views-and-filters.md) of each table (column order, widths, hidden columns, sort, filters, folders). A table is identified by the GUID of the script file of its type, so its views are kept when you rename the type, as long as you rename its script file from Unity. A type without a script file of its own (a nested type, a type in a DLL) is identified by its full name instead.
 
 ## `[Column]`
 
@@ -65,11 +67,57 @@ private int _basePrice = 0;
 |---|---|---|
 | `Name` (or the first argument) | The field name, nicified (`_basePrice` becomes *Base Price*) | The text of the column header |
 | `Width` | `0` | The default width of the column, in pixels. With `0` or less, the column is flexible: the flexible columns share the width left by the others |
+| `Path` | None | A field nested in the marked field, to show instead of the marked field (see [Nested fields](#nested-fields)) |
 
 - The field must be serialized by Unity: public, or marked with `[SerializeField]`. Fields that Unity can't serialize are skipped, with a warning in the console.
 - The field can be declared on the table type or any of its base types. The columns go from the root base type down to the table type, then in declaration order within each type.
 - The `[Tooltip]` of the field is shown when hovering its column header.
 - An auto-property can be a column too, with `[field: SerializeField, Column]`: the column is named after the property.
+
+### Nested fields
+
+The fields of a serializable struct or class can each have a column. Give the field one `[Column]` per nested field, with its `Path`:
+
+```cs
+[Serializable]
+public struct ItemBonuses
+{
+    [Range(0, 10)]
+    public int strength;
+    public int agility;
+    public ElementalResistances resistances;
+}
+
+[Serializable]
+public struct ElementalResistances
+{
+    public float fire;
+    public float frost;
+}
+
+public abstract class EquipmentSO : ScriptableObject
+{
+    // Three columns: "Strength", "Agility", and "Fire Res."
+    [SerializeField]
+    [Column(Path = "strength")]
+    [Column(Path = "agility")]
+    [Column("Fire Res.", Path = "resistances.fire")]
+    private ItemBonuses _bonuses;
+}
+```
+
+- A path holds the names of the nested fields, separated with dots, from the marked field down to the value to show (`resistances.fire`).
+- The columns of a field are in the order of its attributes.
+- A nested column is named after its nested field (*Strength*, not *Bonuses Strength*). Two nested fields with the same name need a `Name` to tell them apart.
+- The tooltip of a nested column is the `[Tooltip]` of the nested field, or of the nearest field of the path that has one.
+- The attributes of the nested field apply to the cells, like `[Range]` above.
+- Each field of the path must be serialized by Unity. It can be declared in its type or in a base type, and the name of an auto-property can be used for its backing field.
+- A path can't go through a reference to an asset, an array, a list or a `[SerializeReference]` field: the values of those can't be a single column. An invalid path is skipped, with a warning in the console.
+- Two columns can't show the same value: the second one is skipped, with a warning.
+
+### Column identifiers
+
+The views, the filters and the [import](import-export.md#columns) find the columns by their identifier: the name of the field (`_basePrice`), or the path of a nested field (`_bonuses.resistances.fire`). Changing the `Name` of a column keeps its settings, but renaming its field loses them: `[FormerlySerializedAs]` keeps the values of the assets, not the settings of the views.
 
 ### Supported values
 
@@ -107,8 +155,8 @@ The [`[AssetDropdown]`](https://side-xp.github.io/unity-core/guides/inspector-at
 private ItemCategorySO _category = null;
 ```
 
-![Asset dropdown column](database-asset_dropdown-dropdown.png)
-![Demo assets shown in dropdown](database-asset_dropdown-assets.png)
+![Asset dropdown column](../img/database-asset_dropdown-dropdown.png)
+![Demo assets shown in dropdown](../img/database-asset_dropdown-assets.png)
 
 ## Opening a table from code
 

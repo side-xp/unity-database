@@ -250,8 +250,8 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         /// <remarks>
         /// Changed objects are found by the GUID of their file instead of their instance ID, since instance IDs are replaced by entity
-        /// IDs (<c>entityId</c>) in recent versions of Unity, which don't exist in the oldest supported version. As a result, editing a sub-asset invalidates the rows of all the assets of its file,
-        /// which only costs a few more reads.
+        /// IDs (<c>entityId</c>) in recent versions of Unity, which don't exist in the oldest supported version. As a result, editing a
+        /// sub-asset invalidates the rows of all the assets of its file, which only costs a few more reads.
         /// </remarks>
         /// <param name="stream">The recorded changes.</param>
         private void OnChangesPublished(ref ObjectChangeEventStream stream)

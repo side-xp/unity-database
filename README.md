@@ -24,14 +24,17 @@ public class ItemSO : ScriptableObject
 
 ## Features
 
-- **Tables declared in code**: mark a `ScriptableObject` type with `[Table]` and its fields with `[Column]`. Tables can be passed on to derived types, and abstract types can be tables, to list a family of types.
+- **Tables declared in code**: mark a `ScriptableObject` type with `[Table]` and its fields with `[Column]`, including the fields nested in structs. Tables can be passed on to derived types, and abstract types can be tables, to list a family of types. The table list groups them in a tree.
+- **Computed columns**: show the value returned by a method, such as a total or a rank among the other assets, with `[ComputedColumn]`.
 - **Every asset of the type**: a table lists the assets of its type and of its derived types found in the project, including sub-assets.
 - **Edit in place**: double-click a cell, or press *Enter*, *F2* or start typing. Checkboxes and dropdowns change the value in one click. Each edit is a single Undo step.
-- **Sort and search**: click a header to sort by a column, and filter the rows by typing words found in any cell.
-- **Your layout, remembered**: reorder, resize, hide and show the columns. The layout and the sort of each table are kept between sessions.
+- **Spreadsheet-like selection**: select cells, ranges, rows and columns, edit them all at once, and copy and paste them to and from spreadsheet apps.
+- **Sort, search and filter**: sort by several columns, search words found in any cell, and build filters of conditions on the columns, limited to some folders if needed.
+- **Views**: save several layouts of each table (columns, sort, filters, folders), and share them with your team through version control. Your changes to a shared view stay yours until you save them for everyone.
+- **CSV and TSV**: export a view or a whole table, edit it in a spreadsheet app, and import it back after a preview of the changes.
 - **Asset operations**: create, rename, duplicate, delete and ping assets from the table, including sub-assets.
 - **Always up to date**: changes made in the Inspector, by Undo, or by importing, moving or deleting assets show up in the table.
-- **Open In Database**: right-click an asset in the Project window to open its table and jump to its row.
+- **Open In Database**: from the Project window or the Inspector, open the table of an asset and jump to its row.
 - **Custom cells**: change how the values of a type, or of the fields that have an attribute, are displayed, edited, sorted and converted to text, with your own cell handlers.
 - **Dropdowns of assets**: fields marked with `[AssetDropdown]` (from the core lib) are shown as dropdowns of assets, in the table and in the Inspector.
 

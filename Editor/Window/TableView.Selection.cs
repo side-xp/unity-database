@@ -87,7 +87,8 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         private const float RowHandlePadding = 6;
 
-        private const string RowHandleTooltip = "Selects the row. Shift selects the rows from the active cell, Ctrl adds or removes the row.";
+        private const string RowHandleTooltip = "Selects the row. Shift selects the rows from the active cell, Ctrl adds or removes " +
+            "the row.";
         private const string AddColumnText = "Add Column to Selection";
         private const string RemoveColumnText = "Remove Column from Selection";
 

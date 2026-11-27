@@ -30,13 +30,13 @@ public class WeaponSO : ScriptableObject
 - A column shows a field serialized by Unity: public, or marked with `[SerializeField]`.
 - The `[Tooltip]` of a field is shown when hovering its column header.
 
-See [Declaring tables](declaring-tables.md) for all the options, and for tables shared by a family of types.
+See [Declaring tables](guides/declaring-tables.md) for all the options, and for tables shared by a family of types.
 
 ## 2. Open the Database window
 
 Open the window from `Tools > Sideways Experiments > Database`. It lists the tables of your project: click one to open it.
 
-![The list of the tables](../img/database-table_list.png)
+![The list of the tables](img/database-table_list.png)
 
 The table shows one row per asset of the type, including the assets of its derived types and the sub-assets. The first column holds the name of the asset, and stays visible when you scroll horizontally. The last column holds buttons to ping, duplicate and delete the asset.
 
@@ -53,10 +53,20 @@ If the table is empty, create your first assets with the *Create* button of the 
 
 - Click a column header to **sort** the rows by that column, and click again to reverse the order.
 - Type in the **search** field of the toolbar to show only the rows that contain each word, in any cell.
-- Right-click an asset in the Project window and choose **Open In Database** to open its table and jump to its row.
+- Click the *View* button at the right of the toolbar to build **filters** on the columns.
+- Right-click an asset in the Project window and choose **Open In Database** to open its table and jump to its row. The Inspector of the asset has the same button in its header.
+
+## 5. Edit many assets at once
+
+- **Select** several cells: *Shift*-click a range, *Ctrl*-click cells one by one, or click the row handles and the headers (with *Shift*) for whole rows and columns.
+- **Edit** a selected cell: the value applies to the other selected cells of its column. Hold *Alt* to apply it to all the selected cells of the same type.
+- **Copy and paste** the selection with *Ctrl*+*C* and *Ctrl*+*V*, in the table or from a spreadsheet app.
 
 ## Next steps
 
-- [The Database window](database-window.md): everything the window can do.
-- [Declaring tables](declaring-tables.md): the options of `[Table]` and `[Column]`.
-- [Custom cell handlers](cell-handlers.md): change how the values of a type are displayed and edited.
+- [The Database window](guides/database-window.md): everything the window can do.
+- [Views and filters](guides/views-and-filters.md): save layouts of a table, filter its rows, and share views with your team.
+- [Import and export](guides/import-export.md): edit a table in a spreadsheet app.
+- [Declaring tables](guides/declaring-tables.md): the options of `[Table]` and `[Column]`, and the columns of nested fields.
+- [Computed columns](guides/computed-columns.md): columns of values computed by a method.
+- [Custom cell handlers](guides/cell-handlers.md): change how the values of a type are displayed and edited.

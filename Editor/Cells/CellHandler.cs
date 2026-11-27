@@ -250,7 +250,8 @@ namespace SideXP.Database.EditorOnly
         /// Compares two values of a column, for sorting. Only called if <see cref="CanCompare"/> returns true for the column.
         /// </summary>
         /// <remarks>
-        /// The sort is stable: the rows of equal values keep the order of the assets in the project.
+        /// The sort is stable: the rows of equal values are ordered by the next sorted columns, then keep the order of the assets in the
+        /// project.
         /// </remarks>
         /// <param name="a">The first value, read from the value cache.</param>
         /// <param name="b">The second value, read from the value cache.</param>
@@ -268,7 +269,8 @@ namespace SideXP.Database.EditorOnly
         #region Text conversion
 
         /// <summary>
-        /// Converts a value to text, for display, search, copy and export.
+        /// Converts a value to text, for display, search, text filters, copy and export. The import also compares the cells through
+        /// it, so a value written differently (<c>1.50</c> for <c>1.5</c>) is not a change.
         /// </summary>
         /// <param name="value">The value to convert.</param>
         /// <returns>Returns the converted value. By default, an empty string for null, invariant culture formats for numbers, and names

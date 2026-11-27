@@ -19,9 +19,15 @@ namespace SideXP.Database
     /// method with another signature is ignored, with a warning.
     /// <para>
     /// The values are computed again when the data of the table changes (an edit, a reload) and when the filters change, never on
-    /// each repaint. The column can be sorted, filtered and searched like the others, but not edited. Use the <see cref="ITableContext"/> to compute values from the other assets of the table (totals, rankings), and
-    /// <see cref="ITableContext.GetShared{T}(Func{ITableContext, T})"/> to build the data shared by all the rows once. This attribute
-    /// is stripped from player builds.
+    /// each repaint, and only for the rows that pass the filters. The column can be sorted, filtered and searched like the others,
+    /// but not edited. Use the <see cref="ITableContext"/> to compute values from the other assets of the table (totals, rankings),
+    /// and <see cref="ITableContext.GetShared{T}(Func{ITableContext, T})"/> to build the data shared by all the rows once. If the
+    /// method throws an exception, the rows of the column not computed yet get no value, and the exception is logged.
+    /// </para>
+    /// <para>
+    /// The column is identified by its method (its declaring type and its name): changing <see cref="Name"/> keeps its settings in
+    /// the views, renaming the method loses them. Overloads would share that identifier, so only the first one is a column. This
+    /// attribute is stripped from player builds.
     /// </para>
     /// </remarks>
     /// <example>
@@ -37,7 +43,11 @@ namespace SideXP.Database
     ///
     ///     private static Dictionary&lt;Object, int&gt; BuildPriceRanks(ITableContext context)
     ///     {
-    ///         List&lt;EquipmentSO&gt; items = context.VisibleAssets.Cast&lt;EquipmentSO&gt;().OrderByDescending(i =&gt; i.BasePrice).ToList();
+    ///         List&lt;EquipmentSO&gt; items = context.VisibleAssets
+    ///             .OfType&lt;EquipmentSO&gt;()
+    ///             .OrderByDescending(i =&gt; i.BasePrice)
+    ///             .ToList();
+    ///
     ///         Dictionary&lt;Object, int&gt; ranks = new Dictionary&lt;Object, int&gt;();
     ///         for (int i = 0; i &lt; items.Count; i++)
     ///             ranks[items[i]] = i + 1;
@@ -80,7 +90,7 @@ namespace SideXP.Database
 
         /// <summary>
         /// The type of the assets the column applies to: the type of a table, or a base type of tables. The column is added to the
-        /// tables whose type is this type or derives from it.
+        /// tables whose type is this type or derives from it. It can be an interface, to add the column to unrelated tables.
         /// </summary>
         public Type TargetType { get; private set; } = null;
 

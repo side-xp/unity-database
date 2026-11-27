@@ -9,9 +9,9 @@ namespace SideXP.Database.EditorOnly
     /// <see cref="FilterCondition"/>).
     /// </summary>
     /// <remarks>
-    /// The tree is serialized with <see cref="UnityEngine.SerializeReferenceAttribute"/>, so the settings of a view can store any kind of node.
-    /// It refers to the columns by their id, and is compiled against the columns of the table before it filters the rows, so a filter
-    /// survives the changes of the columns: the nodes that don't apply anymore are ignored.
+    /// The tree is serialized with <see cref="UnityEngine.SerializeReferenceAttribute"/>, so the settings of a view can store any kind
+    /// of node. It refers to the columns by their id, and is compiled against the columns of the table before it filters the rows, so
+    /// a filter survives the changes of the columns: the nodes that don't apply anymore are ignored.
     /// </remarks>
     [Serializable]
     internal abstract class FilterNode
