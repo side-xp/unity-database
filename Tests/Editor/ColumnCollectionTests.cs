@@ -132,7 +132,8 @@ namespace SideXP.Database.Tests
         #region Invalid columns
 
         /// <summary>
-        /// Columns on fields that are not serialized are skipped with a warning each, and extra columns on a field are reported.
+        /// Columns on fields that are not serialized are skipped with a warning each, and a second column without path on a field is
+        /// skipped with a warning, since it would display the same value.
         /// </summary>
         [Test]
         public void CollectColumns_InvalidFields_SkippedWithWarnings()
@@ -140,7 +141,8 @@ namespace SideXP.Database.Tests
             List<ColumnDefinition> columns = CodeTables.CollectColumns(typeof(InvalidColumnsSO), _warnings);
 
             CollectionAssert.AreEqual(new[] { "_severalColumns", "_validField" }, columns.Select(i => i.Id));
-            // Static, const, readonly, non-serialized and private fields, plus the field with several columns
+            Assert.AreEqual("Several Columns", columns[0].Name, "The first column of the field is kept.");
+            // Static, const, readonly, non-serialized and private fields, plus the second column of the field with several columns
             Assert.AreEqual(6, _warnings.Count);
         }
 
