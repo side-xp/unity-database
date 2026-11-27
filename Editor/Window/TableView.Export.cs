@@ -38,10 +38,10 @@ namespace SideXP.Database.EditorOnly
         private const char InvalidFileNameReplacement = '-';
 
         /// <summary>
-        /// The folder of the last exported file, suggested by the next save dialog. Static, so it's shared by the windows. Forgotten
-        /// after a domain reload, when the dialog starts in the folder of the project again.
+        /// The folder of the last exported or imported file, suggested by the next file dialog. Static, so it's shared by the windows.
+        /// Forgotten after a domain reload, when the dialogs start in the folder of the project again.
         /// </summary>
-        private static string s_lastExportFolder = null;
+        private static string s_lastFileFolder = null;
 
         #endregion
 
@@ -68,14 +68,14 @@ namespace SideXP.Database.EditorOnly
             Refresh();
 
             string formatName = TableExport.GetFormatName(format);
-            string path = EditorUtility.SaveFilePanel($"Export {formatName}", GetExportFolder(), GetExportFileName(isWholeTable),
+            string path = EditorUtility.SaveFilePanel($"Export {formatName}", GetFileFolder(), GetExportFileName(isWholeTable),
                 TableExport.GetExtension(format));
 
             // Empty if the dialog has been cancelled
             if (string.IsNullOrEmpty(path))
                 return false;
 
-            s_lastExportFolder = Path.GetDirectoryName(path);
+            s_lastFileFolder = Path.GetDirectoryName(path);
             IReadOnlyList<TableRow> rows = isWholeTable
                 ? TableExport.LoadAllRows(_table.Type, _columns.ConvertAll(column => column.Accessor))
                 : _pipeline.VisibleRows;
@@ -145,14 +145,14 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Gets the folder in which the save dialog of an export starts: the folder of the last exported file if it still exists, or the
-        /// folder of the project.
+        /// Gets the folder in which the file dialogs of the exports and the imports start: the folder of the last exported or imported
+        /// file if it still exists, or the folder of the project.
         /// </summary>
         /// <returns>Returns the absolute path of the folder.</returns>
-        private static string GetExportFolder()
+        private static string GetFileFolder()
         {
-            if (!string.IsNullOrEmpty(s_lastExportFolder) && Directory.Exists(s_lastExportFolder))
-                return s_lastExportFolder;
+            if (!string.IsNullOrEmpty(s_lastFileFolder) && Directory.Exists(s_lastFileFolder))
+                return s_lastFileFolder;
 
             // The parent of the Assets folder
             return Path.GetDirectoryName(Application.dataPath);

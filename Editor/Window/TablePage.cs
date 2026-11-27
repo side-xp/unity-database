@@ -84,12 +84,13 @@ namespace SideXP.Database.EditorOnly
         private const string RefreshText = "Refresh";
         private const string RefreshTooltip = "Loads the assets of the table again. Use it if a change made outside of the window " +
             "doesn't show up, such as a value written by a script without notifying Unity.";
-        private const string ExportText = "Export";
+        private const string ImportExportText = "Import/Export";
+        private const string ImportText = "Import CSV or TSV...";
         private const string ExportViewScopeText = "View";
         private const string ExportTableScopeText = "Whole Table";
-        private const string ExportTooltip = "Exports the rows to a CSV or TSV file, which spreadsheet apps can open: the view as " +
+        private const string ImportExportTooltip = "Exports the rows to a CSV or TSV file, which spreadsheet apps can open: the view as " +
             "displayed (its visible columns and the rows of all the pages), or the whole table (all the columns and all the assets). " +
-            "The first column of the file identifies the assets.";
+            "The first column of the file identifies the assets.\n\nImports a CSV or TSV file back, after a preview of its changes.";
         private const string SyncSelectionText = "Sync Selection";
         private const string SyncSelectionTooltip = "When enabled, selecting cells selects the assets of their rows in Unity, so the " +
             "Inspector shows them (and edits several of them at once). The rows of the assets selected elsewhere are highlighted. " +
@@ -140,9 +141,10 @@ namespace SideXP.Database.EditorOnly
         private ToolbarButton _createButton = null;
 
         /// <summary>
-        /// The button that opens the menu of the exports to CSV and TSV files (see <see cref="TableView.Export"/>).
+        /// The button that opens the menu of the import and the exports of CSV and TSV files (see <see cref="TableView.StartImport"/>
+        /// and <see cref="TableView.Export"/>).
         /// </summary>
-        private ToolbarButton _exportButton = null;
+        private ToolbarButton _importExportButton = null;
 
         /// <summary>
         /// The button that enables and disables the selection sync (see <see cref="TableView.SetSelectionSynced(bool)"/>). A button
@@ -244,9 +246,9 @@ namespace SideXP.Database.EditorOnly
             DatabaseElements.SetIcon(refreshButton, DatabaseIcons.Refresh, RefreshText);
             toolbar.Add(refreshButton);
 
-            _exportButton = new ToolbarButton(ShowExportMenu) { tooltip = ExportTooltip };
-            DatabaseElements.SetIcon(_exportButton, DatabaseIcons.Export, ExportText);
-            toolbar.Add(_exportButton);
+            _importExportButton = new ToolbarButton(ShowImportExportMenu) { tooltip = ImportExportTooltip };
+            DatabaseElements.SetIcon(_importExportButton, DatabaseIcons.ImportExport, ImportExportText);
+            toolbar.Add(_importExportButton);
 
             _syncSelectionButton = new ToolbarButton(OnSyncSelectionClicked) { tooltip = SyncSelectionTooltip };
             UpdateSyncSelectionButton();
@@ -662,28 +664,31 @@ namespace SideXP.Database.EditorOnly
         #endregion
 
 
-        #region Export
+        #region Import and export
 
         /// <summary>
-        /// Called when the button of the exports is clicked. Opens the menu of the exports under it: the view, then the whole table,
-        /// each as CSV or TSV.
+        /// Called when the button of the import and the exports is clicked. Opens its menu under it: the import, then the exports of the
+        /// view and of the whole table, each as CSV or TSV.
         /// </summary>
-        private void ShowExportMenu()
+        private void ShowImportExportMenu()
         {
             if (_table == null)
                 return;
 
             GenericMenu menu = new GenericMenu();
+            // Deferred, so the modal preview doesn't open from inside the event of the menu
+            menu.AddItem(new GUIContent(ImportText), false, () => EditorApplication.delayCall += _tableView.StartImport);
+            menu.AddSeparator(string.Empty);
             AddExportItems(menu, false);
             menu.AddSeparator(string.Empty);
             AddExportItems(menu, true);
-            menu.DropDown(_exportButton.worldBound);
+            menu.DropDown(_importExportButton.worldBound);
         }
 
         /// <summary>
-        /// Adds the items that export the view or the whole table to the menu of the exports, one per format.
+        /// Adds the items that export the view or the whole table to the menu of the import and the exports, one per format.
         /// </summary>
-        /// <param name="menu">The menu of the exports.</param>
+        /// <param name="menu">The menu of the import and the exports.</param>
         /// <param name="isWholeTable">If enabled, the items export the whole table. Otherwise, they export the view.</param>
         private void AddExportItems(GenericMenu menu, bool isWholeTable)
         {

@@ -856,3 +856,133 @@
     opacity: 0.6;
     margin: 12px;
 }
+
+/* The preview of an import (ImportWindow), a modal window of its own. Temporary look, until the style pass */
+.database-import {
+    padding: 8px;
+}
+
+.database-import__header {
+    flex-shrink: 0;
+    margin-bottom: 6px;
+}
+
+.database-import__title {
+    -unity-font-style: bold;
+    font-size: 13px;
+    white-space: normal;
+}
+
+.database-import__summary {
+    white-space: normal;
+    margin-top: 2px;
+}
+
+/* The same header as the sections of the view panel. The sections keep their height, except the changes, which grow */
+.database-import__section {
+    flex-shrink: 0;
+    margin-bottom: 6px;
+}
+
+.database-import__section-title {
+    -unity-font-style: bold;
+    -unity-text-align: middle-left;
+    height: 22px;
+    margin-bottom: 4px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(0, 0, 0, 0.25);
+}
+
+/* Scrolls when the file has many columns, so the list of the changes stays visible */
+.database-import__columns {
+    max-height: 140px;
+}
+
+.database-import__column {
+    flex-direction: row;
+    align-items: center;
+    min-height: 20px;
+}
+
+.database-import__column-header {
+    width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.database-import__column-arrow {
+    width: 20px;
+    -unity-text-align: middle-center;
+    opacity: 0.6;
+}
+
+.database-import__column-target {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+/* The identity column and the read-only columns, whose values are not written */
+.database-import__column-target--faded {
+    opacity: 0.6;
+}
+
+.database-import__folder {
+    flex-direction: row;
+    align-items: center;
+}
+
+.database-import__folder-field {
+    flex-grow: 1;
+}
+
+.database-import__hint {
+    white-space: normal;
+    opacity: 0.6;
+}
+
+/* A translucent border works with both editor themes */
+.database-import__changes {
+    flex-grow: 1;
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0.3);
+}
+
+.database-import__line {
+    -unity-text-align: middle-left;
+    padding-left: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.database-import__line--row {
+    -unity-font-style: bold;
+}
+
+/* Under the title of their row */
+.database-import__line--change,
+.database-import__line--skipped-value {
+    padding-left: 20px;
+}
+
+/* A skipped row starts at the left like a title, a skipped value is indented like a change. Orange is readable on both themes */
+.database-import__line--skipped-row,
+.database-import__line--skipped-value {
+    color: rgb(230, 150, 40);
+}
+
+.database-import__footer {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-top: 6px;
+}
+
+/* The hint shrinks before the buttons */
+.database-import__footer > .database-import__hint {
+    flex-shrink: 1;
+    max-width: 70%;
+}
+
+.database-import__footer-spacer {
+    flex-grow: 1;
+}

@@ -37,7 +37,10 @@ namespace SideXP.Database.EditorOnly
 
         private const string WindowTitle = "Database";
         private const string MenuItem = EditorConstants.EditorWindowMenu + "/Database";
-        private const string StyleSheetPath = DatabaseConstants.WindowFolderPath + "DatabaseWindow.uss";
+        /// <summary>
+        /// The path of the style sheet of the window, also used by the other windows of the package (see <see cref="ImportWindow"/>).
+        /// </summary>
+        internal const string StyleSheetPath = DatabaseConstants.WindowFolderPath + "DatabaseWindow.uss";
 
         /// <summary>
         /// The identifier of the open table, or null if the table list is shown.
