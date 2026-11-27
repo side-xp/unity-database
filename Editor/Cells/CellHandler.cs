@@ -53,6 +53,12 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         public const string EditFieldClass = "database-cell__edit-field";
 
+        /// <summary>
+        /// The USS class of the live controls (see <see cref="SetLiveControl(VisualElement)"/>), which the table view uses to find them,
+        /// for example to make them read-only in the columns that can't be edited.
+        /// </summary>
+        public const string LiveControlClass = "database-cell__live-control";
+
         #endregion
 
 
@@ -92,13 +98,15 @@ namespace SideXP.Database.EditorOnly
         /// cell with it, without entering the edit mode. Clicking the control doesn't select the cell, and doesn't change the focus.
         /// </summary>
         /// <remarks>
-        /// Call it in <see cref="CreateDisplay"/>, then call <see cref="SubmitValue(VisualElement, object)"/> when the value of the
-        /// control changes. A handler whose display is a live control usually has no edit field (<see cref="CreateEditField"/> returns
-        /// null).
+        /// Call it in <see cref="CreateDisplay"/> (or in <see cref="BindDisplay"/> for a control created on bind), then call
+        /// <see cref="SubmitValue(VisualElement, object)"/> when the value of the control changes. A handler whose display is a live
+        /// control usually has no edit field (<see cref="CreateEditField"/> returns null). In a column that can't be edited (a computed
+        /// column), the control ignores the pointer, so a click selects the cell instead of changing the value.
         /// </remarks>
         /// <param name="control">The element that changes the value.</param>
         protected internal static void SetLiveControl(VisualElement control)
         {
+            control.AddToClassList(LiveControlClass);
             // Not focusable, so the keys keep going to the table, and a reused element never keeps the focus of another row
             control.focusable = false;
             control.RegisterCallback<PointerDownEvent>(OnLiveControlPointerDown);

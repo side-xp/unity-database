@@ -83,6 +83,7 @@ namespace SideXP.Database.EditorOnly
         private const string HeaderSortPriorityClass = "database-table-view__header-sort-priority";
         private const string HeaderFilterIconClass = "database-table-view__header-filter-icon";
         private const string CellClass = "database-table-view__cell";
+        private const string ReadOnlyLiveControlClass = "database-cell__live-control--read-only";
         private const string ActiveCellClass = "database-table-view__cell--active";
         private const string SelectedCellClass = "database-table-view__cell--selected";
         private const string HoverMirrorRowClass = "database-table-view__row--hover-mirror";
@@ -767,6 +768,10 @@ namespace SideXP.Database.EditorOnly
             {
                 CellContext context = new CellContext(row.Asset, column.Field, column.Accessor.ValueType);
                 column.Handler.BindDisplay(cell[0], row.GetValue(columnIndex), context);
+
+                // Some handlers create their live control on bind (enums), so the controls are found after each bind
+                if (column.IsComputed)
+                    SetLiveControlsReadOnly(cell[0]);
             }
             catch (Exception exception)
             {
@@ -778,6 +783,21 @@ namespace SideXP.Database.EditorOnly
                     $"the column \"{column.Name}\". The next errors of this column are not logged.");
                 Debug.LogException(exception);
             }
+        }
+
+        /// <summary>
+        /// Makes the live controls of a display ignore the pointer, so a click on a cell that can't be edited selects it instead of
+        /// changing a value that can't be written, and fades them.
+        /// </summary>
+        /// <param name="display">The display of the cell, created by the handler of its column.</param>
+        private static void SetLiveControlsReadOnly(VisualElement display)
+        {
+            display.Query(className: CellHandler.LiveControlClass).ForEach(control =>
+            {
+                control.AddToClassList(ReadOnlyLiveControlClass);
+                // The parts of the control (the checkmark of a toggle, the input of a dropdown) are targets of the pointer too
+                control.Query<VisualElement>().ForEach(element => element.pickingMode = PickingMode.Ignore);
+            });
         }
 
         /// <summary>
@@ -1075,13 +1095,7 @@ namespace SideXP.Database.EditorOnly
             List<TableViewColumn> columns = new List<TableViewColumn>(definitionColumns.Count + 2);
             columns.Add(TableViewColumn.CreateAssetNameColumn());
             foreach (ColumnDefinition column in definitionColumns)
-            {
-                // @todo 25b2: display the computed columns (read-only, not searched nor filtered until 25b3)
-                if (column.IsComputed)
-                    continue;
-
                 columns.Add(TableViewColumn.FromDefinition(column));
-            }
 
             // Last, since the first column is frozen and must show what identifies the rows
             columns.Add(TableViewColumn.CreateControlsColumn());

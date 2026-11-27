@@ -29,6 +29,7 @@ namespace SideXP.Database.EditorOnly
         private const string AssetNameTooltip = "The name of the asset.";
         private const string ControlsTitle = "Controls";
         private const string ControlsTooltip = "Select the asset in the Project window, duplicate it or delete it.";
+        private const string ComputedTooltip = "Computed column: its values are computed from the assets, and can't be edited.";
 
         /// <summary>
         /// The default width of the <i>Asset Name</i> column, in pixels. Fixed, so the name doesn't take the space of the other columns
@@ -168,6 +169,12 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         public bool HasProperty => !string.IsNullOrEmpty(_propertyPath);
 
+        /// <summary>
+        /// Checks if the values of the column are computed by a method (see <see cref="ComputedColumnAttribute"/>). Its cells are
+        /// read-only, and its values are computed after the filters, so the filters and the search can't use them yet.
+        /// </summary>
+        public bool IsComputed => _accessor is ComputedAccessor;
+
         /// <inheritdoc cref="_handler"/>
         public CellHandler Handler => _handler;
 
@@ -205,7 +212,12 @@ namespace SideXP.Database.EditorOnly
                 ? column.Fields[column.Fields.Count - 1]
                 : null;
 
-            return new TableViewColumn(column.Id, column.Name, column.Tooltip, column.Width, ValueAccessors.Create(column), field,
+            // The header of a computed column says that it's read-only, since its cells look like the others
+            string tooltip = column.Tooltip;
+            if (column.IsComputed)
+                tooltip = string.IsNullOrEmpty(tooltip) ? ComputedTooltip : $"{tooltip}\n\n{ComputedTooltip}";
+
+            return new TableViewColumn(column.Id, column.Name, tooltip, column.Width, ValueAccessors.Create(column), field,
                 column.PropertyPath);
         }
 

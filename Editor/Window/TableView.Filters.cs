@@ -111,8 +111,8 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Gets the columns that the filters can use: all the columns except <i>Controls</i>, hidden ones included, since the filters
-        /// also apply to them.
+        /// Gets the columns that the filters can use: all the columns except <i>Controls</i> and the computed columns (whose values are
+        /// computed after the filters), hidden ones included, since the filters also apply to them.
         /// </summary>
         /// <returns>Returns the columns in their display order, or an empty list if no table is displayed.</returns>
         public List<TableViewColumn> GetFilterableColumns()
@@ -121,7 +121,7 @@ namespace SideXP.Database.EditorOnly
                 return new List<TableViewColumn>();
 
             List<TableViewColumn> columns = GetColumnOrder().ConvertAll(columnIndex => _columns[columnIndex]);
-            columns.RemoveAll(column => column.IsControls);
+            columns.RemoveAll(column => !IsFilterable(column));
             return columns;
         }
 
@@ -180,11 +180,12 @@ namespace SideXP.Database.EditorOnly
                 return;
             }
 
+            // A condition on a column left out is ignored, like a condition on a column that doesn't exist anymore
             Dictionary<string, FilterColumn> columns = new Dictionary<string, FilterColumn>(_columns.Count);
             for (int i = 0; i < _columns.Count; i++)
             {
                 TableViewColumn column = _columns[i];
-                if (column.IsControls)
+                if (!IsFilterable(column))
                     continue;
 
                 columns[column.Id] = new FilterColumn(i, column.Accessor.ValueType, value => ToFilterText(column, value));
@@ -209,10 +210,23 @@ namespace SideXP.Database.EditorOnly
             if (column == null)
                 return false;
 
-            // The Controls column has no value to filter
-            DropdownMenuAction.Status status = column.IsControls ? DropdownMenuAction.Status.Disabled : DropdownMenuAction.Status.Normal;
+            DropdownMenuAction.Status status = IsFilterable(column)
+                ? DropdownMenuAction.Status.Normal
+                : DropdownMenuAction.Status.Disabled;
             menu.AppendAction(FilterByColumnText, action => FilterByColumnRequested?.Invoke(column.Id), status);
             return true;
+        }
+
+        /// <summary>
+        /// Checks if the filters can use a column.
+        /// </summary>
+        /// <param name="column">The column to check.</param>
+        /// <returns>Returns false for the <i>Controls</i> column, which has no value, and for the computed columns, whose values are
+        /// computed after the filters.</returns>
+        private static bool IsFilterable(TableViewColumn column)
+        {
+            // @todo 25b3: filter the computed columns, in a second filter pass after their values are computed
+            return !column.IsControls && !column.IsComputed;
         }
 
         /// <summary>

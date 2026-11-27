@@ -114,6 +114,7 @@ namespace SideXP.Database.EditorOnly
         /// <remarks>
         /// The text contains the displayed columns only, so every match can be seen on screen, and the asset name, which is searched
         /// even if its column is hidden. It must be built again when the displayed columns change (see <see cref="ClearSearchTexts"/>).
+        /// The computed columns are not searched: their values are computed after the search.
         /// </remarks>
         /// <param name="row">The row of which to get the text.</param>
         /// <returns>Returns the text of the row.</returns>
@@ -126,7 +127,8 @@ namespace SideXP.Database.EditorOnly
             for (int i = 0; i < _columns.Count; i++)
             {
                 TableViewColumn column = _columns[i];
-                if (column.IsControls || (!column.IsAssetName && !IsColumnDisplayed(i)))
+                // @todo 25b3: search the computed columns, in a second filter pass after their values are computed
+                if (column.IsControls || column.IsComputed || (!column.IsAssetName && !IsColumnDisplayed(i)))
                     continue;
 
                 _cellTexts.Add(ToSearchText(column, row.GetValue(i)));

@@ -555,6 +555,12 @@
     margin-right: 0;
 }
 
+/* A live control in a column that can't be edited (a computed column, TableView.SetLiveControlsReadOnly()): it ignores the pointer,
+   and is faded so it doesn't look like it can be changed */
+.database-cell__live-control--read-only {
+    opacity: 0.6;
+}
+
 /* Holds the live dropdown of an enum, created when the first value is bound */
 .database-cell__dropdown {
     flex-direction: row;
