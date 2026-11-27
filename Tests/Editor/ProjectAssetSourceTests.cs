@@ -35,6 +35,16 @@ namespace SideXP.Database.Tests
         /// </summary>
         private const string TempFolder = "Assets/" + TempFolderName;
 
+        /// <summary>
+        /// The name of the subfolder of the temporary folder, created by the tests of the folder scope.
+        /// </summary>
+        private const string SubFolderName = "Sub";
+
+        /// <summary>
+        /// The path of the subfolder of the temporary folder.
+        /// </summary>
+        private const string SubFolder = TempFolder + "/" + SubFolderName;
+
         #endregion
 
 
@@ -133,6 +143,49 @@ namespace SideXP.Database.Tests
         }
 
         /// <summary>
+        /// With a folder scope, only the assets of its folders and of their subfolders are loaded.
+        /// </summary>
+        [Test]
+        public void LoadAssets_FolderScope_OnlyAssetsOfFolders()
+        {
+            CreateSubfolderAsset();
+
+            CollectionAssert.AreEqual(new[] { "Inner Weapon" }, LoadNamesInScope(typeof(ItemSO), SubFolder));
+            CollectionAssert.AreEqual(new[] { "Boots", "Consumable", "Item", "Sub Weapon", "Inner Weapon", "Weapon" },
+                LoadNamesInScope(typeof(ItemSO), TempFolder));
+        }
+
+        /// <summary>
+        /// A scope whose folders don't exist loads no asset.
+        /// </summary>
+        [Test]
+        public void LoadAssets_MissingFolder_NoAsset()
+        {
+            CollectionAssert.IsEmpty(LoadNamesInScope(typeof(ItemSO), $"{TempFolder}/Missing"));
+        }
+
+        /// <summary>
+        /// A change of the scope applies to the next load, and a null scope is the whole project.
+        /// </summary>
+        [Test]
+        public void LoadAssets_ScopeChanged_AppliesToNextLoad()
+        {
+            CreateSubfolderAsset();
+            ProjectAssetSource source = new ProjectAssetSource(typeof(WeaponSO))
+            {
+                Scope = new FolderScope(new[] { SubFolder })
+            };
+            CollectionAssert.AreEqual(new[] { "Inner Weapon" }, source.LoadAssets().Select(i => i.name).ToArray());
+
+            source.Scope = null;
+            Assert.IsTrue(source.Scope.IsWholeProject);
+            CollectionAssert.AreEqual(new[] { "Sub Weapon", "Inner Weapon", "Weapon" }, source.LoadAssets()
+                .Where(i => AssetDatabase.GetAssetPath(i).StartsWith($"{TempFolder}/"))
+                .Select(i => i.name)
+                .ToArray());
+        }
+
+        /// <summary>
         /// A source can only be created for a <see cref="ScriptableObject"/> type.
         /// </summary>
         [Test]
@@ -172,6 +225,27 @@ namespace SideXP.Database.Tests
                 .Where(i => AssetDatabase.GetAssetPath(i).StartsWith($"{TempFolder}/"))
                 .Select(i => i.name)
                 .ToArray();
+        }
+
+        /// <summary>
+        /// Loads the assets of a type with a <see cref="ProjectAssetSource"/> limited to a folder scope.
+        /// </summary>
+        /// <param name="type">The type of the assets to load.</param>
+        /// <param name="folders">The folders of the scope.</param>
+        /// <returns>Returns the names of the loaded assets, in order.</returns>
+        private static string[] LoadNamesInScope(Type type, params string[] folders)
+        {
+            ProjectAssetSource source = new ProjectAssetSource(type) { Scope = new FolderScope(folders) };
+            return source.LoadAssets().Select(i => i.name).ToArray();
+        }
+
+        /// <summary>
+        /// Creates the <see cref="SubFolder"/> folder, with the asset <c>Inner Weapon</c> (<see cref="WeaponSO"/>).
+        /// </summary>
+        private static void CreateSubfolderAsset()
+        {
+            AssetDatabase.CreateFolder(TempFolder, SubFolderName);
+            AssetDatabase.CreateAsset(ScriptableObject.CreateInstance<WeaponSO>(), $"{SubFolder}/Inner Weapon.asset");
         }
 
         #endregion

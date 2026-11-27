@@ -4,8 +4,326 @@
     flex-grow: 1;
 }
 
+/* Holds the table view and the view panel, side by side under the toolbar */
+.database-page__content {
+    flex-direction: row;
+    flex-grow: 1;
+}
+
+/* The panel of the view (ViewPanel), on the right of the table. A translucent border works with both editor themes. Temporary look,
+   until the style pass */
+.database-view-panel {
+    width: 320px;
+    min-width: 220px;
+    flex-shrink: 0;
+    border-left-width: 1px;
+    border-left-color: rgba(0, 0, 0, 0.4);
+}
+
+.database-view-panel__content {
+    flex-grow: 1;
+}
+
+.database-view-panel__section {
+    padding-left: 6px;
+    padding-right: 6px;
+    padding-bottom: 8px;
+}
+
+.database-view-panel__section-header {
+    flex-direction: row;
+    align-items: center;
+    height: 26px;
+    margin-bottom: 4px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(0, 0, 0, 0.25);
+}
+
+/* Grows, so the buttons of the section are on the right */
+.database-view-panel__section-title {
+    -unity-font-style: bold;
+    -unity-text-align: middle-left;
+    font-size: 13px;
+    padding-left: 0;
+    margin-left: 0;
+}
+
+/* Between the title (and its mark) and the other elements of the header of a section, so they're on the right */
+.database-view-panel__section-spacer {
+    flex-grow: 1;
+}
+
+/* After the title of a section whose setting is overridden in a project view (ViewPanel) */
+.database-view-panel__override-mark {
+    --sxp-icon-size: 14;
+    margin-left: 2px;
+    opacity: 0.6;
+}
+
+/* The list of the overrides of a project view, under its name in the View section (ViewPanel) */
+.database-view-panel__overrides {
+    margin-top: 6px;
+}
+
+.database-view-panel__overrides-title {
+    -unity-font-style: bold;
+    font-size: 11px;
+    opacity: 0.6;
+    padding-left: 0;
+    margin-left: 0;
+    margin-bottom: 2px;
+}
+
+.database-view-panel__override {
+    flex-direction: row;
+    align-items: center;
+    height: 20px;
+}
+
+.database-view-panel__override-text {
+    flex-grow: 1;
+    -unity-text-align: middle-left;
+    padding-left: 0;
+    margin-left: 0;
+}
+
+.database-view-panel__override-reset {
+    flex-shrink: 0;
+    padding-left: 1px;
+    padding-right: 1px;
+    margin-right: 0;
+}
+
+.database-view-panel__override-reset > .sxp-icon {
+    --sxp-icon-size: 14;
+}
+
+.database-view-panel__override-actions {
+    flex-direction: row;
+    justify-content: flex-end;
+    margin-top: 4px;
+}
+
+.database-view-panel__section-button {
+    margin-right: 0;
+}
+
+/* The status of the open view, on the right of the title of the View section (ViewPanel): faded, so it informs without competing
+   with the title */
+.database-view-panel__view-status {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 1;
+    min-width: 0;
+    opacity: 0.6;
+}
+
+.database-view-panel__view-status-icon {
+    --sxp-icon-size: 14;
+    flex-shrink: 0;
+}
+
+.database-view-panel__view-status-label {
+    -unity-text-align: middle-left;
+    font-size: 11px;
+    margin-left: 3px;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
+    flex-shrink: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* A group of the filter editor (FilterEditor). The groups inside another group are indented, with a line on their left */
+.database-filter-group {
+    margin-top: 2px;
+    margin-bottom: 2px;
+}
+
+.database-filter-group .database-filter-group {
+    margin-left: 4px;
+    padding-left: 6px;
+    border-left-width: 2px;
+    border-left-color: rgba(128, 128, 128, 0.4);
+}
+
+.database-filter-group__header {
+    flex-direction: row;
+    align-items: center;
+}
+
+/* Grows, so the remove button of the group is on the right */
+.database-filter-group__operator {
+    flex-grow: 1;
+    margin-left: 0;
+}
+
+.database-filter-group__footer {
+    flex-direction: row;
+    margin-top: 2px;
+}
+
+.database-filter-group__footer > .database-filter-editor__add {
+    margin-left: 0;
+    margin-right: 4px;
+}
+
+.database-filter-group__empty,
+.database-filter-condition__ignored {
+    -unity-font-style: italic;
+    white-space: normal;
+    opacity: 0.6;
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+
+/* A condition: its column, its fields, then the remove button */
+.database-filter-condition {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 1px;
+    margin-bottom: 1px;
+}
+
+.database-filter-condition__column {
+    width: 35%;
+    flex-shrink: 0;
+    -unity-text-align: middle-left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-left: 0;
+}
+
+/* A condition on a column that doesn't exist anymore. Orange like the warnings of the console, readable with both editor themes */
+.database-filter-condition__column--missing {
+    color: rgb(230, 150, 40);
+}
+
+.database-filter-condition__field,
+.database-filter-condition__ignored {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 40px;
+}
+
+/* A number range: the minimum, "to", then the maximum, sharing the width of the fields */
+.database-filter-condition__range {
+    flex-direction: row;
+    align-items: center;
+}
+
+.database-filter-condition__limit {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 30px;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+/* A limit that isn't a number, which is not applied. Red like the errors of the console, readable with both editor themes */
+.database-filter-condition__limit--invalid > .unity-text-field__input {
+    border-color: rgb(220, 70, 60);
+}
+
+.database-filter-condition__range-separator {
+    -unity-text-align: middle-center;
+    opacity: 0.7;
+    padding-left: 3px;
+    padding-right: 3px;
+}
+
+/* The chosen values of an enum, which can be long: aligned like a text, cut with an ellipsis */
+.database-filter-condition__enum {
+    -unity-text-align: middle-left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-left: 0;
+}
+
+/* A reference: what it checks, then the asset, which takes the remaining width */
+.database-filter-condition__reference {
+    flex-direction: row;
+    align-items: center;
+}
+
+.database-filter-condition__match {
+    width: 84px;
+    flex-shrink: 0;
+    margin-left: 0;
+}
+
+.database-filter-condition__asset {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 40px;
+    margin-left: 2px;
+    margin-right: 0;
+}
+
+/* The folders of the scope (FolderScopeEditor), which is also the target of the folders dropped from the Project window. The border
+   shows while folders are dragged over it */
+.database-folder-scope {
+    padding-top: 2px;
+    padding-bottom: 2px;
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0);
+}
+
+.database-folder-scope--drag-over {
+    border-color: rgb(58, 121, 187);
+    background-color: rgba(58, 121, 187, 0.1);
+}
+
+.database-folder-scope__folder {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 1px;
+    margin-bottom: 1px;
+}
+
+/* Grows, so the remove button is on the right. The hand cursor says that a click pings the folder */
+.database-folder-scope__path {
+    flex-grow: 1;
+    flex-shrink: 1;
+    -unity-text-align: middle-left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: link;
+}
+
+/* A folder that doesn't exist, ignored by the scope. Orange like the missing columns of the filters */
+.database-folder-scope__path--missing {
+    color: rgb(230, 150, 40);
+    cursor: arrow;
+}
+
+.database-folder-scope__hint {
+    -unity-font-style: italic;
+    white-space: normal;
+    opacity: 0.6;
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+
+.database-filter-editor__remove {
+    flex-shrink: 0;
+    padding-left: 1px;
+    padding-right: 1px;
+    margin-right: 0;
+}
+
+.database-filter-editor__remove > .sxp-icon {
+    --sxp-icon-size: 14;
+}
+
+/* Shrinks beside the view panel instead of pushing it out of the window: the list views scroll horizontally */
 .database-table-view {
     flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 100px;
 }
 
 /* Holds the frozen list and the main list, side by side */
@@ -36,7 +354,8 @@
     margin-top: 0;
 }
 
-/* The header of a column: the icon of the sort, then the name (TableView.MakeHeader()) */
+/* The header of a column: the priority of the column in the sort, the icon of the sort, the icon of the filters, then the name
+   (TableView.MakeHeader()) */
 .database-table-view__header {
     flex-direction: row;
     justify-content: center;
@@ -67,6 +386,25 @@
     margin-right: 4px;
 }
 
+/* Shown only when several columns are sorted. Close to the icon it belongs to, smaller and fainter than the name */
+.database-table-view__header-sort-priority {
+    font-size: 10px;
+    -unity-font-style: bold;
+    opacity: 0.7;
+    -unity-text-align: middle-left;
+    padding-left: 0;
+    padding-right: 0;
+    margin-left: 0;
+    margin-right: 1px;
+}
+
+/* Shown only on the headers of the columns that a condition of the filters uses. Faded, so it doesn't compete with the sort */
+.database-table-view__header-filter-icon {
+    margin-right: 4px;
+    opacity: 0.8;
+    --sxp-icon-size: 14;
+}
+
 /* Replaced by the icon of the header, which shows the sort beside the name instead of above it */
 .database-table-view MultiColumnHeaderColumnSortIndicator {
     display: none;
@@ -91,8 +429,62 @@
     background-color: var(--unity-colors-list_view_item-background-hover);
 }
 
-/* The padding is reduced by the width of the border, so the content of the active cell doesn't move. Temporary look, until the style
+/* Holds the handle of a row and the cell of the first displayed column (TableView.WrapWithRowHandle()) */
+.database-table-view__row-handle-container {
+    flex-direction: row;
+    flex-grow: 1;
+}
+
+/* The handle at the start of each row, which selects the whole row and shows its number. Its width is set by TableView, so the largest
+   number fits. Translucent colors work with both editor themes. Temporary look, until the style pass */
+.database-table-view__row-handle {
+    flex-shrink: 0;
+    justify-content: center;
+    background-color: rgba(128, 128, 128, 0.15);
+    border-right-width: 1px;
+    border-right-color: rgba(0, 0, 0, 0.2);
+}
+
+.database-table-view__row-handle:hover {
+    background-color: rgba(58, 121, 187, 0.5);
+}
+
+/* Small and faded, so the numbers don't draw attention. TableView.RowNumberDigitWidth depends on this font size */
+.database-table-view__row-number {
+    font-size: 9px;
+    opacity: 0.6;
+    -unity-text-align: middle-center;
+    padding-left: 0;
+    padding-right: 0;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+/* The cells of the rows whose assets are selected in Unity, while the selection sync is enabled. Lighter than the selection, which is
+   drawn over it (declared after it) */
+.database-table-view__cell--synced {
+    background-color: rgba(58, 121, 187, 0.1);
+}
+
+/* The selected cells. The active cell is usually selected too, so a single click shows both styles. Temporary look, until the style
    pass */
+.database-table-view__cell--selected {
+    background-color: rgba(58, 121, 187, 0.25);
+}
+
+/* While Alt is held, the selected cells that an edit of the active cell would change (same type, in any column). Fainter than the
+   outline of the active cell, declared before it so the active cell wins. The padding is reduced by the width of the border */
+.database-table-view__cell--alt-target {
+    padding-top: 2px;
+    padding-bottom: 2px;
+    padding-left: 3px;
+    padding-right: 3px;
+    border-width: 1px;
+    border-color: rgba(58, 121, 187, 0.7);
+}
+
+/* The active cell has an outline only, so it can be told apart inside a selection. The padding is reduced by the width of the border,
+   so its content doesn't move */
 .database-table-view__cell--active {
     padding-top: 2px;
     padding-bottom: 2px;
@@ -100,7 +492,6 @@
     padding-right: 3px;
     border-width: 1px;
     border-color: rgb(58, 121, 187);
-    background-color: rgba(58, 121, 187, 0.25);
 }
 
 /* Public class: CellHandler.EditFieldClass, also used by the custom handlers. The field fills the cell, which already has a padding */
@@ -162,6 +553,12 @@
 .database-cell__toggle {
     margin-left: 0;
     margin-right: 0;
+}
+
+/* A live control in a column that can't be edited (a computed column, TableView.SetLiveControlsReadOnly()): it ignores the pointer,
+   and is faded so it doesn't look like it can be changed */
+.database-cell__live-control--read-only {
+    opacity: 0.6;
 }
 
 /* Holds the live dropdown of an enum, created when the first value is bound */
@@ -248,21 +645,77 @@
     padding-right: 0;
 }
 
-/* A translucent border works with both the light and the dark editor themes */
+/* A translucent border works with both the light and the dark editor themes. Tall enough for the page controls and the page size
+   field, which keep the height of Unity's fields */
 .database-status-bar {
     flex-direction: row;
     align-items: center;
     flex-shrink: 0;
-    height: 20px;
+    height: 22px;
     padding-left: 6px;
     padding-right: 6px;
     border-top-width: 1px;
     border-top-color: rgba(0, 0, 0, 0.3);
 }
 
+/* Shrinks with an ellipsis before the page controls in a narrow window */
 .database-status-bar__label {
     -unity-text-align: middle-left;
     opacity: 0.8;
+    flex-shrink: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Pushes the page controls and the page size to the right */
+.database-status-bar__spacer {
+    flex-grow: 1;
+}
+
+/* The page controls (TableView.Pagination) */
+.database-status-bar__pages {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-left: 6px;
+}
+
+.database-status-bar__page-button {
+    padding-left: 1px;
+    padding-right: 1px;
+    margin-left: 1px;
+    margin-right: 1px;
+    cursor: link;
+}
+
+.database-status-bar__page-button > .sxp-icon {
+    --sxp-icon-size: 14;
+}
+
+.database-status-bar__page-text {
+    -unity-text-align: middle-left;
+    opacity: 0.8;
+    padding-left: 3px;
+    padding-right: 3px;
+}
+
+/* Room for four digits, the number of a page of a large table, or a page size */
+.database-status-bar__page-field,
+.database-status-bar__page-size {
+    width: 40px;
+    flex-shrink: 0;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.database-status-bar__page-field > .unity-base-field__input,
+.database-status-bar__page-size > .unity-base-field__input {
+    -unity-text-align: middle-center;
+}
+
+/* Apart from the page controls, since it's a setting of the view rather than a way to browse the pages */
+.database-status-bar__page-size {
+    margin-left: 8px;
 }
 
 /* The toolbar of both pages. Taller than Unity's toolbars, so its items get some room around them */
@@ -279,11 +732,21 @@
     cursor: link;
 }
 
+
 /* The focused button keeps the borders of the other toolbar buttons instead of the blue focus border, and is marked by its
    background only, so the buttons can still be reached with the keyboard */
 .database-toolbar > .unity-toolbar-button:focus {
     border-color: var(--unity-colors-toolbar_button-border);
     background-color: var(--unity-colors-toolbar_button-background-focus);
+}
+
+/* A toolbar button used as a toggle, while it's on (the selection sync): the background of Unity's checked toolbar toggles. It stays
+   on hover and focus (and press, which is also a hover), so the state is always visible: declared after the focus style, with more
+   classes than it and than the hover style of Unity */
+.database-toolbar > .unity-toolbar-button.database-toolbar__button--checked,
+.database-toolbar > .unity-toolbar-button.database-toolbar__button--checked:hover,
+.database-toolbar > .unity-toolbar-button.database-toolbar__button--checked:focus {
+    background-color: var(--unity-colors-toolbar_button-background-checked);
 }
 
 .database-toolbar > .database-toolbar__search,
@@ -326,19 +789,55 @@
     margin-left: 4px;
 }
 
+/* The button of the views, right of the search field (TablePage). It shrinks with the search field, and a long view name ends with
+   an ellipsis */
+.database-toolbar > .database-toolbar__view {
+    flex-shrink: 1;
+    min-width: 60px;
+}
+
+.database-toolbar__view > .database-icon-button__label {
+    flex-shrink: 1;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Smaller than the icon of the view, like the arrows of Unity's dropdowns */
+.database-toolbar__view > .database-toolbar__view-arrow {
+    --sxp-icon-size: 12;
+    flex-shrink: 0;
+    margin-left: 2px;
+    opacity: 0.7;
+}
+
+/* The name field of the View section of the view panel (ViewPanel) */
+.database-view-panel__view-name {
+    margin-left: 0;
+    margin-right: 0;
+}
+
 .database-table-list {
     flex-grow: 1;
 }
 
-/* The height of the items is set by TableListPage. The hand cursor says that a single click opens the table */
+/* The height of the items is set by TableListPage. The hand cursor says that a single click opens the table or toggles the group.
+   The item fills the content of the row of the tree view, after its indent and its arrow, so the whole row can be clicked */
 .database-table-list__item {
     cursor: link;
+    flex-grow: 1;
     flex-direction: row;
     align-items: center;
     padding-top: 2px;
     padding-bottom: 2px;
-    padding-left: 10px;
+    padding-left: 2px;
     padding-right: 10px;
+}
+
+.database-table-list__icon {
+    flex-shrink: 0;
+    margin-right: 6px;
+    opacity: 0.8;
 }
 
 .database-table-list__name {
@@ -346,9 +845,144 @@
     font-size: 14px;
 }
 
+/* The groups are only used to navigate: their names are fainter than the tables */
+.database-table-list__item--group > .database-table-list__name {
+    opacity: 0.8;
+}
+
 .database-message {
     -unity-text-align: middle-center;
     white-space: normal;
     opacity: 0.6;
     margin: 12px;
+}
+
+/* The preview of an import (ImportWindow), a modal window of its own. Temporary look, until the style pass */
+.database-import {
+    padding: 8px;
+}
+
+.database-import__header {
+    flex-shrink: 0;
+    margin-bottom: 6px;
+}
+
+.database-import__title {
+    -unity-font-style: bold;
+    font-size: 13px;
+    white-space: normal;
+}
+
+.database-import__summary {
+    white-space: normal;
+    margin-top: 2px;
+}
+
+/* The same header as the sections of the view panel. The sections keep their height, except the changes, which grow */
+.database-import__section {
+    flex-shrink: 0;
+    margin-bottom: 6px;
+}
+
+.database-import__section-title {
+    -unity-font-style: bold;
+    -unity-text-align: middle-left;
+    height: 22px;
+    margin-bottom: 4px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(0, 0, 0, 0.25);
+}
+
+/* Scrolls when the file has many columns, so the list of the changes stays visible */
+.database-import__columns {
+    max-height: 140px;
+}
+
+.database-import__column {
+    flex-direction: row;
+    align-items: center;
+    min-height: 20px;
+}
+
+.database-import__column-header {
+    width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.database-import__column-arrow {
+    width: 20px;
+    -unity-text-align: middle-center;
+    opacity: 0.6;
+}
+
+.database-import__column-target {
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+/* The identity column and the read-only columns, whose values are not written */
+.database-import__column-target--faded {
+    opacity: 0.6;
+}
+
+.database-import__folder {
+    flex-direction: row;
+    align-items: center;
+}
+
+.database-import__folder-field {
+    flex-grow: 1;
+}
+
+.database-import__hint {
+    white-space: normal;
+    opacity: 0.6;
+}
+
+/* A translucent border works with both editor themes */
+.database-import__changes {
+    flex-grow: 1;
+    border-width: 1px;
+    border-color: rgba(0, 0, 0, 0.3);
+}
+
+.database-import__line {
+    -unity-text-align: middle-left;
+    padding-left: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.database-import__line--row {
+    -unity-font-style: bold;
+}
+
+/* Under the title of their row */
+.database-import__line--change,
+.database-import__line--skipped-value {
+    padding-left: 20px;
+}
+
+/* A skipped row starts at the left like a title, a skipped value is indented like a change. Orange is readable on both themes */
+.database-import__line--skipped-row,
+.database-import__line--skipped-value {
+    color: rgb(230, 150, 40);
+}
+
+.database-import__footer {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    margin-top: 6px;
+}
+
+/* The hint shrinks before the buttons */
+.database-import__footer > .database-import__hint {
+    flex-shrink: 1;
+    max-width: 70%;
+}
+
+.database-import__footer-spacer {
+    flex-grow: 1;
 }

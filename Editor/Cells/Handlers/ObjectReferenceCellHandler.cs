@@ -24,9 +24,10 @@ namespace SideXP.Database.EditorOnly
         private const string IconClass = "database-cell__reference-icon";
 
         /// <summary>
-        /// The character between the path of an asset and the name of a sub-asset in the text of a reference.
+        /// The character between the path of an asset and the name of a sub-asset in the text of a reference. Also read by the import,
+        /// whose identity column accepts the same paths.
         /// </summary>
-        private const char SubAssetSeparator = '#';
+        public const char SubAssetSeparator = '#';
 
         /// <summary>
         /// The rank of empty references (<i>None</i>) in ascending order: before all the others.
@@ -121,7 +122,8 @@ namespace SideXP.Database.EditorOnly
         /// Gets the rank of a reference in ascending order.
         /// </summary>
         /// <param name="value">The reference.</param>
-        /// <returns>Returns <see cref="EmptyReferenceRank"/>, <see cref="MissingReferenceRank"/> or <see cref="ValidReferenceRank"/>.</returns>
+        /// <returns>Returns <see cref="EmptyReferenceRank"/>, <see cref="MissingReferenceRank"/> or
+        /// <see cref="ValidReferenceRank"/>.</returns>
         private static int GetCompareRank(object value)
         {
             if (value is not Object reference)

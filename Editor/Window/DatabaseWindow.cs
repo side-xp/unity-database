@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -15,8 +16,9 @@ namespace SideXP.Database.EditorOnly
     /// Editor window that displays assets as tables, and lets you view and edit their values like in a spreadsheet.
     /// </summary>
     /// <remarks>
-    /// The window shows either the list of the tables, or an open table. The open table, the search text of the list and the search
-    /// text of the open table are remembered across domain reloads and editor sessions. Open it from
+    /// The window shows either the list of the tables, or an open table. The open table, the search text and the expanded groups of
+    /// the list, the search text and the page of the open table, the selection sync option and the view panel (open or closed) are
+    /// remembered across domain reloads and editor sessions. Open it from
     /// <c>Tools &gt; Sideways Experiments &gt; Database</c>, or from code.
     /// </remarks>
     /// <example>
@@ -35,7 +37,10 @@ namespace SideXP.Database.EditorOnly
 
         private const string WindowTitle = "Database";
         private const string MenuItem = EditorConstants.EditorWindowMenu + "/Database";
-        private const string StyleSheetPath = DatabaseConstants.WindowFolderPath + "DatabaseWindow.uss";
+        /// <summary>
+        /// The path of the style sheet of the window, also used by the other windows of the package (see <see cref="ImportWindow"/>).
+        /// </summary>
+        internal const string StyleSheetPath = DatabaseConstants.WindowFolderPath + "DatabaseWindow.uss";
 
         /// <summary>
         /// The identifier of the open table, or null if the table list is shown.
@@ -50,10 +55,36 @@ namespace SideXP.Database.EditorOnly
         private string _tableSearch = string.Empty;
 
         /// <summary>
+        /// The paths of the groups of the table list expanded by the user (see <see cref="TableTreeNode.GroupPath"/>). The other groups
+        /// are collapsed, new groups included. The paths of groups that don't exist anymore are kept.
+        /// </summary>
+        [SerializeField]
+        private List<string> _expandedTableGroups = new List<string>();
+
+        /// <summary>
         /// The text of the search field of the open table, cleared when another table is opened.
         /// </summary>
         [SerializeField]
         private string _rowSearch = string.Empty;
+
+        /// <summary>
+        /// The index of the displayed page of the open table, from 0, reset when another table is opened.
+        /// </summary>
+        [SerializeField]
+        private int _rowPage = 0;
+
+        /// <summary>
+        /// Checks if the selection of the open table is synced with the selection of Unity. Disabled by default, since it changes the
+        /// selection of the whole editor.
+        /// </summary>
+        [SerializeField]
+        private bool _isSelectionSynced = false;
+
+        /// <summary>
+        /// Checks if the panel of the view is open, on the right of the open table.
+        /// </summary>
+        [SerializeField]
+        private bool _isViewPanelOpen = false;
 
         /// <summary>
         /// The asset whose row must be shown once the open table is displayed, or null if there is none. Kept until the UI is built,
@@ -87,14 +118,20 @@ namespace SideXP.Database.EditorOnly
             else
                 Debug.LogWarning($"{DatabaseConstants.LogPrefix}The style sheet of the window can't be found at \"{StyleSheetPath}\".");
 
-            _tableListPage = new TableListPage(TableRegistry.Tables, _tableSearch);
+            _tableListPage = new TableListPage(TableRegistry.Tables, _tableSearch, _expandedTableGroups);
             _tableListPage.TableChosen += OpenTable;
             _tableListPage.SearchChanged += search => _tableSearch = search;
+            _tableListPage.GroupExpandedChanged += SetTableGroupExpanded;
             rootVisualElement.Add(_tableListPage);
 
             _tablePage = new TablePage();
             _tablePage.BackClicked += ShowTableList;
             _tablePage.SearchChanged += search => _rowSearch = search;
+            _tablePage.PageChanged += pageIndex => _rowPage = pageIndex;
+            _tablePage.SetSelectionSynced(_isSelectionSynced);
+            _tablePage.SelectionSyncChanged += isSynced => _isSelectionSynced = isSynced;
+            _tablePage.SetViewPanelOpen(_isViewPanelOpen);
+            _tablePage.ViewPanelToggled += isOpen => _isViewPanelOpen = isOpen;
             rootVisualElement.Add(_tablePage);
 
             RefreshPage();
@@ -149,7 +186,7 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         /// <remarks>
         /// Used by the <i>Open In Database</i> menu of the Project window (see <see cref="OpenInDatabaseMenu"/>). A warning is logged if
-        /// the asset has no row in the table.
+        /// the asset has no row in the table, or if the filters or the folder scope hide it (see <see cref="TableView.ShowAsset"/>).
         /// </remarks>
         /// <param name="table">The table to open.</param>
         /// <param name="asset">The asset of which to show the row.</param>
@@ -177,9 +214,12 @@ namespace SideXP.Database.EditorOnly
         /// <param name="table">The table to open.</param>
         private void OpenTable(TableDefinition table)
         {
-            // The search of a table means nothing for another one
+            // The search and the page of a table mean nothing for another one
             if (table.Id != _openTableId)
+            {
                 _rowSearch = string.Empty;
+                _rowPage = 0;
+            }
 
             _openTableId = table.Id;
             RefreshPage();
@@ -210,7 +250,7 @@ namespace SideXP.Database.EditorOnly
             bool isTableOpen = TableRegistry.TryGet(_openTableId, out TableDefinition table);
             if (isTableOpen)
             {
-                _tablePage.SetTable(table, _rowSearch);
+                _tablePage.SetTable(table, _rowSearch, _rowPage);
             }
             else
             {
@@ -221,13 +261,24 @@ namespace SideXP.Database.EditorOnly
             _tablePage.SetDisplayed(isTableOpen);
             _tableListPage.SetDisplayed(!isTableOpen);
 
+            // The table view warns if it can't show the asset, with the reason
             Object assetToShow = _assetToShow;
             _assetToShow = null;
-            if (isTableOpen && assetToShow != null && !_tablePage.ShowAsset(assetToShow))
-            {
-                Debug.LogWarning($"{DatabaseConstants.LogPrefix}The asset \"{assetToShow.name}\" has no row in the table " +
-                    $"\"{table.Name}\".", assetToShow);
-            }
+            if (isTableOpen && assetToShow != null)
+                _tablePage.ShowAsset(assetToShow);
+        }
+
+        /// <summary>
+        /// Remembers that the user expanded or collapsed a group of the table list.
+        /// </summary>
+        /// <param name="groupPath">The path of the group.</param>
+        /// <param name="isExpanded">True if the group is expanded, false if it's collapsed.</param>
+        private void SetTableGroupExpanded(string groupPath, bool isExpanded)
+        {
+            // The groups are compared ignoring case, like in the table list
+            _expandedTableGroups.RemoveAll(i => string.Equals(i, groupPath, StringComparison.OrdinalIgnoreCase));
+            if (isExpanded)
+                _expandedTableGroups.Add(groupPath);
         }
 
         #endregion

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 
-using UnityEngine;
 using UnityEngine.UIElements;
 
 using Object = UnityEngine.Object;
@@ -11,6 +10,7 @@ namespace SideXP.Database.EditorOnly
 
     /// <summary>
     /// The search of the table view: filters the rows on their asset name and on the text of their cells (see <see cref="RowSearch"/>).
+    /// It's combined with the filters of the view (see <see cref="ApplyRowFilter"/>).
     /// </summary>
     /// <remarks>
     /// The text of a cell comes from the text conversion of its handler (<see cref="CellHandler.ToText(object)"/>), so the search finds
@@ -22,7 +22,13 @@ namespace SideXP.Database.EditorOnly
 
         #region Fields
 
-        private const string NoMatchMessage = "No row matches the search.";
+        private const string NoSearchMatchMessage = "No row matches the search.";
+
+        /// <summary>
+        /// The label shown by the main list when the search or the filters hide all the rows, or null if the list hasn't created it.
+        /// Its text is updated on each refresh (see <see cref="GetNoMatchMessage"/>).
+        /// </summary>
+        private Label _noMatchLabel = null;
 
         /// <summary>
         /// The text of the search, or an empty string if there is none.
@@ -62,8 +68,8 @@ namespace SideXP.Database.EditorOnly
         /// Shows only the rows that contain each word of a search, in their asset name or in the text of their cells, ignoring case.
         /// </summary>
         /// <remarks>
-        /// The active cell is cleared if its row is hidden. Setting another table replaces the search with the one given to
-        /// <see cref="SetTable(TableDefinition, string)"/>.
+        /// The active cell is cleared if its row is hidden, and the first page is shown. Setting another table replaces the search with
+        /// the one given to <see cref="SetTable(TableDefinition, string, int)"/>.
         /// </remarks>
         /// <param name="search">The text of the search. If null or blank, all the rows are visible.</param>
         public void SetSearch(string search)
@@ -72,7 +78,8 @@ namespace SideXP.Database.EditorOnly
             if (_pipeline == null)
                 return;
 
-            ApplySearchFilter();
+            ResetPage();
+            ApplyRowFilter();
             Refresh();
         }
 
@@ -92,14 +99,6 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Sets the filter of the pipeline from the words of the search. The rows are filtered on the next update of the pipeline.
-        /// </summary>
-        private void ApplySearchFilter()
-        {
-            _pipeline.Filter = IsSearching ? MatchesSearch : null;
-        }
-
-        /// <summary>
         /// Checks if a row matches the search.
         /// </summary>
         /// <param name="row">The row to check.</param>
@@ -115,6 +114,8 @@ namespace SideXP.Database.EditorOnly
         /// <remarks>
         /// The text contains the displayed columns only, so every match can be seen on screen, and the asset name, which is searched
         /// even if its column is hidden. It must be built again when the displayed columns change (see <see cref="ClearSearchTexts"/>).
+        /// The computed columns are searched too: the search runs in the second pass of the filters, after their values are computed
+        /// (see <see cref="ApplyRowFilter"/>), and the text of a row is cleared when one of its computed values changes.
         /// </remarks>
         /// <param name="row">The row of which to get the text.</param>
         /// <returns>Returns the text of the row.</returns>
@@ -150,29 +151,15 @@ namespace SideXP.Database.EditorOnly
         /// Converts the value of a cell to text through the handler of its column.
         /// </summary>
         /// <remarks>
-        /// An error of the handler is logged once per column, and the cell is then searched as an empty text, so a broken custom
-        /// handler doesn't break the search.
+        /// An error of the handler is logged once per column (see <see cref="TableViewColumn.ToText(object, string)"/>), and the cell is
+        /// then searched as an empty text, so a broken custom handler doesn't break the search.
         /// </remarks>
         /// <param name="column">The column of the cell.</param>
         /// <param name="value">The cached value of the cell.</param>
         /// <returns>Returns the text of the cell, or null if the handler failed.</returns>
         private static string ToSearchText(TableViewColumn column, object value)
         {
-            try
-            {
-                return column.Handler.ToText(value);
-            }
-            catch (Exception exception)
-            {
-                if (!column.HasLoggedError)
-                {
-                    column.HasLoggedError = true;
-                    Debug.LogError($"{DatabaseConstants.LogPrefix}The cell handler {column.Handler.GetType()} failed to convert a " +
-                        $"value of the column \"{column.Name}\" to text for the search. The next errors of this column are not logged.");
-                    Debug.LogException(exception);
-                }
-                return null;
-            }
+            return column.ToText(value, "for the search");
         }
 
         /// <summary>
@@ -187,7 +174,7 @@ namespace SideXP.Database.EditorOnly
 
         /// <summary>
         /// Clears the search if it hides the row of an asset, so a new asset is always visible, and notifies it with
-        /// <see cref="SearchReset"/>.
+        /// <see cref="SearchReset"/>. Call it only when the filters don't hide the row, since the search would be cleared for nothing.
         /// </summary>
         /// <param name="asset">The asset that must be visible.</param>
         private void ResetSearchIfHidden(Object asset)
@@ -200,15 +187,15 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Creates the element shown by the main list when it has no row, which only happens when the search hides all the rows: a
-        /// table without asset shows its own message instead of the lists.
+        /// Creates the element shown by the main list when it has no row, which only happens when the search or the filters hide all
+        /// the rows: a table without asset shows its own message instead of the lists.
         /// </summary>
         /// <returns>Returns the created element.</returns>
-        private static VisualElement MakeNoMatchElement()
+        private VisualElement MakeNoMatchElement()
         {
-            Label label = new Label(NoMatchMessage);
-            label.AddToClassList(MessageClass);
-            return label;
+            _noMatchLabel = new Label(GetNoMatchMessage());
+            _noMatchLabel.AddToClassList(MessageClass);
+            return _noMatchLabel;
         }
 
         #endregion

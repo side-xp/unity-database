@@ -53,6 +53,12 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         public const string EditFieldClass = "database-cell__edit-field";
 
+        /// <summary>
+        /// The USS class of the live controls (see <see cref="SetLiveControl(VisualElement)"/>), which the table view uses to find them,
+        /// for example to make them read-only in the columns that can't be edited.
+        /// </summary>
+        public const string LiveControlClass = "database-cell__live-control";
+
         #endregion
 
 
@@ -92,13 +98,15 @@ namespace SideXP.Database.EditorOnly
         /// cell with it, without entering the edit mode. Clicking the control doesn't select the cell, and doesn't change the focus.
         /// </summary>
         /// <remarks>
-        /// Call it in <see cref="CreateDisplay"/>, then call <see cref="SubmitValue(VisualElement, object)"/> when the value of the
-        /// control changes. A handler whose display is a live control usually has no edit field (<see cref="CreateEditField"/> returns
-        /// null).
+        /// Call it in <see cref="CreateDisplay"/> (or in <see cref="BindDisplay"/> for a control created on bind), then call
+        /// <see cref="SubmitValue(VisualElement, object)"/> when the value of the control changes. A handler whose display is a live
+        /// control usually has no edit field (<see cref="CreateEditField"/> returns null). In a column that can't be edited (a computed
+        /// column), the control ignores the pointer, so a click selects the cell instead of changing the value.
         /// </remarks>
         /// <param name="control">The element that changes the value.</param>
         protected internal static void SetLiveControl(VisualElement control)
         {
+            control.AddToClassList(LiveControlClass);
             // Not focusable, so the keys keep going to the table, and a reused element never keeps the focus of another row
             control.focusable = false;
             control.RegisterCallback<PointerDownEvent>(OnLiveControlPointerDown);
@@ -201,6 +209,26 @@ namespace SideXP.Database.EditorOnly
             return false;
         }
 
+        /// <summary>
+        /// Checks a value given to a cell by an edit of another cell, when the edit applies to the selection: the value comes from the
+        /// edited cell, which can be in another column of the same type (Alt+Enter).
+        /// </summary>
+        /// <remarks>
+        /// The edited cell itself doesn't go through this method: its value comes from <see cref="TryGetEditedValue"/>, or from the
+        /// live control of the display.
+        /// </remarks>
+        /// <param name="value">The value of the edited cell, of the type of the column.</param>
+        /// <param name="context">Information about the cell that receives the value.</param>
+        /// <param name="acceptedValue">Outputs the value to write to the cell, which can differ from the given value (for example, a
+        /// number clamped to the limits of the field).</param>
+        /// <returns>Returns true if the value can be written to the cell. Returns false to reject it: the cell is then skipped, and
+        /// reported. By default, accepts the value as it is.</returns>
+        public virtual bool TryAcceptValue(object value, CellContext context, out object acceptedValue)
+        {
+            acceptedValue = value;
+            return true;
+        }
+
         #endregion
 
 
@@ -222,7 +250,8 @@ namespace SideXP.Database.EditorOnly
         /// Compares two values of a column, for sorting. Only called if <see cref="CanCompare"/> returns true for the column.
         /// </summary>
         /// <remarks>
-        /// The sort is stable: the rows of equal values keep the order of the assets in the project.
+        /// The sort is stable: the rows of equal values are ordered by the next sorted columns, then keep the order of the assets in the
+        /// project.
         /// </remarks>
         /// <param name="a">The first value, read from the value cache.</param>
         /// <param name="b">The second value, read from the value cache.</param>
@@ -240,7 +269,8 @@ namespace SideXP.Database.EditorOnly
         #region Text conversion
 
         /// <summary>
-        /// Converts a value to text, for display, search, copy and export.
+        /// Converts a value to text, for display, search, text filters, copy and export. The import also compares the cells through
+        /// it, so a value written differently (<c>1.50</c> for <c>1.5</c>) is not a change.
         /// </summary>
         /// <param name="value">The value to convert.</param>
         /// <returns>Returns the converted value. By default, an empty string for null, invariant culture formats for numbers, and names

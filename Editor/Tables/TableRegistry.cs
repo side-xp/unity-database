@@ -120,9 +120,10 @@ namespace SideXP.Database.EditorOnly
 
             List<string> warnings = new List<string>();
             s_tables = new List<TableDefinition>();
+            ComputedColumns computedColumns = ComputedColumns.FromProject();
             foreach (Type type in CodeTables.GetCandidateTypes())
             {
-                TableDefinition table = CodeTables.Build(type, warnings);
+                TableDefinition table = CodeTables.Build(type, warnings, computedColumns);
                 if (table != null)
                     s_tables.Add(table);
             }

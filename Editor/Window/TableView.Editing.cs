@@ -14,7 +14,8 @@ namespace SideXP.Database.EditorOnly
     /// <list type="bullet">
     /// <item>A double-click, Enter or F2 edits the active cell. Typing a character edits it too, starting with that character.</item>
     /// <item>Enter confirms the edit, as well as clicking outside of the edited cell (the field loses the focus), and picking a value
-    /// in a toggle or an enum field.</item>
+    /// in a toggle or an enum field. The value is also given to the other selected cells of the column, or of the same type with
+    /// Alt+Enter (see <see cref="MultiCellEdit"/>).</item>
     /// <item>Escape cancels the edit, and reverts its writes.</item>
     /// </list>
     /// Most edits write the serialized property of their column (see <see cref="CellEditSession"/>). The <i>Asset Name</i> column has
@@ -62,6 +63,17 @@ namespace SideXP.Database.EditorOnly
             /// </summary>
             public readonly CellEditSession Session;
 
+            /// <summary>
+            /// The value of the cell when the edit started, read from the value cache, or null for a rename.
+            /// </summary>
+            public readonly object OriginalValue;
+
+            /// <summary>
+            /// Checks if the edit field showed the mixed value indicator when the edit started, because the other cells that the edit
+            /// would change have different values.
+            /// </summary>
+            public readonly bool WasMixed;
+
             /// <inheritdoc cref="EditState"/>
             /// <param name="cellElement"><inheritdoc cref="CellElement" path="/summary"/></param>
             /// <param name="field"><inheritdoc cref="Field" path="/summary"/></param>
@@ -69,8 +81,10 @@ namespace SideXP.Database.EditorOnly
             /// <param name="column"><inheritdoc cref="Column" path="/summary"/></param>
             /// <param name="context"><inheritdoc cref="Context" path="/summary"/></param>
             /// <param name="session"><inheritdoc cref="Session" path="/summary"/></param>
+            /// <param name="originalValue"><inheritdoc cref="OriginalValue" path="/summary"/></param>
+            /// <param name="wasMixed"><inheritdoc cref="WasMixed" path="/summary"/></param>
             public EditState(VisualElement cellElement, VisualElement field, TableRow row, TableViewColumn column, CellContext context,
-                CellEditSession session)
+                CellEditSession session, object originalValue, bool wasMixed)
             {
                 CellElement = cellElement;
                 Field = field;
@@ -78,6 +92,8 @@ namespace SideXP.Database.EditorOnly
                 Column = column;
                 Context = context;
                 Session = session;
+                OriginalValue = originalValue;
+                WasMixed = wasMixed;
             }
 
         }
@@ -131,10 +147,21 @@ namespace SideXP.Database.EditorOnly
             CellContext context = new CellContext(row.Asset, column.Field, column.Accessor.ValueType);
             VisualElement field;
             CellEditSession session = null;
+            object originalValue = null;
+            bool isMixed = false;
             if (column.HasProperty)
             {
                 if (!TryCreatePropertyEdit(row, column, context, out field, out session))
                     return false;
+
+                // The other selected cells of the column receive the value too: the field says if they have other values, like the
+                // Inspector does for several objects
+                originalValue = row.GetValue(_columns.IndexOf(column));
+                if (field is IMixedValueSupport mixedValueField && IsEditMixed(row, column, originalValue))
+                {
+                    mixedValueField.showMixedValue = true;
+                    isMixed = true;
+                }
             }
             else if (column.IsAssetName && CodeTables.IsRenameAllowed(row.Asset.GetType()))
             {
@@ -147,7 +174,7 @@ namespace SideXP.Database.EditorOnly
                 return false;
             }
 
-            _edit = new EditState(cell, field, row, column, context, session);
+            _edit = new EditState(cell, field, row, column, context, session, originalValue, isMixed);
             cell[0].SetDisplayed(false);
             cell.Add(field);
             field.RegisterCallback<FocusOutEvent>(OnEditFieldFocusOut);
@@ -210,7 +237,10 @@ namespace SideXP.Database.EditorOnly
         /// the writes of the edit are reverted.</param>
         /// <param name="shouldFocusView">If enabled, the table view gets the focus back, so the keyboard keeps working on the table
         /// (after Enter or Escape). Disabled when the edit ends because the user clicked elsewhere.</param>
-        private void EndEdit(bool isConfirmed, bool shouldFocusView)
+        /// <param name="isAppliedToSameType">If enabled (Alt+Enter), a confirmed value is also given to the selected cells of the same
+        /// type in any column. Otherwise, to the selected cells of the column of the edited cell (see <see cref="MultiCellEdit"/>).
+        /// </param>
+        private void EndEdit(bool isConfirmed, bool shouldFocusView, bool isAppliedToSameType = false)
         {
             if (_edit == null)
                 return;
@@ -224,9 +254,15 @@ namespace SideXP.Database.EditorOnly
             if (isWritten)
             {
                 if (edit.Session != null)
-                    WriteEditedValue(edit);
+                {
+                    // In the Undo group of the edit, so all the cells are changed and undone together
+                    if (TryWriteEditedValue(edit, out object value, out bool isBound) && HasEditChanged(edit, value, isBound))
+                        ApplyToTargets(GetEditTargets(edit.Row, edit.Column, isAppliedToSameType), value, edit.Column);
+                }
                 else
+                {
                     RenameEditedAsset(edit);
+                }
             }
 
             if (shouldFocusView)
@@ -256,11 +292,19 @@ namespace SideXP.Database.EditorOnly
         /// <summary>
         /// Writes the value of the edit field, if its handler has one to write.
         /// </summary>
+        /// <remarks>
+        /// A field bound to its property (curves and gradients) has already written its value: it's read back from the asset, so it can
+        /// be given to the other selected cells.
+        /// </remarks>
         /// <param name="edit">The edit being confirmed.</param>
-        private static void WriteEditedValue(EditState edit)
+        /// <param name="value">Outputs the value of the edited cell after the write.</param>
+        /// <param name="isBound">Outputs true if the field is bound to its property, and has written the value itself.</param>
+        /// <returns>Returns true if the edited cell has a new value, false if the value is rejected or can't be written.</returns>
+        private static bool TryWriteEditedValue(EditState edit, out object value, out bool isBound)
         {
             CellHandler handler = edit.Column.Handler;
-            object value = null;
+            value = null;
+            isBound = EditFields.IsBound(edit.Field);
             bool hasValue = false;
             try
             {
@@ -274,17 +318,45 @@ namespace SideXP.Database.EditorOnly
             }
 
             if (!hasValue)
-                return;
+            {
+                if (!isBound)
+                    return false;
+
+                using (ValueReadContext context = new ValueReadContext(edit.Row.Asset))
+                    value = edit.Column.Accessor.Read(context);
+
+                return true;
+            }
 
             try
             {
                 edit.Session.Write(value);
+                return true;
             }
             catch (Exception exception)
             {
                 Debug.LogWarning($"{DatabaseConstants.LogPrefix}The value {TextConversion.ToText(value)} can't be written to the " +
                     $"column \"{edit.Column.Name}\": {exception.Message}");
+                return false;
             }
+        }
+
+        /// <summary>
+        /// Checks if an edit changed the value of its cell, so the value is given to the other selected cells (see
+        /// <see cref="MultiCellEdit.HasChanged"/>).
+        /// </summary>
+        /// <param name="edit">The edit being confirmed.</param>
+        /// <param name="value">The value of the edited cell after the write.</param>
+        /// <param name="isBound">Checks if the field is bound to its property. The cached value may be the object that the binding
+        /// changed in place, so the values can't be compared: the edit is always considered as a change.</param>
+        /// <returns>Returns true if the value applies to the other selected cells.</returns>
+        private static bool HasEditChanged(EditState edit, object value, bool isBound)
+        {
+            if (isBound)
+                return true;
+
+            bool isStillMixed = edit.Field is IMixedValueSupport mixedValueField && mixedValueField.showMixedValue;
+            return MultiCellEdit.HasChanged(edit.OriginalValue, value, edit.WasMixed, isStillMixed);
         }
 
         /// <summary>
@@ -385,7 +457,8 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Writes a value submitted by a live control, as a single Undo step, and refreshes the row.
+        /// Writes a value submitted by a live control, as a single Undo step, and refreshes the row. If the cell is selected, the value
+        /// is also given to the other selected cells of its column, or of the same type if Alt was held when the control was pressed.
         /// </summary>
         /// <remarks>
         /// The row is refreshed even if the value can't be written, so the control shows the value of the asset again.
@@ -402,6 +475,8 @@ namespace SideXP.Database.EditorOnly
                     using (CellEditSession session = new CellEditSession(row.Asset, column.PropertyPath, $"Edit {column.Name}"))
                     {
                         session.Write(value);
+                        // A dropdown submits its value after its menu closes: the modifier is the one of the press that opened it
+                        ApplyToTargets(GetEditTargets(row, column, _isAltHeldOnPress), value, column);
                         session.Confirm();
                     }
                 }
@@ -431,6 +506,7 @@ namespace SideXP.Database.EditorOnly
         /// <param name="evt">The emitted event.</param>
         private void OnKeyDown(KeyDownEvent evt)
         {
+            SetAltHeld(evt.altKey);
             if (_edit != null)
             {
                 OnEditKeyDown(evt);
@@ -457,9 +533,10 @@ namespace SideXP.Database.EditorOnly
         {
             switch (evt.keyCode)
             {
+                // Alt+Enter gives the value to the selected cells of the same type, in any column
                 case KeyCode.Return:
                 case KeyCode.KeypadEnter:
-                    EndEdit(true, true);
+                    EndEdit(true, true, evt.altKey);
                     evt.StopPropagation();
                     return;
 

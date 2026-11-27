@@ -1,18 +1,32 @@
 using System;
 using System.Collections.Generic;
 
+using UnityEngine;
+
 using Object = UnityEngine.Object;
 
 namespace SideXP.Database.EditorOnly
 {
 
     /// <summary>
-    /// Computes the rows of a table through separate stages: source, value cache, filter and sort.
+    /// Computes the rows of a table through separate stages: source, value cache, filter, computed values, post-filter, sort and
+    /// paginate.
     /// </summary>
     /// <remarks>
     /// Each stage only reruns when its input changes: invalidating the source reloads the assets and reads all the values again,
-    /// invalidating a row reads its values again, and both rerun the filter and the sort. Changing the filter reruns the filter and the
-    /// sort, changing the sort only reruns the sort. Invalidations are deferred: call <see cref="Update"/> to apply them.
+    /// invalidating a row reads its values again, and both rerun the filter and the next stages. Changing the filter reruns the
+    /// filter and the next stages, changing the post-filter reruns the post-filter and the next stages (not the computed values),
+    /// changing the sort reruns the sort and the paginate stage, changing the page or its size only reruns the paginate stage.
+    /// Invalidations are deferred: call <see cref="Update"/> to apply them.
+    /// <para>
+    /// The values of the computed columns (see <see cref="ComputedAccessor"/>) are computed after the filter, since they can depend on
+    /// the rows that pass it (the visible assets of their context), and only for these rows: the other rows have no value. The filter
+    /// must not use them: the post-filter, which runs after them, can. A computed column that throws an exception has no value until
+    /// the next computation, and the first exception of each column is logged.
+    /// </para>
+    /// <para>
+    /// The pages only split the visible rows for the display: <see cref="VisibleRows"/> always holds the rows of all the pages.
+    /// </para>
     /// </remarks>
     internal class TablePipeline
     {
@@ -30,6 +44,17 @@ namespace SideXP.Database.EditorOnly
         private IReadOnlyList<IValueAccessor> _accessors = null;
 
         /// <summary>
+        /// The indices of the computed columns, in the order of the accessors.
+        /// </summary>
+        private int[] _computedColumns = null;
+
+        /// <summary>
+        /// The indices of the computed columns whose exception has already been logged, so a column that keeps failing doesn't flood
+        /// the console on each change.
+        /// </summary>
+        private HashSet<int> _loggedComputeErrors = new HashSet<int>();
+
+        /// <summary>
         /// All the rows of the table, in the order of the source.
         /// </summary>
         private List<TableRow> _rows = new List<TableRow>();
@@ -40,29 +65,53 @@ namespace SideXP.Database.EditorOnly
         private Dictionary<Object, TableRow> _rowsByAsset = new Dictionary<Object, TableRow>();
 
         /// <summary>
-        /// The rows that pass the filter, in the order of the sort.
+        /// The rows that pass the filter, in the order of the source. Their computed values are computed, and they are the visible
+        /// assets of the context of the computed columns.
+        /// </summary>
+        private List<TableRow> _filteredRows = new List<TableRow>();
+
+        /// <summary>
+        /// The rows that pass the filter and the post-filter, in the order of the sort.
         /// </summary>
         private List<TableRow> _visibleRows = new List<TableRow>();
 
         /// <summary>
-        /// The condition a row must meet to be visible, or null to show all the rows.
+        /// The condition a row must meet to be visible, checked before the computed values are computed, or null to keep all the rows.
         /// </summary>
         private Predicate<TableRow> _filter = null;
 
         /// <summary>
-        /// The index of the column used to sort the rows, or -1 to keep the order of the source.
+        /// The condition a row that passes the filter must meet to be visible, checked after the computed values are computed, so it
+        /// can use them. Null to keep all the rows that pass the filter.
         /// </summary>
-        private int _sortColumnIndex = -1;
+        private Predicate<TableRow> _postFilter = null;
 
         /// <summary>
-        /// Checks if the rows are sorted in descending order.
+        /// The columns used to sort the rows, by priority: the rows are sorted by the first column, then the rows of equal values by
+        /// the second column, and so on. Empty to keep the order of the source.
         /// </summary>
-        private bool _isSortDescending = false;
+        private List<SortKey> _sortKeys = new List<SortKey>();
 
         /// <summary>
-        /// Compares two values of the sorted column.
+        /// The number of rows per page, or 0 to show all the visible rows on a single page.
         /// </summary>
-        private Comparison<object> _sortComparison = null;
+        private int _pageSize = 0;
+
+        /// <summary>
+        /// The index of the displayed page, from 0. Kept in the range of the pages when the paginate stage reruns.
+        /// </summary>
+        private int _pageIndex = 0;
+
+        /// <summary>
+        /// The visible rows of the displayed page, in the order of the sort. All the visible rows if the rows are not paginated.
+        /// </summary>
+        private List<TableRow> _pageRows = new List<TableRow>();
+
+        /// <summary>
+        /// The index in <see cref="VisibleRows"/> of the first row of <see cref="PageRows"/>, as of the last update. Kept apart from
+        /// the page index, which can be set before the next update.
+        /// </summary>
+        private int _pageStartIndex = 0;
 
         /// <summary>
         /// The number of times the source has been loaded, so the users of the pipeline can tell when its rows have been replaced.
@@ -85,9 +134,24 @@ namespace SideXP.Database.EditorOnly
         private bool _isFilterValid = false;
 
         /// <summary>
+        /// Checks if the values of the computed columns match the values of the rows and the rows that pass the filter.
+        /// </summary>
+        private bool _areComputedValuesValid = false;
+
+        /// <summary>
+        /// Checks if the visible rows match the post-filter.
+        /// </summary>
+        private bool _isPostFilterValid = false;
+
+        /// <summary>
         /// Checks if the visible rows match the sort.
         /// </summary>
         private bool _isSortValid = false;
+
+        /// <summary>
+        /// Checks if the rows of the page match the visible rows, the page and its size.
+        /// </summary>
+        private bool _isPageValid = false;
 
         #endregion
 
@@ -101,6 +165,14 @@ namespace SideXP.Database.EditorOnly
         {
             _source = source;
             _accessors = accessors;
+
+            List<int> computedColumns = new List<int>();
+            for (int i = 0; i < accessors.Count; i++)
+            {
+                if (accessors[i] is ComputedAccessor)
+                    computedColumns.Add(i);
+            }
+            _computedColumns = computedColumns.ToArray();
         }
 
         #endregion
@@ -119,17 +191,18 @@ namespace SideXP.Database.EditorOnly
         /// <inheritdoc cref="_visibleRows"/>
         public IReadOnlyList<TableRow> VisibleRows => _visibleRows;
 
+        /// <inheritdoc cref="_filteredRows"/>
+        public IReadOnlyList<TableRow> FilteredRows => _filteredRows;
+
         /// <inheritdoc cref="_sourceVersion"/>
         public int SourceVersion => _sourceVersion;
 
-        /// <inheritdoc cref="_sortColumnIndex"/>
-        public int SortColumnIndex => _sortColumnIndex;
-
-        /// <inheritdoc cref="_isSortDescending"/>
-        public bool IsSortDescending => _isSortDescending;
+        /// <inheritdoc cref="_sortKeys"/>
+        public IReadOnlyList<SortKey> SortKeys => _sortKeys;
 
         /// <summary>
-        /// The condition a row must meet to be visible, or null to show all the rows. Setting it invalidates the filter.
+        /// The condition a row must meet to be visible, checked before the computed values are computed, so it must not use them. Null
+        /// to keep all the rows. Setting it invalidates the filter, so the computed values are computed again.
         /// </summary>
         public Predicate<TableRow> Filter
         {
@@ -142,7 +215,93 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Sorts the rows by a column. Rows with equal values keep the order of the source, in both directions.
+        /// The condition a row that passes the <see cref="Filter"/> must meet to be visible, checked after the computed values are
+        /// computed, so it can use them. Null to keep all the rows that pass the filter. Setting it invalidates the post-filter only:
+        /// the computed values are not computed again.
+        /// </summary>
+        public Predicate<TableRow> PostFilter
+        {
+            get => _postFilter;
+            set
+            {
+                _postFilter = value;
+                InvalidatePostFilter();
+            }
+        }
+
+        /// <inheritdoc cref="_pageRows"/>
+        public IReadOnlyList<TableRow> PageRows => _pageRows;
+
+        /// <summary>
+        /// The number of rows per page, or 0 to show all the visible rows on a single page. A negative size is read as 0. Setting it
+        /// invalidates the page.
+        /// </summary>
+        /// <remarks>
+        /// The page keeps its index when the size changes, and is brought back in the range of the pages on the next update.
+        /// </remarks>
+        public int PageSize
+        {
+            get => _pageSize;
+            set
+            {
+                int pageSize = Math.Max(0, value);
+                if (pageSize == _pageSize)
+                    return;
+
+                _pageSize = pageSize;
+                _isPageValid = false;
+            }
+        }
+
+        /// <summary>
+        /// Checks if the visible rows are split into pages.
+        /// </summary>
+        public bool IsPaginated => _pageSize > 0;
+
+        /// <summary>
+        /// The index of the displayed page, from 0. Setting it invalidates the page.
+        /// </summary>
+        /// <remarks>
+        /// An index out of the range of the pages is accepted, and brought back in the range on the next update: the last page for an
+        /// index too large, the first page for a negative index.
+        /// </remarks>
+        public int PageIndex
+        {
+            get => _pageIndex;
+            set
+            {
+                if (value == _pageIndex)
+                    return;
+
+                _pageIndex = value;
+                _isPageValid = false;
+            }
+        }
+
+        /// <summary>
+        /// Gets the number of pages of the visible rows: 1 if the rows are not paginated, or if no row is visible.
+        /// </summary>
+        public int PageCount => GetPageCount(_visibleRows.Count, _pageSize);
+
+        /// <inheritdoc cref="_pageStartIndex"/>
+        public int PageStartIndex => _pageStartIndex;
+
+        /// <summary>
+        /// Gets the page that displays a row: its position in the visible rows of the last update, with the current page size.
+        /// </summary>
+        /// <param name="row">The row to find.</param>
+        /// <returns>Returns the index of the page, from 0, or -1 if the row is not visible.</returns>
+        public int GetPageOf(TableRow row)
+        {
+            int index = row != null ? _visibleRows.IndexOf(row) : -1;
+            if (index < 0)
+                return -1;
+
+            return IsPaginated ? index / _pageSize : 0;
+        }
+
+        /// <summary>
+        /// Sorts the rows by a single column. Rows with equal values keep the order of the source, in both directions.
         /// </summary>
         /// <param name="columnIndex">The index of the column used to sort the rows.</param>
         /// <param name="isDescending">If enabled, the rows are sorted in descending order.</param>
@@ -151,12 +310,36 @@ namespace SideXP.Database.EditorOnly
         /// <exception cref="ArgumentNullException">Thrown if the comparison is null.</exception>
         public void SetSort(int columnIndex, bool isDescending, Comparison<object> comparison)
         {
-            if (columnIndex < 0 || columnIndex >= _accessors.Count)
-                throw new ArgumentOutOfRangeException(nameof(columnIndex));
+            SetSort(new[] { new SortKey(columnIndex, isDescending, comparison) });
+        }
 
-            _sortColumnIndex = columnIndex;
-            _isSortDescending = isDescending;
-            _sortComparison = comparison ?? throw new ArgumentNullException(nameof(comparison));
+        /// <summary>
+        /// Sorts the rows by several columns, by priority: the rows are sorted by the first key, then the rows of equal values by the
+        /// second key, and so on. Each key has its own direction. Rows equal for all the keys keep the order of the source.
+        /// </summary>
+        /// <param name="keys">The columns used to sort the rows, by priority. If empty, the rows are in the order of the source.</param>
+        /// <exception cref="ArgumentNullException">Thrown if the list of keys, or the comparison of a key, is null.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if the column index of a key is out of range.</exception>
+        /// <exception cref="ArgumentException">Thrown if several keys sort the same column.</exception>
+        public void SetSort(IReadOnlyList<SortKey> keys)
+        {
+            if (keys == null)
+                throw new ArgumentNullException(nameof(keys));
+
+            HashSet<int> columnIndices = new HashSet<int>();
+            foreach (SortKey key in keys)
+            {
+                if (key.ColumnIndex < 0 || key.ColumnIndex >= _accessors.Count)
+                    throw new ArgumentOutOfRangeException(nameof(keys), $"The column index {key.ColumnIndex} is out of range.");
+
+                if (key.Comparison == null)
+                    throw new ArgumentNullException(nameof(keys), $"The key of the column {key.ColumnIndex} has no comparison.");
+
+                if (!columnIndices.Add(key.ColumnIndex))
+                    throw new ArgumentException($"The column {key.ColumnIndex} is sorted by several keys.", nameof(keys));
+            }
+
+            _sortKeys = new List<SortKey>(keys);
             _isSortValid = false;
         }
 
@@ -165,9 +348,7 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         public void ClearSort()
         {
-            _sortColumnIndex = -1;
-            _isSortDescending = false;
-            _sortComparison = null;
+            _sortKeys.Clear();
             _isSortValid = false;
         }
 
@@ -200,6 +381,14 @@ namespace SideXP.Database.EditorOnly
         public void InvalidateFilter()
         {
             _isFilterValid = false;
+        }
+
+        /// <summary>
+        /// Marks the post-filter as outdated, so it reruns on the next update, without computing the computed values again.
+        /// </summary>
+        public void InvalidatePostFilter()
+        {
+            _isPostFilterValid = false;
         }
 
         /// <summary>
@@ -243,9 +432,27 @@ namespace SideXP.Database.EditorOnly
                 hasChanged = true;
             }
 
+            if (!_areComputedValuesValid)
+            {
+                ComputeValues();
+                hasChanged = true;
+            }
+
+            if (!_isPostFilterValid)
+            {
+                ApplyPostFilter();
+                hasChanged = true;
+            }
+
             if (!_isSortValid)
             {
                 ApplySort();
+                hasChanged = true;
+            }
+
+            if (!_isPageValid)
+            {
+                ApplyPage();
                 hasChanged = true;
             }
 
@@ -308,15 +515,97 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         private void ApplyFilter()
         {
-            _visibleRows.Clear();
+            _filteredRows.Clear();
             foreach (TableRow row in _rows)
             {
                 if (_filter == null || _filter(row))
-                    _visibleRows.Add(row);
+                    _filteredRows.Add(row);
             }
 
             _isFilterValid = true;
+            // The computed values can depend on the rows that pass the filter
+            _areComputedValuesValid = false;
+        }
+
+        /// <summary>
+        /// Computes the values of the computed columns for the rows that pass the filter, with a context shared by all the columns. The
+        /// other rows get no value, so they don't keep values computed from other data.
+        /// </summary>
+        private void ComputeValues()
+        {
+            _areComputedValuesValid = true;
+            _isPostFilterValid = false;
+            if (_computedColumns.Length == 0)
+                return;
+
+            // Both in the order of the source
+            List<Object> allAssets = _rows.ConvertAll(row => row.Asset);
+            List<Object> visibleAssets = _filteredRows.ConvertAll(row => row.Asset);
+            HashSet<TableRow> filteredRows = new HashSet<TableRow>(_filteredRows);
+
+            TableContext context = new TableContext(allAssets, visibleAssets);
+            try
+            {
+                foreach (int columnIndex in _computedColumns)
+                    ComputeColumn(columnIndex, context, filteredRows);
+            }
+            finally
+            {
+                context.End();
+            }
+        }
+
+        /// <summary>
+        /// Selects the rows that pass the filter and the post-filter, in the order of the source, to be sorted.
+        /// </summary>
+        private void ApplyPostFilter()
+        {
+            _visibleRows.Clear();
+            foreach (TableRow row in _filteredRows)
+            {
+                if (_postFilter == null || _postFilter(row))
+                    _visibleRows.Add(row);
+            }
+
+            _isPostFilterValid = true;
             _isSortValid = false;
+        }
+
+        /// <summary>
+        /// Computes the values of a computed column. After an exception, the other rows of the column get no value.
+        /// </summary>
+        /// <param name="columnIndex">The index of the computed column.</param>
+        /// <param name="context">The context of the computation.</param>
+        /// <param name="visibleRows">The rows that pass the filter, which get a value.</param>
+        private void ComputeColumn(int columnIndex, TableContext context, HashSet<TableRow> visibleRows)
+        {
+            ComputedAccessor accessor = (ComputedAccessor)_accessors[columnIndex];
+            bool hasFailed = false;
+            foreach (TableRow row in _rows)
+            {
+                object value = null;
+                if (!hasFailed && visibleRows.Contains(row))
+                {
+                    try
+                    {
+                        value = accessor.Compute(row.Asset, context);
+                    }
+                    catch (Exception exception)
+                    {
+                        hasFailed = true;
+                        if (_loggedComputeErrors.Add(columnIndex))
+                        {
+                            string assetName = row.Asset != null ? row.Asset.name : "a missing asset";
+                            Debug.LogWarning($"{DatabaseConstants.LogPrefix}The computed column {accessor.MethodLabel} has thrown an " +
+                                $"exception for {assetName}, so the column has no value until its values are computed again (after a " +
+                                $"change of the data or of the filters). Next exceptions of this column are not logged.\n{exception}",
+                                row.Asset);
+                        }
+                    }
+                }
+
+                row.SetComputedValue(columnIndex, value);
+            }
         }
 
         /// <summary>
@@ -328,23 +617,60 @@ namespace SideXP.Database.EditorOnly
         /// </remarks>
         private void ApplySort()
         {
-            if (_sortColumnIndex < 0)
+            // Copied, so the comparison of the rows doesn't go through the list
+            SortKey[] keys = _sortKeys.ToArray();
+            _visibleRows.Sort((a, b) =>
             {
-                _visibleRows.Sort((a, b) => a.SourceIndex.CompareTo(b.SourceIndex));
+                foreach (SortKey key in keys)
+                {
+                    // The sign is used instead of the raw result, since negating int.MinValue overflows
+                    int result = Math.Sign(key.Comparison(a.GetValue(key.ColumnIndex), b.GetValue(key.ColumnIndex)));
+                    if (result != 0)
+                        return key.IsDescending ? -result : result;
+                }
+
+                return a.SourceIndex.CompareTo(b.SourceIndex);
+            });
+
+            _isSortValid = true;
+            _isPageValid = false;
+        }
+
+        /// <summary>
+        /// Brings the page back in the range of the pages, and selects the visible rows of the page.
+        /// </summary>
+        private void ApplyPage()
+        {
+            _pageIndex = Math.Max(0, Math.Min(_pageIndex, PageCount - 1));
+            _pageStartIndex = _pageIndex * _pageSize;
+            _pageRows.Clear();
+            if (IsPaginated)
+            {
+                int count = Math.Min(_pageSize, _visibleRows.Count - _pageStartIndex);
+                if (count > 0)
+                    _pageRows.AddRange(_visibleRows.GetRange(_pageStartIndex, count));
             }
             else
             {
-                int columnIndex = _sortColumnIndex;
-                // The sign is used instead of the raw result, since negating int.MinValue overflows
-                int direction = _isSortDescending ? -1 : 1;
-                _visibleRows.Sort((a, b) =>
-                {
-                    int result = Math.Sign(_sortComparison(a.GetValue(columnIndex), b.GetValue(columnIndex))) * direction;
-                    return result != 0 ? result : a.SourceIndex.CompareTo(b.SourceIndex);
-                });
+                _pageRows.AddRange(_visibleRows);
             }
 
-            _isSortValid = true;
+            _isPageValid = true;
+        }
+
+        /// <summary>
+        /// Gets the number of pages of some rows.
+        /// </summary>
+        /// <param name="rowCount">The number of rows.</param>
+        /// <param name="pageSize">The number of rows per page, or 0 or less to show all the rows on a single page.</param>
+        /// <returns>Returns the number of pages, at least 1, so a table without visible row still has an (empty) page.</returns>
+        private static int GetPageCount(int rowCount, int pageSize)
+        {
+            if (pageSize <= 0 || rowCount <= 0)
+                return 1;
+
+            // Rounded up, so the last rows get a page even if it's not full
+            return ((rowCount - 1) / pageSize) + 1;
         }
 
         #endregion

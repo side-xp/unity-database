@@ -25,6 +25,10 @@ namespace SideXP.Database.EditorOnly
     /// <para>
     /// The order of the columns, their widths and the sort are remembered for each table (see <see cref="ViewSettings"/>).
     /// </para>
+    /// <para>
+    /// The rows are displayed in pages: the list views display the rows of the page only, while the selection and its operations use
+    /// all the visible rows (see <see cref="SetPageSize(int)"/>).
+    /// </para>
     /// </remarks>
     internal partial class TableView : VisualElement
     {
@@ -76,8 +80,12 @@ namespace SideXP.Database.EditorOnly
         private const string HeaderClass = "database-table-view__header";
         private const string HeaderLabelClass = "database-table-view__header-label";
         private const string HeaderSortIconClass = "database-table-view__header-sort-icon";
+        private const string HeaderSortPriorityClass = "database-table-view__header-sort-priority";
+        private const string HeaderFilterIconClass = "database-table-view__header-filter-icon";
         private const string CellClass = "database-table-view__cell";
+        private const string ReadOnlyLiveControlClass = "database-cell__live-control--read-only";
         private const string ActiveCellClass = "database-table-view__cell--active";
+        private const string SelectedCellClass = "database-table-view__cell--selected";
         private const string HoverMirrorRowClass = "database-table-view__row--hover-mirror";
         private const string StatusBarClass = "database-status-bar";
         private const string StatusLabelClass = "database-status-bar__label";
@@ -118,7 +126,8 @@ namespace SideXP.Database.EditorOnly
         private List<TableViewColumn> _columns = new List<TableViewColumn>();
 
         /// <summary>
-        /// The visible rows of the pipeline, copied after each update, used as the source of the list view.
+        /// The visible rows of the pipeline, of all the pages, copied after each update. The selection is built on them. The list views
+        /// display the rows of the page only (see <see cref="_pageRows"/>).
         /// </summary>
         private List<TableRow> _rows = new List<TableRow>();
 
@@ -187,6 +196,11 @@ namespace SideXP.Database.EditorOnly
         private VisualElement _emptyMessage = null;
 
         /// <summary>
+        /// The label of <see cref="_emptyMessage"/>, which says if the table has no asset in the project or in its folder scope.
+        /// </summary>
+        private Label _emptyMessageLabel = null;
+
+        /// <summary>
         /// The button of <see cref="_emptyMessage"/> that creates an asset, hidden if the table has no type that can be created.
         /// </summary>
         private Button _emptyCreateButton = null;
@@ -213,9 +227,9 @@ namespace SideXP.Database.EditorOnly
             _emptyMessage = new VisualElement();
             _emptyMessage.AddToClassList(EmptyClass);
             _emptyMessage.SetDisplayed(false);
-            Label messageLabel = new Label(NoAssetMessage);
-            messageLabel.AddToClassList(MessageClass);
-            _emptyMessage.Add(messageLabel);
+            _emptyMessageLabel = new Label(NoAssetMessage);
+            _emptyMessageLabel.AddToClassList(MessageClass);
+            _emptyMessage.Add(_emptyMessageLabel);
             _emptyCreateButton = CreateEmptyCreateButton();
             _emptyMessage.Add(_emptyCreateButton);
             Add(_emptyMessage);
@@ -225,6 +239,7 @@ namespace SideXP.Database.EditorOnly
             _statusLabel = new Label();
             _statusLabel.AddToClassList(StatusLabelClass);
             statusBar.Add(_statusLabel);
+            CreatePageControls(statusBar);
             Add(statusBar);
 
             RegisterCallback<AttachToPanelEvent>(OnAttachToPanel);
@@ -233,6 +248,14 @@ namespace SideXP.Database.EditorOnly
             // The view gets the focus when a cell is clicked, so it receives the keys that start an edit
             focusable = true;
             RegisterCallback<KeyDownEvent>(OnKeyDown, TrickleDown.TrickleDown);
+            // Alt changes the cells an edit applies to, which are outlined while it's held
+            RegisterCallback<KeyUpEvent>(OnKeyUp, TrickleDown.TrickleDown);
+            RegisterCallback<PointerMoveEvent>(OnPointerMoveTrickleDown, TrickleDown.TrickleDown);
+            // Ends the drag selections started on a cell or a row handle
+            RegisterCallback<PointerUpEvent>(OnPointerUpTrickleDown, TrickleDown.TrickleDown);
+            // Ctrl+C and Ctrl+V, sent by the editor as commands to the focused element
+            RegisterCallback<ValidateCommandEvent>(OnValidateCommand);
+            RegisterCallback<ExecuteCommandEvent>(OnExecuteCommand);
         }
 
         /// <summary>
@@ -241,6 +264,12 @@ namespace SideXP.Database.EditorOnly
         /// <param name="evt">The emitted event.</param>
         private void OnAttachToPanel(AttachToPanelEvent evt)
         {
+            UpdateUnitySelectionListening(true);
+            // Removed first, since a view can be attached again without being detached in between (moved to another parent)
+            DatabasePreferences.PageSizeChanged -= OnPageSizeChanged;
+            DatabasePreferences.PageSizeChanged += OnPageSizeChanged;
+            // The size may have changed in another window while the view was detached
+            OnPageSizeChanged();
             if (_changeTracker == null)
                 return;
 
@@ -259,6 +288,8 @@ namespace SideXP.Database.EditorOnly
             EndEdit(true, false);
             SaveColumnOrder();
             _changeTracker?.Stop();
+            UpdateUnitySelectionListening(false);
+            DatabasePreferences.PageSizeChanged -= OnPageSizeChanged;
         }
 
         #endregion
@@ -271,41 +302,52 @@ namespace SideXP.Database.EditorOnly
 
         /// <summary>
         /// Displays a table: loads its assets, and builds its columns and its pipeline, with the remembered order, widths, hidden
-        /// columns and sort of the table.
+        /// columns, sort, filters and folder scope of the open view of the table, and the page size of the preferences.
         /// </summary>
         /// <param name="table">The table to display.</param>
         /// <param name="search">The search that filters the rows (see <see cref="SetSearch(string)"/>), or null to show all the rows.
         /// </param>
-        public void SetTable(TableDefinition table, string search = null)
+        /// <param name="pageIndex">The page to show, from 0 (see <see cref="SetPage(int)"/>), for example the page shown before a
+        /// domain reload. An index out of the range of the pages shows the first or the last page.</param>
+        public void SetTable(TableDefinition table, string search = null, int pageIndex = 0)
         {
             // Leaving a table confirms its edit, like clicking outside of the edited cell
             EndEdit(true, false);
             SaveColumnOrder();
             _changeTracker?.Stop();
             _table = table;
-            _activeCell = CellId.None;
-            _activeCellElement = null;
+            ClearSelection();
             _creatableTypes = AssetOperations.GetCreatableTypes(table.Type);
             UpdateCreateButton(_emptyCreateButton, CreateAssetText);
 
-            ProjectAssetSource source = new ProjectAssetSource(table.Type);
-            IReadOnlyList<Object> assets = source.LoadAssets();
+            // The scope applies to the first load, so the assets outside of it are never loaded. The columns are then validated
+            // against the first asset of the scope
+            ViewCatalog catalog = ViewCatalog.Current;
+            catalog.RemoveDeletedOverrides(table.Id);
+            _viewSettings = new LayeredViewSettings(catalog.GetLayers(catalog.GetOpenView(table.Id)), IsHiddenByDefault);
+            _folderScope = new FolderScope(_viewSettings.Folders);
+            _source = new ProjectAssetSource(table.Type) { Scope = _folderScope };
+            IReadOnlyList<Object> assets = _source.LoadAssets();
             _columns = CreateColumns(table, assets.Count > 0 ? assets[0] : null);
-            _viewSettings = UserViews.instance.GetDefaultView(table.Id);
 
             IValueAccessor[] accessors = new IValueAccessor[_columns.Count];
             for (int i = 0; i < _columns.Count; i++)
                 accessors[i] = _columns[i].Accessor;
 
-            _pipeline = new TablePipeline(new PreloadedAssetSource(assets, source), accessors);
+            _pipeline = new TablePipeline(new PreloadedAssetSource(assets, _source), accessors);
             // Before the first update, so the rows are filtered and sorted once, on the displayed columns
             UpdateDisplayedColumns();
             StoreSearch(search);
-            ApplySearchFilter();
+            // The filter editor changes the tree in place: a tree of a project view is copied, so only the overrides change
+            _filter = _viewSettings.GetEditableFilter();
+            CompileFilter();
+            ApplyRowFilter();
             ApplyRememberedSort();
+            ApplyRememberedPagination(pageIndex);
 
             _changeTracker = new TableChangeTracker(table.Type, _pipeline);
             _changeTracker.Changed += ScheduleRefresh;
+            ApplyFolderScope();
             if (panel != null)
                 _changeTracker.Start();
 
@@ -325,13 +367,22 @@ namespace SideXP.Database.EditorOnly
             _table = null;
             _viewSettings = null;
             _pipeline = null;
+            _source = null;
+            _filter = null;
+            _compiledFilter = null;
+            _firstPassFilter = null;
+            _secondPassFilter = null;
+            _filteredColumnIds.Clear();
+            _folderScope = FolderScope.WholeProject;
             _columns = new List<TableViewColumn>();
             _displayedColumns = new List<int>();
             _isColumnDisplayed = Array.Empty<bool>();
             _rows.Clear();
-            _activeCell = CellId.None;
-            _activeCellElement = null;
+            _pageRows.Clear();
+            _notifiedPageIndex = 0;
+            ClearSelection();
             _hoveredRow = null;
+            _noMatchLabel = null;
             _creatableTypes = new List<Type>();
 
             _body.Clear();
@@ -344,7 +395,7 @@ namespace SideXP.Database.EditorOnly
         public CellId ActiveCell => _activeCell;
 
         /// <summary>
-        /// Sets the active cell, and highlights it.
+        /// Sets the active cell, and highlights it. The selection doesn't change.
         /// </summary>
         /// <param name="cell">The cell to activate, or <see cref="CellId.None"/> to have no active cell.</param>
         public void SetActiveCell(CellId cell)
@@ -353,34 +404,48 @@ namespace SideXP.Database.EditorOnly
                 return;
 
             _activeCell = cell;
-            _activeCellElement?.RemoveFromClassList(ActiveCellClass);
             _activeCellElement = null;
 
-            // Find the element of the new active cell among the visible cells. Elements that are not visible get the highlight when
+            // Finds the element of the new active cell among the visible cells. Elements that are not visible get the highlight when
             // they are bound
-            if (!cell.IsNone)
-                _body.Query(className: CellClass).ForEach(UpdateActiveCellHighlight);
+            UpdateCellHighlights();
         }
 
         /// <summary>
-        /// Shows the row of an asset: clears the search if it hides the row, makes the asset the active cell (see
-        /// <see cref="GetShownAssetColumnId"/>), scrolls to its row, and focuses the view.
+        /// Shows the row of an asset: clears the search if it hides the row, opens the page of the row, selects a cell of the asset and
+        /// makes it the active cell (see <see cref="GetShownAssetColumnId"/>), scrolls to its row, and focuses the view.
         /// </summary>
         /// <remarks>
         /// The asset must already be in the table: call <see cref="Reload"/> first if it has just been created. Works on a table that
         /// has just been set, whose list views are not laid out yet.
+        /// <para>
+        /// The filters and the folder scope are kept, even if they hide the asset: a filter built by hand must not be lost. The view
+        /// warns instead, with the reason, and the asset is not shown. The search is only cleared when it's what hides the row.
+        /// </para>
         /// </remarks>
         /// <param name="asset">The asset to show.</param>
-        /// <returns>Returns true if the asset has a row in the table, false if it doesn't (or if no table is displayed).</returns>
+        /// <returns>
+        /// Returns true if the asset is shown, false if it has no row in the table, if the filters hide its row, or if no table is
+        /// displayed.
+        /// </returns>
         public bool ShowAsset(Object asset)
         {
-            if (asset == null || _pipeline == null || !_pipeline.TryGetRow(asset, out _))
+            if (asset == null || _pipeline == null)
                 return false;
+
+            _pipeline.TryGetRow(asset, out TableRow row);
+            if (row == null || IsHiddenByFilters(row))
+            {
+                WarnAssetNotShown(asset, row);
+                return false;
+            }
 
             // The user just asked for that asset: it must not stay hidden by the search
             ResetSearchIfHidden(asset);
+            // After the search, which goes back to the first page when it's cleared
+            ShowPageOf(row);
 
-            SetActiveCell(new CellId(asset, GetShownAssetColumnId()));
+            SelectCell(new CellId(asset, GetShownAssetColumnId()));
             ScrollToAsset(asset);
             Focus();
             return true;
@@ -418,6 +483,10 @@ namespace SideXP.Database.EditorOnly
                 _changeTracker.UpdateIndex();
                 _rows.Clear();
                 _rows.AddRange(_pipeline.VisibleRows);
+                _pageRows.Clear();
+                _pageRows.AddRange(_pipeline.PageRows);
+                // Before the list views bind their rows again, so the handles get the width of the new largest number
+                UpdateRowHandleWidth();
 
                 // The asset of the active cell may have been deleted, may not be in the table anymore, or may be hidden by the search
                 if (!_activeCell.IsNone && !IsAssetVisible(_activeCell.Asset))
@@ -427,6 +496,7 @@ namespace SideXP.Database.EditorOnly
                     SetActiveCell(CellId.None);
                 }
 
+                RemoveHiddenRowsFromSelection();
                 _listView.RefreshItems();
                 _frozenListView?.RefreshItems();
             }
@@ -434,7 +504,12 @@ namespace SideXP.Database.EditorOnly
             bool hasAssets = _pipeline.Rows.Count > 0;
             _body.SetDisplayed(hasAssets);
             _emptyMessage.SetDisplayed(!hasAssets);
+            _emptyMessageLabel.text = GetNoAssetMessage();
+            if (_noMatchLabel != null)
+                _noMatchLabel.text = GetNoMatchMessage();
+
             _statusLabel.text = GetStatusText();
+            UpdatePageControls();
         }
 
         #endregion
@@ -491,7 +566,8 @@ namespace SideXP.Database.EditorOnly
                 float frozenColumnWidth = GetInitialWidth(frozenColumn);
 
                 _frozenColumnLink = new FrozenColumnLink(_frozenListView, _listView, frozenColumnWidth);
-                _frozenListView.columns.Add(CreateListColumn(frozenColumn, frozenColumnIndex, frozenColumnWidth, false, _frozenColumnLink));
+                _frozenListView.columns.Add(CreateListColumn(frozenColumn, frozenColumnIndex, frozenColumnWidth, false, true,
+                    _frozenColumnLink));
                 firstMainColumn = 1;
             }
 
@@ -499,10 +575,13 @@ namespace SideXP.Database.EditorOnly
             {
                 int columnIndex = displayedColumns[i];
                 TableViewColumn column = _columns[columnIndex];
-                _listView.columns.Add(CreateListColumn(column, columnIndex, GetInitialWidth(column), column.IsFlexible, null));
+                // Without frozen list, the row handles go in the first column of the main list
+                bool hasRowHandle = i == 0;
+                _listView.columns.Add(CreateListColumn(column, columnIndex, GetInitialWidth(column), column.IsFlexible, hasRowHandle,
+                    null));
             }
 
-            ShowSortInHeader();
+            ShowSortInHeaders();
             if (scrollOffset != Vector2.zero)
                 RestoreScrollOffset(_listView, scrollOffset);
         }
@@ -530,14 +609,14 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Creates a list view that displays the rows, without columns.
+        /// Creates a list view that displays the rows of the page, without columns.
         /// </summary>
         /// <returns>Returns the created list view.</returns>
         private MultiColumnListView CreateListView()
         {
             MultiColumnListView listView = new MultiColumnListView
             {
-                itemsSource = _rows,
+                itemsSource = _pageRows,
                 fixedItemHeight = RowHeight,
                 selectionType = SelectionType.None,
                 // The header only reports the sort: the pipeline sorts the rows
@@ -557,9 +636,11 @@ namespace SideXP.Database.EditorOnly
         /// <param name="columnIndex">The index of the column in the pipeline.</param>
         /// <param name="width">The initial width of the column, in pixels.</param>
         /// <param name="isStretchable">If enabled, the column grows to fill the width left by the other columns.</param>
+        /// <param name="hasRowHandle">If enabled, the cells of the column start with the handle that selects their row (see
+        /// <see cref="WrapWithRowHandle(VisualElement)"/>). Only the first displayed column has them.</param>
         /// <param name="frozenColumnLink">The link that tracks the cells of the frozen column, or null if the column is not frozen.</param>
         /// <returns>Returns the created column.</returns>
-        private Column CreateListColumn(TableViewColumn column, int columnIndex, float width, bool isStretchable,
+        private Column CreateListColumn(TableViewColumn column, int columnIndex, float width, bool isStretchable, bool hasRowHandle,
             FrozenColumnLink frozenColumnLink)
         {
             Column listColumn = new Column
@@ -575,11 +656,18 @@ namespace SideXP.Database.EditorOnly
                 makeCell = () =>
                 {
                     VisualElement cell = MakeCell(column, frozenColumnLink != null);
-                    frozenColumnLink?.TrackCell(cell);
-                    return cell;
+                    VisualElement element = hasRowHandle ? WrapWithRowHandle(cell) : cell;
+                    frozenColumnLink?.TrackCell(element);
+                    return element;
                 },
-                bindCell = (element, rowIndex) => BindCell(element, column, columnIndex, _rows[rowIndex]),
-                unbindCell = (element, rowIndex) => UnbindCell(element),
+                bindCell = (element, rowIndex) =>
+                {
+                    // The index of the item is its index in the page
+                    BindCell(GetCellElement(element), column, columnIndex, _pageRows[rowIndex]);
+                    if (hasRowHandle)
+                        BindRowHandle(element, _pipeline.PageStartIndex + rowIndex);
+                },
+                unbindCell = (element, rowIndex) => UnbindCell(GetCellElement(element)),
             };
 
             // After the initial width is set, so only the widths chosen by the user are reported
@@ -588,12 +676,15 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Creates the header of a column, with its tooltip: the icon of the sort, shown if the column is sorted, then the name.
+        /// Creates the header of a column, with its tooltip: the priority of the column in the sort and the icon of the sort, shown if
+        /// the column is sorted, the icon of the filters, shown if a condition of the filters applies to the column, then the name.
         /// </summary>
         /// <remarks>
         /// The header holds its column, so the order of the columns can be read from the headers (see <see cref="SaveColumnOrder"/>).
         /// The sort indicator of the list views is hidden by the style sheet, and replaced by the icon (see
-        /// <see cref="UpdateSortIcons"/>).
+        /// <see cref="UpdateSortIcons"/>). Shift-clicking and Ctrl-clicking the header selects the column instead of sorting it (see
+        /// <see cref="OnHeaderPointerDown(PointerDownEvent)"/>), and Alt-clicking it adds the column to the sort (see
+        /// <see cref="OnHeaderSortPointerDown(PointerDownEvent)"/>).
         /// </remarks>
         /// <param name="column">The column of which to create the header.</param>
         /// <returns>Returns the created header.</returns>
@@ -603,44 +694,28 @@ namespace SideXP.Database.EditorOnly
             header.AddToClassList(HeaderClass);
 
             // The header is the target of the tooltip, not its content
+            Label sortPriorityLabel = new Label { pickingMode = PickingMode.Ignore };
+            sortPriorityLabel.AddToClassList(HeaderSortPriorityClass);
+            header.Add(sortPriorityLabel);
+
             Icon sortIcon = new Icon { pickingMode = PickingMode.Ignore };
             sortIcon.AddToClassList(HeaderSortIconClass);
             header.Add(sortIcon);
+
+            Icon filterIcon = new Icon(DatabaseIcons.Filter) { pickingMode = PickingMode.Ignore };
+            filterIcon.AddToClassList(HeaderFilterIconClass);
+            header.Add(filterIcon);
 
             Label label = new Label(column.Name) { pickingMode = PickingMode.Ignore };
             label.AddToClassList(HeaderLabelClass);
             header.Add(label);
 
+            header.RegisterCallback<PointerDownEvent>(OnHeaderPointerDown);
+            header.RegisterCallback<PointerDownEvent>(OnHeaderSortPointerDown);
+            header.RegisterCallback<MouseDownEvent>(OnHeaderMouseDown);
             UpdateSortIcon(header);
+            UpdateFilterIcon(header);
             return header;
-        }
-
-        /// <summary>
-        /// Shows the sort of the pipeline on the headers of both list views.
-        /// </summary>
-        private void UpdateSortIcons()
-        {
-            _listView?.Query(className: HeaderClass).ForEach(UpdateSortIcon);
-            _frozenListView?.Query(className: HeaderClass).ForEach(UpdateSortIcon);
-        }
-
-        /// <summary>
-        /// Shows the icon of the sort on the header of a column if the pipeline is sorted by that column, or hides it otherwise.
-        /// </summary>
-        /// <param name="header">The header of the column, created by <see cref="MakeHeader"/>.</param>
-        private void UpdateSortIcon(VisualElement header)
-        {
-            Icon sortIcon = header.Q<Icon>(className: HeaderSortIconClass);
-            if (sortIcon == null)
-                return;
-
-            bool isSorted = _pipeline != null
-                && _pipeline.SortColumnIndex >= 0
-                && header.userData == _columns[_pipeline.SortColumnIndex];
-
-            sortIcon.SetDisplayed(isSorted);
-            if (isSorted)
-                sortIcon.IconName = _pipeline.IsSortDescending ? DatabaseIcons.SortDescending : DatabaseIcons.SortAscending;
         }
 
         /// <summary>
@@ -661,6 +736,8 @@ namespace SideXP.Database.EditorOnly
             cell.AddToClassList(CellClass);
             cell.Add(column.IsControls ? CreateControls(cell) : column.Handler.CreateDisplay());
             cell.RegisterCallback<PointerDownEvent>(OnCellPointerDown);
+            // Before the live controls of the display get the press, which they stop
+            cell.RegisterCallback<PointerDownEvent>(OnCellPointerDownTrickleDown, TrickleDown.TrickleDown);
             cell.RegisterCallback<PointerEnterEvent>(OnCellPointerEnter);
             cell.RegisterCallback<PointerLeaveEvent>(OnCellPointerLeave);
             cell.RegisterCallback<CellValueSubmitEvent>(OnCellValueSubmitted);
@@ -668,7 +745,8 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Shows the cached value of a row in a cell, through the handler of the column, and highlights the cell if it's active.
+        /// Shows the cached value of a row in a cell, through the handler of the column, and highlights the cell if it's active or
+        /// selected.
         /// </summary>
         /// <remarks>
         /// An error of the handler is logged once per column, and doesn't prevent the other cells from being displayed.
@@ -680,7 +758,7 @@ namespace SideXP.Database.EditorOnly
         private void BindCell(VisualElement cell, TableViewColumn column, int columnIndex, TableRow row)
         {
             ((CellBinding)cell.userData).Row = row;
-            UpdateActiveCellHighlight(cell);
+            UpdateCellHighlight(cell);
             UpdateHoverMirror(cell);
             EndEditIfRebound(cell, row);
 
@@ -692,6 +770,10 @@ namespace SideXP.Database.EditorOnly
             {
                 CellContext context = new CellContext(row.Asset, column.Field, column.Accessor.ValueType);
                 column.Handler.BindDisplay(cell[0], row.GetValue(columnIndex), context);
+
+                // Some handlers create their live control on bind (enums), so the controls are found after each bind
+                if (column.IsComputed)
+                    SetLiveControlsReadOnly(cell[0]);
             }
             catch (Exception exception)
             {
@@ -706,6 +788,21 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
+        /// Makes the live controls of a display ignore the pointer, so a click on a cell that can't be edited selects it instead of
+        /// changing a value that can't be written, and fades them.
+        /// </summary>
+        /// <param name="display">The display of the cell, created by the handler of its column.</param>
+        private static void SetLiveControlsReadOnly(VisualElement display)
+        {
+            display.Query(className: CellHandler.LiveControlClass).ForEach(control =>
+            {
+                control.AddToClassList(ReadOnlyLiveControlClass);
+                // The parts of the control (the checkmark of a toggle, the input of a dropdown) are targets of the pointer too
+                control.Query<VisualElement>().ForEach(element => element.pickingMode = PickingMode.Ignore);
+            });
+        }
+
+        /// <summary>
         /// Detaches a cell from its row, when the list view releases its element.
         /// </summary>
         /// <param name="cell">The element created by <see cref="MakeCell(TableViewColumn, bool)"/>.</param>
@@ -713,7 +810,7 @@ namespace SideXP.Database.EditorOnly
         {
             // A released element may stay in the hierarchy, hidden, so it must not keep the highlight of its last row
             ((CellBinding)cell.userData).Row = null;
-            UpdateActiveCellHighlight(cell);
+            UpdateCellHighlight(cell);
             UpdateHoverMirror(cell);
             EndEditIfRebound(cell, null);
         }
@@ -799,7 +896,8 @@ namespace SideXP.Database.EditorOnly
         #region Active cell
 
         /// <summary>
-        /// Called when a cell is clicked. Activates the cell, and edits it on a double-click.
+        /// Called when a cell is clicked. Changes the selection and the active cell (see <see cref="ClickCell"/>), and edits the cell on
+        /// a double-click.
         /// </summary>
         /// <param name="evt">The emitted event.</param>
         private void OnCellPointerDown(PointerDownEvent evt)
@@ -823,23 +921,42 @@ namespace SideXP.Database.EditorOnly
             // Ended explicitly, since the field may not have the focus (for example a custom edit field without focusable element)
             EndEdit(true, false);
             Focus();
-            SetActiveCell(clickedCell);
 
-            if (evt.clickCount == 2 && _activeCellElement != null)
-                BeginEdit(_activeCellElement, '\0');
+            // The first click of the double-click has already changed the selection
+            if (evt.clickCount == 2)
+            {
+                RestoreSelectionBeforeClick(clickedCell);
+                if (_activeCellElement != null)
+                    BeginEdit(_activeCellElement, '\0');
+
+                return;
+            }
+
+            // Ctrl on Windows and Linux, Command on macOS
+            ClickCell(clickedCell, evt.actionKey, evt.shiftKey);
+
+            // Dragging over other cells selects the range from the pressed cell, or from the active cell with Shift, like a click
+            CellId anchor = evt.shiftKey && !_activeCell.IsNone ? _activeCell : clickedCell;
+            StartDragSelection(DragSelectionMode.Cells, anchor, evt.actionKey);
         }
 
         /// <summary>
-        /// Highlights a cell element if it displays the active cell, and removes its highlight otherwise.
+        /// Highlights a cell element if it displays a selected cell, outlines it if it displays the active cell or a cell that an edit
+        /// with Alt would change (see <see cref="IsAltTarget"/>), and removes these styles otherwise.
         /// </summary>
         /// <param name="cell">The element created by <see cref="MakeCell(TableViewColumn, bool)"/>.</param>
-        private void UpdateActiveCellHighlight(VisualElement cell)
+        private void UpdateCellHighlight(VisualElement cell)
         {
             if (cell.userData is not CellBinding binding)
                 return;
 
-            bool isActive = binding.Row != null && _activeCell.Is(binding.Row.Asset, binding.Column.Id);
+            bool hasRow = binding.Row != null;
+            bool isActive = hasRow && _activeCell.Is(binding.Row.Asset, binding.Column.Id);
+            bool isSelected = hasRow && _selection.Contains(new CellId(binding.Row.Asset, binding.Column.Id));
             cell.EnableInClassList(ActiveCellClass, isActive);
+            cell.EnableInClassList(SelectedCellClass, isSelected);
+            cell.EnableInClassList(AltTargetCellClass, hasRow && IsAltTarget(binding.Column, isSelected, isActive));
+            cell.EnableInClassList(SyncedRowCellClass, hasRow && IsSyncedRow(binding.Row));
             if (isActive)
                 _activeCellElement = cell;
             else if (_activeCellElement == cell)
@@ -863,7 +980,7 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Scrolls the table so the row of an asset is visible. Does nothing if the asset has no visible row.
+        /// Scrolls the table so the row of an asset is visible. Does nothing if the asset has no row on the displayed page.
         /// </summary>
         /// <remarks>
         /// Only the main list is scrolled: the frozen list follows it (see <see cref="FrozenColumnLink"/>).
@@ -874,7 +991,7 @@ namespace SideXP.Database.EditorOnly
             if (_pipeline == null || _listView == null || !_pipeline.TryGetRow(asset, out TableRow row))
                 return;
 
-            int index = _rows.IndexOf(row);
+            int index = _pageRows.IndexOf(row);
             if (index < 0)
                 return;
 
@@ -882,7 +999,7 @@ namespace SideXP.Database.EditorOnly
             Action scrollToRow = () =>
             {
                 // The list may have been rebuilt, or the rows may have changed in the meantime
-                if (_listView == listView && index < _rows.Count && _rows[index] == row)
+                if (_listView == listView && index < _pageRows.Count && _pageRows[index] == row)
                     _listView.ScrollToItem(index);
             };
 
@@ -910,130 +1027,22 @@ namespace SideXP.Database.EditorOnly
         #endregion
 
 
-        #region Sorting
-
-        /// <summary>
-        /// Called when the user clicks the header of a sortable column, in the frozen list or in the main list. Sorts the rows by that
-        /// column.
-        /// </summary>
-        /// <remarks>
-        /// The table is sorted by a single column until multi-column sorting (Next milestone). The headers can describe several sorted
-        /// columns (Shift-click), so only the last sorted column is kept, and the header of the other list is cleared.
-        /// </remarks>
-        /// <param name="listView">The list view whose header has been clicked.</param>
-        private void OnColumnSortingChanged(MultiColumnListView listView)
-        {
-            // Changing the sort descriptions below raises this event again
-            if (_isUpdatingSort || _pipeline == null)
-                return;
-
-            _isUpdatingSort = true;
-            try
-            {
-                SortColumnDescriptions descriptions = listView.sortColumnDescriptions;
-                SortColumnDescription description = descriptions.Count > 0 ? descriptions[descriptions.Count - 1] : null;
-                if (descriptions.Count > 1)
-                {
-                    descriptions.Clear();
-                    descriptions.Add(description);
-                }
-
-                MultiColumnListView otherListView = listView == _listView ? _frozenListView : _listView;
-                if (description != null && otherListView != null && otherListView.sortColumnDescriptions.Count > 0)
-                    otherListView.sortColumnDescriptions.Clear();
-
-                int columnIndex = description != null ? GetColumnIndex(listView, description) : -1;
-                if (columnIndex >= 0)
-                    SetPipelineSort(columnIndex, description.direction == SortDirection.Descending);
-                else
-                    _pipeline.ClearSort();
-            }
-            finally
-            {
-                _isUpdatingSort = false;
-            }
-
-            UpdateSortIcons();
-            SaveSort();
-            Refresh();
-        }
-
-        /// <summary>
-        /// Sorts the rows of the pipeline by a column, through its handler.
-        /// </summary>
-        /// <param name="columnIndex">The index of the column in the pipeline.</param>
-        /// <param name="isDescending">If enabled, the rows are sorted in descending order.</param>
-        private void SetPipelineSort(int columnIndex, bool isDescending)
-        {
-            TableViewColumn column = _columns[columnIndex];
-            _pipeline.SetSort(columnIndex, isDescending, (a, b) => Compare(column, a, b));
-        }
-
-        /// <summary>
-        /// Gets the index of the column of the table described by a sort description of a list view.
-        /// </summary>
-        /// <param name="listView">The list view that owns the description.</param>
-        /// <param name="description">The sort description.</param>
-        /// <returns>Returns the index of the column in the pipeline, or -1 if it's not found.</returns>
-        private int GetColumnIndex(MultiColumnListView listView, SortColumnDescription description)
-        {
-            // The columns of the list views are named after the identifiers of the columns of the table
-            string columnId = description.column?.name;
-            if (string.IsNullOrEmpty(columnId))
-                columnId = description.columnName;
-
-            if (string.IsNullOrEmpty(columnId) && description.columnIndex >= 0 && description.columnIndex < listView.columns.Count)
-                columnId = listView.columns[description.columnIndex].name;
-
-            return _columns.FindIndex(column => column.Id == columnId);
-        }
-
-        /// <summary>
-        /// Compares two values of a column through its handler.
-        /// </summary>
-        /// <remarks>
-        /// An error of the handler is logged once per column, and the values are then considered equal, so a broken custom handler
-        /// doesn't prevent the table from being displayed.
-        /// </remarks>
-        /// <param name="column">The column of the values.</param>
-        /// <param name="a">The first value.</param>
-        /// <param name="b">The second value.</param>
-        /// <returns>Returns the result of the handler, or 0 if it fails.</returns>
-        private static int Compare(TableViewColumn column, object a, object b)
-        {
-            try
-            {
-                return column.Handler.Compare(a, b);
-            }
-            catch (Exception exception)
-            {
-                if (!column.HasLoggedError)
-                {
-                    column.HasLoggedError = true;
-                    Debug.LogError($"{DatabaseConstants.LogPrefix}The cell handler {column.Handler.GetType()} failed to compare " +
-                        $"values of the column \"{column.Name}\". The next errors of this column are not logged.");
-                    Debug.LogException(exception);
-                }
-                return 0;
-            }
-        }
-
-        #endregion
-
-
         #region Private API
 
         /// <summary>
-        /// Gets the text of the status line: the number of rows, and the number of visible rows when the search hides some.
+        /// Gets the text of the status line: the number of rows, the number of visible rows when the search or the filters hide some,
+        /// and the selection (see <see cref="GetSelectionStatusText"/>).
         /// </summary>
         /// <returns>Returns the text of the status line.</returns>
         private string GetStatusText()
         {
             int rowCount = _pipeline.Rows.Count;
             string rowsText = rowCount == 1 ? "row" : "rows";
-            return _rows.Count == rowCount
+            string countText = _rows.Count == rowCount
                 ? $"{rowCount} {rowsText}"
                 : $"{_rows.Count} of {rowCount} {rowsText}";
+
+            return $"{countText}{GetSelectionStatusText()}";
         }
 
         /// <summary>

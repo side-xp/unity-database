@@ -7,8 +7,9 @@ namespace SideXP.Database.EditorOnly
 {
 
     /// <summary>
-    /// The remembered settings of the table view: the order, the widths and the visibility of the columns, and the sort, stored as
-    /// the user's default view of the table (see <see cref="UserViews"/>).
+    /// The remembered settings of the table view: the order, the widths and the visibility of the columns, and the sort, stored in the
+    /// open view of the table (see <see cref="ViewCatalog.GetOpenView"/>), resolved from its layers (see
+    /// <see cref="LayeredViewSettings"/>).
     /// </summary>
     /// <remarks>
     /// The list views have no public event for a reordered column, so the order is read from the headers after each click in the
@@ -30,12 +31,18 @@ namespace SideXP.Database.EditorOnly
         private const string WidthPropertyName = nameof(Column.width);
 
         private const string ShowAllColumnsText = "Show All Columns";
-        private const string ResetViewText = "Reset View";
 
         /// <summary>
-        /// The remembered settings of the displayed table, or null if no table is displayed.
+        /// The text of the items that reset the open view (see <see cref="ResetView"/>), in the menu of the headers and in the menu of
+        /// the views.
         /// </summary>
-        private ViewSettings _viewSettings = null;
+        public const string ResetViewText = "Reset View";
+
+        /// <summary>
+        /// The settings of the open view of the displayed table, resolved from its layers, or null if no table is displayed. The
+        /// changes are written to the open view.
+        /// </summary>
+        private LayeredViewSettings _viewSettings = null;
 
         /// <summary>
         /// The indices in the pipeline of the columns that are not hidden, in their display order.
@@ -47,14 +54,22 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         private bool[] _isColumnDisplayed = Array.Empty<bool>();
 
+        /// <summary>
+        /// Called after the table view changed a setting of the open view (columns, sort, filters or folders), once the save is
+        /// scheduled. Called on each move of the pointer while a column is resized.
+        /// </summary>
+        public event Action ViewSettingsChanged;
+
         #endregion
 
 
         #region Column visibility
 
         /// <summary>
-        /// Called when the header of a list view is right-clicked. Replaces the items of Unity with the items that show and hide the
-        /// columns of the table.
+        /// Called when the header of a list view is right-clicked. Replaces the items of Unity with the item that adds the clicked
+        /// column to the selection (see <see cref="AppendColumnSelectionItem"/>), the items of the sort (see
+        /// <see cref="AppendSortItems"/>), the item that filters by the column (see <see cref="AppendFilterItem"/>), and the items
+        /// that show and hide the columns of the table.
         /// </summary>
         /// <remarks>
         /// The items of Unity only know the columns of their own list view, and hiding a column directly in a list view would ignore
@@ -67,6 +82,15 @@ namespace SideXP.Database.EditorOnly
             evt.menu.ClearItems();
             if (_viewSettings == null)
                 return;
+
+            if (AppendColumnSelectionItem(evt.menu, clickedColumn))
+                evt.menu.AppendSeparator();
+
+            if (AppendSortItems(evt.menu, clickedColumn))
+                evt.menu.AppendSeparator();
+
+            if (AppendFilterItem(evt.menu, clickedColumn))
+                evt.menu.AppendSeparator();
 
             // The hidden columns are listed at their place, so the menu shows the whole order of the table
             bool hasHiddenColumns = _displayedColumns.Count < _columns.Count;
@@ -117,10 +141,14 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Gives the columns their default order, widths and visibility, and removes the sort.
+        /// Gives the columns their default order, widths and visibility, and removes the sort, in the open view (see
+        /// <see cref="LayeredViewSettings.Reset"/>). The filters and the folder scope are kept.
         /// </summary>
-        private void ResetView()
+        public void ResetView()
         {
+            if (_viewSettings == null)
+                return;
+
             _viewSettings.Reset();
             ApplyColumnChanges();
         }
@@ -145,25 +173,34 @@ namespace SideXP.Database.EditorOnly
             // The active cell gets its new element when it's bound again
             _activeCellElement = null;
 
-            // A sort without its column in the headers can't be seen nor changed
-            if (_viewSettings.HasSort && !IsColumnDisplayed(_viewSettings.SortColumnId))
-                _viewSettings.ClearSort();
-
+            // A sorted column without header can't show its sort nor be changed: it leaves the sort, and the next columns take its
+            // priority
             ApplyRememberedSort();
-            // The texts of the rows contain the displayed columns only
+            SaveSort();
+            // The texts of the rows contain the displayed columns only. The search is in the second pass of the filters
             ClearSearchTexts();
             if (IsSearching)
-                _pipeline.InvalidateFilter();
+                _pipeline.InvalidatePostFilter();
 
             RebuildListViews(true);
             Refresh();
-            UserViews.instance.ScheduleSave();
+            OnViewSettingsChanged();
         }
 
         #endregion
 
 
         #region Private API
+
+        /// <summary>
+        /// Schedules the save of the settings of the open view, and notifies <see cref="ViewSettingsChanged"/>. Call it after each
+        /// change of a setting of the view.
+        /// </summary>
+        private void OnViewSettingsChanged()
+        {
+            UserViews.instance.ScheduleSave();
+            ViewSettingsChanged?.Invoke();
+        }
 
         /// <summary>
         /// Updates the displayed columns from the remembered settings: the columns that are not hidden, in their remembered order.
@@ -192,13 +229,23 @@ namespace SideXP.Database.EditorOnly
         /// <returns>Returns the indices of the columns in the pipeline, in their display order.</returns>
         private List<int> GetColumnOrder()
         {
-            List<string> columnIds = _columns.ConvertAll(column => column.Id);
-            List<string> order = _viewSettings.GetColumnOrder(columnIds, IsHiddenByDefault);
+            List<string> columnIds = GetColumnIds();
+            List<string> order = _viewSettings.GetColumnOrder(columnIds);
             return order.ConvertAll(columnId => columnIds.IndexOf(columnId));
         }
 
         /// <summary>
-        /// Checks if a column is hidden until the user shows it: the <i>Asset Name</i> column of a table that hides it.
+        /// Gets the identifiers of all the columns of the table, hidden ones included.
+        /// </summary>
+        /// <returns>Returns the identifiers of the columns, in their default order (the order of the pipeline).</returns>
+        private List<string> GetColumnIds()
+        {
+            return _columns.ConvertAll(column => column.Id);
+        }
+
+        /// <summary>
+        /// Checks if a column is hidden until the user shows it: the <i>Asset Name</i> column of a table that hides it. Given to the
+        /// settings of the view as the default visibility of the columns.
         /// </summary>
         /// <param name="columnId">The identifier of the column.</param>
         /// <returns>Returns true if the column is hidden by default.</returns>
@@ -222,7 +269,7 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         /// <param name="columnId">The identifier of the column.</param>
         /// <returns>Returns true if the column exists and is displayed.</returns>
-        private bool IsColumnDisplayed(string columnId)
+        public bool IsColumnDisplayed(string columnId)
         {
             return IsColumnDisplayed(_columns.FindIndex(column => column.Id == columnId));
         }
@@ -243,54 +290,21 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Sorts the pipeline with the remembered sort, if its column is displayed and can be sorted.
+        /// Sorts the pipeline with the remembered sort. The columns that are missing, hidden or can't be sorted are skipped, and the
+        /// next ones take their priority.
         /// </summary>
         private void ApplyRememberedSort()
         {
-            int columnIndex = _columns.FindIndex(column => column.Id == _viewSettings.SortColumnId);
-            if (IsColumnDisplayed(columnIndex) && _columns[columnIndex].IsSortable)
-                SetPipelineSort(columnIndex, _viewSettings.IsSortDescending);
-            else
-                _pipeline.ClearSort();
+            SetPipelineSort(_viewSettings.GetSort(CanSortColumn));
         }
 
         /// <summary>
-        /// Shows the sort of the pipeline in the header of the list view that displays its column.
-        /// </summary>
-        private void ShowSortInHeader()
-        {
-            if (_pipeline.SortColumnIndex < 0)
-                return;
-
-            string columnId = _columns[_pipeline.SortColumnIndex].Id;
-            MultiColumnListView listView = _frozenListView != null && _frozenListView.columns.Contains(columnId)
-                ? _frozenListView
-                : _listView;
-
-            if (!listView.columns.Contains(columnId))
-                return;
-
-            // Changing the sort descriptions raises the event of a sort chosen by the user
-            _isUpdatingSort = true;
-            try
-            {
-                SortDirection direction = _pipeline.IsSortDescending ? SortDirection.Descending : SortDirection.Ascending;
-                listView.sortColumnDescriptions.Add(new SortColumnDescription(columnId, direction));
-            }
-            finally
-            {
-                _isUpdatingSort = false;
-            }
-        }
-
-        /// <summary>
-        /// Remembers the sort of the pipeline.
+        /// Remembers the sort of the pipeline, replacing the remembered sort.
         /// </summary>
         private void SaveSort()
         {
-            string columnId = _pipeline.SortColumnIndex >= 0 ? _columns[_pipeline.SortColumnIndex].Id : null;
-            if (_viewSettings.SetSort(columnId, _pipeline.IsSortDescending))
-                UserViews.instance.ScheduleSave();
+            if (_viewSettings.SetSort(GetSort()))
+                OnViewSettingsChanged();
         }
 
         /// <summary>
@@ -309,7 +323,7 @@ namespace SideXP.Database.EditorOnly
                     return;
 
                 if (_viewSettings.SetWidth(column.Id, listColumn.width.value))
-                    UserViews.instance.ScheduleSave();
+                    OnViewSettingsChanged();
             };
         }
 
@@ -347,8 +361,8 @@ namespace SideXP.Database.EditorOnly
             if (order.Count != _listView.columns.Count)
                 return;
 
-            if (_viewSettings.SetColumnOrder(order))
-                UserViews.instance.ScheduleSave();
+            if (_viewSettings.SetColumnOrder(GetColumnIds(), order))
+                OnViewSettingsChanged();
         }
 
         #endregion

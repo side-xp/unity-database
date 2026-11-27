@@ -15,7 +15,8 @@ namespace SideXP.Database.Tests
 {
 
     /// <summary>
-    /// Tests for the <see cref="TablePipeline"/>: value cache, invalidation per stage, filter and stable sort.
+    /// Tests for the <see cref="TablePipeline"/>: value cache, invalidation per stage, filter, stable sort on one or several columns,
+    /// and pages.
     /// </summary>
     /// <remarks>
     /// The pipeline reads in-memory assets from a list, through accessors that count their reads, so the tests can check which stages
@@ -457,6 +458,286 @@ namespace SideXP.Database.Tests
         #endregion
 
 
+        #region Sort on several columns
+
+        /// <summary>
+        /// The rows of equal values in the first column are sorted by the second column.
+        /// </summary>
+        [Test]
+        public void SetSort_SeveralColumns_EqualValuesSortedByNextColumn()
+        {
+            _pipeline.SetSort(new[] { new SortKey(NumberColumn, false, Compare), new SortKey(NameColumn, true, Compare) });
+            _pipeline.Update();
+
+            CollectionAssert.AreEqual(new[] { "B", "D", "C", "A" }, GetVisibleNames());
+        }
+
+        /// <summary>
+        /// Each column has its own direction.
+        /// </summary>
+        [Test]
+        public void SetSort_SeveralColumns_OwnDirections()
+        {
+            _pipeline.SetSort(new[] { new SortKey(NumberColumn, true, Compare), new SortKey(NameColumn, true, Compare) });
+            _pipeline.Update();
+
+            CollectionAssert.AreEqual(new[] { "C", "A", "D", "B" }, GetVisibleNames());
+        }
+
+        /// <summary>
+        /// The rows equal in all the sorted columns keep the order of the source.
+        /// </summary>
+        [Test]
+        public void SetSort_SeveralColumnsAllEqual_KeepSourceOrder()
+        {
+            _pipeline.SetSort(new[] { new SortKey(NumberColumn, false, Compare), new SortKey(NameColumn, true, (a, b) => 0) });
+            _pipeline.Update();
+
+            CollectionAssert.AreEqual(new[] { "B", "D", "A", "C" }, GetVisibleNames());
+        }
+
+        /// <summary>
+        /// The sort keys of the pipeline are the given ones, in their order.
+        /// </summary>
+        [Test]
+        public void SortKeys_SeveralColumns_InOrder()
+        {
+            _pipeline.SetSort(new[] { new SortKey(NameColumn, true, Compare), new SortKey(NumberColumn, false, Compare) });
+
+            Assert.AreEqual(2, _pipeline.SortKeys.Count);
+            Assert.AreEqual(NameColumn, _pipeline.SortKeys[0].ColumnIndex);
+            Assert.IsTrue(_pipeline.SortKeys[0].IsDescending);
+            Assert.AreEqual(NumberColumn, _pipeline.SortKeys[1].ColumnIndex);
+            Assert.IsFalse(_pipeline.SortKeys[1].IsDescending);
+        }
+
+        /// <summary>
+        /// Sorting by an empty list of columns restores the order of the source.
+        /// </summary>
+        [Test]
+        public void SetSort_NoColumn_RestoresSourceOrder()
+        {
+            _pipeline.SetSort(NumberColumn, false, Compare);
+            _pipeline.Update();
+
+            _pipeline.SetSort(new SortKey[0]);
+            _pipeline.Update();
+
+            CollectionAssert.AreEqual(new[] { "A", "B", "C", "D" }, GetVisibleNames());
+            Assert.AreEqual(0, _pipeline.SortKeys.Count);
+        }
+
+        /// <summary>
+        /// A list of keys with an invalid key, or with the same column twice, is refused, and the current sort is kept.
+        /// </summary>
+        [Test]
+        public void SetSort_InvalidKeys_Throws()
+        {
+            _pipeline.SetSort(NumberColumn, false, Compare);
+
+            Assert.Throws<ArgumentNullException>(() => _pipeline.SetSort(null));
+            Assert.Throws<ArgumentOutOfRangeException>(() =>
+                _pipeline.SetSort(new[] { new SortKey(NumberColumn, false, Compare), new SortKey(-1, false, Compare) }));
+            Assert.Throws<ArgumentNullException>(() =>
+                _pipeline.SetSort(new[] { new SortKey(NumberColumn, false, Compare), new SortKey(NameColumn, false, null) }));
+            Assert.Throws<ArgumentException>(() =>
+                _pipeline.SetSort(new[] { new SortKey(NumberColumn, false, Compare), new SortKey(NumberColumn, true, Compare) }));
+
+            Assert.AreEqual(1, _pipeline.SortKeys.Count);
+            Assert.AreEqual(NumberColumn, _pipeline.SortKeys[0].ColumnIndex);
+        }
+
+        #endregion
+
+
+        #region Pages
+
+        /// <summary>
+        /// Without page size, the page holds all the visible rows.
+        /// </summary>
+        [Test]
+        public void PageRows_NotPaginated_AllVisibleRows()
+        {
+            _pipeline.Update();
+
+            Assert.IsFalse(_pipeline.IsPaginated);
+            CollectionAssert.AreEqual(new[] { "A", "B", "C", "D" }, GetPageNames());
+            Assert.AreEqual(1, _pipeline.PageCount);
+            Assert.AreEqual(0, _pipeline.PageStartIndex);
+        }
+
+        /// <summary>
+        /// With a page size, each page holds the visible rows of its range, and the last page holds the remaining rows.
+        /// </summary>
+        [Test]
+        public void PageRows_Paginated_RowsOfThePage()
+        {
+            _pipeline.PageSize = 3;
+            _pipeline.Update();
+
+            Assert.IsTrue(_pipeline.IsPaginated);
+            Assert.AreEqual(2, _pipeline.PageCount);
+            CollectionAssert.AreEqual(new[] { "A", "B", "C" }, GetPageNames());
+
+            _pipeline.PageIndex = 1;
+            _pipeline.Update();
+
+            CollectionAssert.AreEqual(new[] { "D" }, GetPageNames());
+            Assert.AreEqual(3, _pipeline.PageStartIndex);
+            // The visible rows still hold the rows of all the pages
+            CollectionAssert.AreEqual(new[] { "A", "B", "C", "D" }, GetVisibleNames());
+        }
+
+        /// <summary>
+        /// The pages split the visible rows in the order of the sort.
+        /// </summary>
+        [Test]
+        public void PageRows_Sorted_PagesFollowSort()
+        {
+            _pipeline.SetSort(NumberColumn, false, Compare);
+            _pipeline.PageSize = 2;
+            _pipeline.PageIndex = 1;
+            _pipeline.Update();
+
+            CollectionAssert.AreEqual(new[] { "A", "C" }, GetPageNames());
+        }
+
+        /// <summary>
+        /// A page out of the range of the pages shows the last page, or the first page for a negative index.
+        /// </summary>
+        [Test]
+        public void PageIndex_OutOfRange_KeptInRange()
+        {
+            _pipeline.PageSize = 3;
+            _pipeline.PageIndex = 10;
+            _pipeline.Update();
+
+            Assert.AreEqual(1, _pipeline.PageIndex);
+            CollectionAssert.AreEqual(new[] { "D" }, GetPageNames());
+
+            _pipeline.PageIndex = -1;
+            _pipeline.Update();
+
+            Assert.AreEqual(0, _pipeline.PageIndex);
+            CollectionAssert.AreEqual(new[] { "A", "B", "C" }, GetPageNames());
+        }
+
+        /// <summary>
+        /// A filter that removes the rows of the displayed page shows the last page left.
+        /// </summary>
+        [Test]
+        public void PageIndex_FilterHidesRows_KeptInRange()
+        {
+            _pipeline.Filter = row => (int)row.GetValue(NumberColumn) > 1;
+            _pipeline.PageSize = 2;
+            _pipeline.PageIndex = 1;
+            _pipeline.Update();
+            CollectionAssert.AreEqual(new[] { "D" }, GetPageNames());
+
+            _pipeline.Filter = row => (int)row.GetValue(NumberColumn) == 3;
+            _pipeline.Update();
+
+            Assert.AreEqual(0, _pipeline.PageIndex);
+            Assert.AreEqual(1, _pipeline.PageCount);
+            CollectionAssert.AreEqual(new[] { "A", "C" }, GetPageNames());
+        }
+
+        /// <summary>
+        /// Without any visible row, there is a single empty page.
+        /// </summary>
+        [Test]
+        public void PageRows_NoVisibleRow_SingleEmptyPage()
+        {
+            _pipeline.Filter = row => false;
+            _pipeline.PageSize = 2;
+            _pipeline.PageIndex = 1;
+            _pipeline.Update();
+
+            Assert.AreEqual(0, _pipeline.PageIndex);
+            Assert.AreEqual(1, _pipeline.PageCount);
+            Assert.IsEmpty(_pipeline.PageRows);
+        }
+
+        /// <summary>
+        /// Changing the page reruns the paginate stage only: the values are not read again, and an update without change reruns
+        /// nothing.
+        /// </summary>
+        [Test]
+        public void PageIndex_Changed_RerunsPageOnly()
+        {
+            _pipeline.PageSize = 2;
+            _pipeline.Update();
+            ResetCounts();
+
+            _pipeline.PageIndex = 1;
+            Assert.IsTrue(_pipeline.Update());
+            Assert.AreEqual(0, _source.LoadCount);
+            Assert.AreEqual(0, _numberAccessor.ReadCount);
+
+            _pipeline.PageIndex = 1;
+            Assert.IsFalse(_pipeline.Update());
+        }
+
+        /// <summary>
+        /// A row whose value changes is sorted again, and moves to the page of its new position.
+        /// </summary>
+        [Test]
+        public void InvalidateRow_ChangedValue_MovesToItsPage()
+        {
+            _pipeline.SetSort(NumberColumn, false, Compare);
+            _pipeline.PageSize = 2;
+            _pipeline.Update();
+            CollectionAssert.AreEqual(new[] { "B", "D" }, GetPageNames());
+
+            _assets[1].number = 5;
+            _pipeline.InvalidateRow(_assets[1]);
+            _pipeline.Update();
+
+            Assert.AreEqual(0, _pipeline.PageIndex);
+            CollectionAssert.AreEqual(new[] { "D", "A" }, GetPageNames());
+            _pipeline.TryGetRow(_assets[1], out TableRow rowB);
+            Assert.AreEqual(1, _pipeline.GetPageOf(rowB));
+        }
+
+        /// <summary>
+        /// The page of a row comes from its position in the visible rows, and a row that isn't visible has no page.
+        /// </summary>
+        [Test]
+        public void GetPageOf_Rows_PageOfTheirPosition()
+        {
+            _pipeline.Filter = row => (int)row.GetValue(NumberColumn) > 1;
+            _pipeline.PageSize = 2;
+            _pipeline.Update();
+
+            _pipeline.TryGetRow(_assets[0], out TableRow rowA);
+            _pipeline.TryGetRow(_assets[1], out TableRow rowB);
+            _pipeline.TryGetRow(_assets[3], out TableRow rowD);
+            Assert.AreEqual(0, _pipeline.GetPageOf(rowA));
+            Assert.AreEqual(1, _pipeline.GetPageOf(rowD));
+            Assert.AreEqual(-1, _pipeline.GetPageOf(rowB));
+            Assert.AreEqual(-1, _pipeline.GetPageOf(null));
+
+            _pipeline.PageSize = 0;
+            Assert.AreEqual(0, _pipeline.GetPageOf(rowD));
+        }
+
+        /// <summary>
+        /// A negative page size is read as no pagination.
+        /// </summary>
+        [Test]
+        public void PageSize_Negative_NotPaginated()
+        {
+            _pipeline.PageSize = -5;
+            _pipeline.Update();
+
+            Assert.AreEqual(0, _pipeline.PageSize);
+            Assert.IsFalse(_pipeline.IsPaginated);
+            CollectionAssert.AreEqual(new[] { "A", "B", "C", "D" }, GetPageNames());
+        }
+
+        #endregion
+
+
         #region Private API
 
         /// <summary>
@@ -501,6 +782,15 @@ namespace SideXP.Database.Tests
         private string[] GetVisibleNames()
         {
             return _pipeline.VisibleRows.Select(i => i.Asset.name).ToArray();
+        }
+
+        /// <summary>
+        /// Gets the names of the assets of the rows of the displayed page, in order.
+        /// </summary>
+        /// <returns>Returns the names of the assets.</returns>
+        private string[] GetPageNames()
+        {
+            return _pipeline.PageRows.Select(i => i.Asset.name).ToArray();
         }
 
         #endregion

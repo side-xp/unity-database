@@ -231,6 +231,32 @@ namespace SideXP.Database.Tests
             Assert.AreEqual(2f, parsed);
         }
 
+        /// <summary>
+        /// The values given by an edit of another cell are clamped to the limits of the field that receives them.
+        /// </summary>
+        [Test]
+        public void RangeAndMinHandlers_AcceptedValues_AreClamped()
+        {
+            CellContext rangeContext = CreateContext(nameof(AttributeHandlerTestFields.rangeFloat));
+            Assert.IsTrue(new RangeCellHandler().TryAcceptValue(5f, rangeContext, out object rangeValue));
+            Assert.AreEqual(1f, rangeValue);
+
+            CellContext minContext = CreateContext(nameof(AttributeHandlerTestFields.minFloat));
+            Assert.IsTrue(new MinCellHandler().TryAcceptValue(-1f, minContext, out object minValue));
+            Assert.AreEqual(2f, minValue);
+        }
+
+        /// <summary>
+        /// The default handler accepts the values given by an edit of another cell as they are.
+        /// </summary>
+        [Test]
+        public void DefaultHandler_AcceptedValue_Unchanged()
+        {
+            CellContext context = CreateContext(nameof(AttributeHandlerTestFields.plainFloat));
+            Assert.IsTrue(new DefaultCellHandler().TryAcceptValue(50f, context, out object value));
+            Assert.AreEqual(50f, value);
+        }
+
         #endregion
 
 

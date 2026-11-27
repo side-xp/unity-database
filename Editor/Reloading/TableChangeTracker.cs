@@ -15,7 +15,8 @@ namespace SideXP.Database.EditorOnly
     /// Two kinds of changes are tracked:
     /// <list type="bullet">
     /// <item>Imports, deletions and moves (<see cref="DatabaseAssetPostprocessor"/>): if they concern the table, its source is
-    /// invalidated.</item>
+    /// invalidated. A file that has no row concerns the table only if it's in the folder scope of the table (see
+    /// <see cref="Scope"/>).</item>
     /// <item>Changes that don't go through an import (<see cref="ObjectChangeEvents"/>): edits in the Inspector, Undo and redo, scripts
     /// that record their changes with <see cref="Undo.RecordObject(Object, string)"/>. The rows of the changed files are invalidated,
     /// or the source if assets have been created or destroyed in a file of the table.</item>
@@ -37,6 +38,11 @@ namespace SideXP.Database.EditorOnly
         /// The pipeline of the table.
         /// </summary>
         private TablePipeline _pipeline = null;
+
+        /// <summary>
+        /// The folders the table is limited to: a new file outside of them doesn't concern the table.
+        /// </summary>
+        private FolderScope _scope = FolderScope.WholeProject;
 
         /// <summary>
         /// The assets of the rows, mapped by the path of their file. Main assets and sub-assets of the same file share an entry.
@@ -79,6 +85,16 @@ namespace SideXP.Database.EditorOnly
 
 
         #region Public API
+
+        /// <summary>
+        /// The folders the table is limited to. Set it with the scope of the source of the pipeline. Setting null is the whole
+        /// project.
+        /// </summary>
+        public FolderScope Scope
+        {
+            get => _scope;
+            set => _scope = value ?? FolderScope.WholeProject;
+        }
 
         /// <summary>
         /// Starts listening to the changes. Does nothing if the tracker is already started.
@@ -144,10 +160,13 @@ namespace SideXP.Database.EditorOnly
         /// Only the type of the main asset of a new file is checked, since checking its sub-assets would load it. So a sub-asset of the
         /// table added to a file that has no row yet, and whose main asset is of another type, is not detected. The <i>Refresh</i>
         /// button covers that case.
+        /// <para>
+        /// Internal instead of private, so the tests can check the changes without importing assets.
+        /// </para>
         /// </remarks>
         /// <param name="changes">The changed paths.</param>
         /// <returns>Returns true if at least one path concerns the table.</returns>
-        private bool Concerns(AssetChanges changes)
+        internal bool Concerns(AssetChanges changes)
         {
             // A deleted or moved file concerns the table if it had rows, which also covers the folders, since Unity reports each file
             // they contain
@@ -163,6 +182,13 @@ namespace SideXP.Database.EditorOnly
                     return true;
             }
 
+            // A file of the table moved into the folder scope from outside of it had no row
+            foreach (string path in changes.Moved)
+            {
+                if (IsTableFile(path))
+                    return true;
+            }
+
             // An imported file concerns the table if it had rows (its sub-assets may have changed) or if it's an asset of the table
             foreach (string path in changes.Imported)
             {
@@ -174,13 +200,16 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Checks if the main asset of a file is an asset of the table, without loading it.
+        /// Checks if the main asset of a file is an asset of the table, in the folder scope, without loading it.
         /// </summary>
         /// <param name="path">The path of the file.</param>
-        /// <returns>Returns true if the main asset of the file is of the table type or one of its derived types.</returns>
+        /// <returns>
+        /// Returns true if the file is in the folder scope, and its main asset is of the table type or one of its derived types.
+        /// </returns>
         private bool IsTableFile(string path)
         {
-            if (string.IsNullOrEmpty(path))
+            // The scope is checked first, since it only compares texts
+            if (string.IsNullOrEmpty(path) || !_scope.Contains(path))
                 return false;
 
             Type mainAssetType = AssetDatabase.GetMainAssetTypeAtPath(path);
@@ -221,8 +250,8 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         /// <remarks>
         /// Changed objects are found by the GUID of their file instead of their instance ID, since instance IDs are replaced by entity
-        /// IDs (<c>entityId</c>) in recent versions of Unity, which don't exist in the oldest supported version. As a result, editing a sub-asset invalidates the rows of all the assets of its file,
-        /// which only costs a few more reads.
+        /// IDs (<c>entityId</c>) in recent versions of Unity, which don't exist in the oldest supported version. As a result, editing a
+        /// sub-asset invalidates the rows of all the assets of its file, which only costs a few more reads.
         /// </remarks>
         /// <param name="stream">The recorded changes.</param>
         private void OnChangesPublished(ref ObjectChangeEventStream stream)

@@ -12,16 +12,15 @@ namespace SideXP.Database.EditorOnly
     /// versioned).
     /// </summary>
     /// <remarks>
-    /// Until views are implemented, it holds the default view of each table: the settings the tool remembers for the user (see
-    /// <see cref="ViewSettings"/>).
+    /// It holds the personal views of the tables, the view open for each table, and the personal overrides of the project views (see
+    /// <see cref="PersonalViews"/>). Before the views, it held a single view per table (the settings the tool remembered for the
+    /// user): these settings are moved to a personal view when the file is loaded (see <see cref="OnAfterDeserialize"/>).
     /// <para>
-    /// Saves are grouped: <see cref="ScheduleSave"/> writes the file once no change has been made for <see cref="SaveDelay"/>, so
-    /// resizing a column doesn't write it on every frame. A scheduled save is written right away before a domain reload and when the
-    /// editor quits, since the changes that are not saved would be lost.
+    /// The saves are grouped (see <see cref="SettingsFile{T}.ScheduleSave"/>).
     /// </para>
     /// </remarks>
     [FilePath(UserViews.RelativeFilePath, FilePathAttribute.Location.ProjectFolder)]
-    internal class UserViews : ScriptableSingleton<UserViews>
+    internal class UserViews : SettingsFile<UserViews>, ISerializationCallbackReceiver
     {
 
         #region Fields
@@ -32,49 +31,40 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         private const string RelativeFilePath = "UserSettings/SideXP.Database.Views.asset";
 
-        /// <summary>
-        /// The time to wait after the last change before writing the file, in seconds.
-        /// </summary>
-        private const double SaveDelay = 1;
+        /// <inheritdoc cref="PersonalViews"/>
+        [SerializeField]
+        private PersonalViews _personalViews = new PersonalViews();
 
         /// <summary>
-        /// The default view of each table that has been opened.
+        /// The single view of each table, saved before the views. Only read, to move them to <see cref="_personalViews"/> (see
+        /// <see cref="OnAfterDeserialize"/>).
         /// </summary>
-        /// <remarks>
-        /// A list, since Unity can't serialize dictionaries. The number of tables of a project is small enough for a linear search.
-        /// </remarks>
         [SerializeField]
         private List<ViewSettings> _defaultViews = new List<ViewSettings>();
 
         /// <summary>
-        /// The time at which the scheduled save is written (see <see cref="EditorApplication.timeSinceStartup"/>), or a negative value
-        /// if no save is scheduled.
+        /// Checks if the views saved before the views have been moved to the personal views when the file was loaded, so the file must
+        /// be saved in the new format.
         /// </summary>
         [NonSerialized]
-        private double _saveTime = -1;
+        private bool _hasImportedDefaultViews = false;
 
         #endregion
 
 
         #region Lifecycle
 
-        /// <summary>
-        /// Called when the singleton is loaded, including after a domain reload.
-        /// </summary>
-        private void OnEnable()
+        /// <inheritdoc/>
+        protected override void OnEnable()
         {
-            AssemblyReloadEvents.beforeAssemblyReload += SaveNow;
-            EditorApplication.quitting += SaveNow;
-        }
+            base.OnEnable();
 
-        /// <summary>
-        /// Called when the singleton is unloaded, including before a domain reload.
-        /// </summary>
-        private void OnDisable()
-        {
-            AssemblyReloadEvents.beforeAssemblyReload -= SaveNow;
-            EditorApplication.quitting -= SaveNow;
-            EditorApplication.update -= SaveWhenDue;
+            // Saved in the new format, so the views moved from the settings of the first pass keep their ids
+            if (_hasImportedDefaultViews)
+            {
+                _hasImportedDefaultViews = false;
+                ScheduleSave();
+            }
         }
 
         #endregion
@@ -83,66 +73,39 @@ namespace SideXP.Database.EditorOnly
         #region Public API
 
         /// <summary>
-        /// Gets the default view of a table, and creates it if the table has none yet.
+        /// The personal views of the tables, the view open for each table, and the personal overrides of the project views.
         /// </summary>
         /// <remarks>
-        /// The view is modified directly: call <see cref="ScheduleSave"/> after changing it.
+        /// The views are modified directly: call <see cref="SettingsFile{T}.ScheduleSave"/> after changing them, or use
+        /// <see cref="ViewCatalog.Current"/>, which saves after each operation.
         /// </remarks>
-        /// <param name="tableId">The stable identifier of the table (see <see cref="TableDefinition.Id"/>).</param>
-        /// <returns>Returns the default view of the table.</returns>
-        /// <exception cref="ArgumentException">Thrown if the identifier is null or empty.</exception>
-        public ViewSettings GetDefaultView(string tableId)
-        {
-            if (string.IsNullOrEmpty(tableId))
-                throw new ArgumentException("The identifier of the table can't be null or empty.", nameof(tableId));
-
-            ViewSettings view = _defaultViews.Find(item => item != null && item.TableId == tableId);
-            if (view == null)
-            {
-                view = new ViewSettings(tableId);
-                _defaultViews.Add(view);
-            }
-
-            return view;
-        }
-
-        /// <summary>
-        /// Writes the file once no change has been made for <see cref="SaveDelay"/>. Each call postpones the save.
-        /// </summary>
-        public void ScheduleSave()
-        {
-            bool isScheduled = _saveTime >= 0;
-            _saveTime = EditorApplication.timeSinceStartup + SaveDelay;
-            if (!isScheduled)
-                EditorApplication.update += SaveWhenDue;
-        }
-
-        /// <summary>
-        /// Writes the file right away if a save is scheduled.
-        /// </summary>
-        public void SaveNow()
-        {
-            if (_saveTime < 0)
-                return;
-
-            EditorApplication.update -= SaveWhenDue;
-            _saveTime = -1;
-            // As text, so the file can be read and merged like the other settings of the project
-            Save(true);
-        }
+        public PersonalViews PersonalViews => _personalViews;
 
         #endregion
 
 
-        #region Private API
+        #region Serialization
 
         /// <summary>
-        /// Called on each editor update while a save is scheduled. Writes the file when the delay is over.
+        /// Called before the views are saved. Nothing to prepare: the views saved before the views are moved when the file is loaded.
         /// </summary>
-        private void SaveWhenDue()
+        public void OnBeforeSerialize()
         {
-            if (EditorApplication.timeSinceStartup >= _saveTime)
-                SaveNow();
+        }
+
+        /// <summary>
+        /// Called after the views are loaded. Moves the single view of each table saved before the views to a personal view named
+        /// <see cref="ViewCatalog.DefaultViewName"/>, open, so the settings of the first pass are not lost.
+        /// </summary>
+        public void OnAfterDeserialize()
+        {
+            if (_defaultViews.Count == 0)
+                return;
+
+            _personalViews ??= new PersonalViews();
+            _personalViews.ImportDefaultViews(_defaultViews);
+            _defaultViews.Clear();
+            _hasImportedDefaultViews = true;
         }
 
         #endregion

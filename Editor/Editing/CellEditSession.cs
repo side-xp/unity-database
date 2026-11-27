@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 
 using UnityEngine;
@@ -107,7 +108,69 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Confirms the edit: groups its writes into a single Undo step.
+        /// Writes a value to a cell other than the edited one, through its own serialized object, for an edit that applies to several
+        /// cells. The write is recorded in the current Undo group, so it joins the Undo step of the edit when the edit is confirmed.
+        /// </summary>
+        /// <param name="asset">The asset of the cell.</param>
+        /// <param name="propertyPath">The path of the serialized property of the cell, from the asset.</param>
+        /// <param name="value">The value to write, of the C# type of the field.</param>
+        /// <returns>Returns true if the value has changed the asset.</returns>
+        /// <exception cref="ArgumentException">Thrown if the asset has no property at the given path.</exception>
+        public static bool WriteValue(Object asset, string propertyPath, object value)
+        {
+            using (SerializedObject serializedObject = new SerializedObject(asset))
+            {
+                SerializedProperty property = serializedObject.FindProperty(propertyPath);
+                if (property == null)
+                {
+                    throw new ArgumentException($"The asset {asset.name} has no serialized property at \"{propertyPath}\".",
+                        nameof(propertyPath));
+                }
+
+                SetValue(property, value);
+                return serializedObject.ApplyModifiedProperties();
+            }
+        }
+
+        /// <summary>
+        /// Writes several values to the cells of an asset, through a single serialized object, for example the values of an import.
+        /// </summary>
+        /// <remarks>
+        /// An undoable write is recorded in the current Undo group. A write without Undo is meant for an asset that has just been created,
+        /// whose creation can't be undone: undoing its values would leave it with the default values.
+        /// </remarks>
+        /// <param name="asset">The asset of the cells.</param>
+        /// <param name="values">The paths of the serialized properties of the cells, from the asset, with the values to write, of the
+        /// C# types of the fields.</param>
+        /// <param name="isUndoable">If enabled, the writes are recorded in the current Undo group.</param>
+        /// <returns>Returns true if the values have changed the asset.</returns>
+        /// <exception cref="ArgumentException">Thrown if the asset has no property at one of the paths. Nothing is written then.
+        /// </exception>
+        public static bool WriteValues(Object asset, IReadOnlyList<KeyValuePair<string, object>> values, bool isUndoable)
+        {
+            using (SerializedObject serializedObject = new SerializedObject(asset))
+            {
+                foreach (KeyValuePair<string, object> value in values)
+                {
+                    SerializedProperty property = serializedObject.FindProperty(value.Key);
+                    if (property == null)
+                    {
+                        throw new ArgumentException($"The asset {asset.name} has no serialized property at \"{value.Key}\".",
+                            nameof(values));
+                    }
+
+                    SetValue(property, value.Value);
+                }
+
+                return isUndoable
+                    ? serializedObject.ApplyModifiedProperties()
+                    : serializedObject.ApplyModifiedPropertiesWithoutUndo();
+            }
+        }
+
+        /// <summary>
+        /// Confirms the edit: groups its writes into a single Undo step, including the writes made to other cells with
+        /// <see cref="WriteValue(Object, string, object)"/> since the edit started.
         /// </summary>
         public void Confirm()
         {

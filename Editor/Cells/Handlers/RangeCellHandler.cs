@@ -10,7 +10,7 @@ namespace SideXP.Database.EditorOnly
 
     /// <summary>
     /// Handles the fields marked with <see cref="RangeAttribute"/>: edits them with a slider and a number field, like the Inspector,
-    /// and clamps the edited and parsed values to the range.
+    /// and clamps the edited, parsed and accepted values to the range.
     /// </summary>
     /// <remarks>
     /// The slider is used for <see cref="float"/> and <see cref="int"/> fields, like in the Inspector, and only in the cells wide
@@ -113,6 +113,16 @@ namespace SideXP.Database.EditorOnly
                 return false;
 
             value = ClampToFieldLimits(value, context);
+            return true;
+        }
+
+        /// <summary>
+        /// Accepts the numbers given by an edit of another cell, clamped to the range of the field.
+        /// </summary>
+        /// <inheritdoc/>
+        public override bool TryAcceptValue(object value, CellContext context, out object acceptedValue)
+        {
+            acceptedValue = ClampToFieldLimits(value, context);
             return true;
         }
 

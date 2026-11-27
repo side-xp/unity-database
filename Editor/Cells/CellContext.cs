@@ -15,13 +15,14 @@ namespace SideXP.Database.EditorOnly
         #region Fields
 
         /// <summary>
-        /// The asset of the cell's row.
+        /// The asset of the cell's row. Null when an import converts the text of an asset it will create, before the asset exists.
         /// </summary>
         public readonly Object Asset;
 
         /// <summary>
-        /// The field displayed in the cell's column, or null if the column doesn't display a field (for example a built-in column). Use
-        /// it to read the attributes of the field.
+        /// The field displayed in the cell's column, or null if the column doesn't display a field (a built-in column, or a computed
+        /// column). For a column of a nested field (see <see cref="ColumnAttribute.Path"/>), the nested field. Use it to read the
+        /// attributes of the field.
         /// </summary>
         public readonly FieldInfo Field;
 

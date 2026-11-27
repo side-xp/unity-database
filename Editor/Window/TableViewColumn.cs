@@ -3,6 +3,8 @@ using System.Reflection;
 
 using UnityEngine;
 
+using Object = UnityEngine.Object;
+
 namespace SideXP.Database.EditorOnly
 {
 
@@ -29,6 +31,7 @@ namespace SideXP.Database.EditorOnly
         private const string AssetNameTooltip = "The name of the asset.";
         private const string ControlsTitle = "Controls";
         private const string ControlsTooltip = "Select the asset in the Project window, duplicate it or delete it.";
+        private const string ComputedTooltip = "Computed column: its values are computed from the assets, and can't be edited.";
 
         /// <summary>
         /// The default width of the <i>Asset Name</i> column, in pixels. Fixed, so the name doesn't take the space of the other columns
@@ -168,6 +171,13 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         public bool HasProperty => !string.IsNullOrEmpty(_propertyPath);
 
+        /// <summary>
+        /// Checks if the values of the column are computed by a method (see <see cref="ComputedColumnAttribute"/>). Its cells are
+        /// read-only, and its values are computed between the two passes of the filters, so only the second pass and the search can
+        /// use them.
+        /// </summary>
+        public bool IsComputed => _accessor is ComputedAccessor;
+
         /// <inheritdoc cref="_handler"/>
         public CellHandler Handler => _handler;
 
@@ -194,6 +204,68 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
+        /// Converts a value of the column to text through its handler, for the copy, the search, the filters and the export.
+        /// </summary>
+        /// <remarks>
+        /// An error of the handler is logged once per column (see <see cref="HasLoggedError"/>), so a broken custom handler doesn't
+        /// break the table.
+        /// </remarks>
+        /// <param name="value">The cached value of a cell of the column.</param>
+        /// <param name="purpose">Why the value is converted, at the end of the error message (for example "for the search").</param>
+        /// <returns>Returns the text of the value, or null if the handler failed.</returns>
+        public string ToText(object value, string purpose)
+        {
+            try
+            {
+                return _handler.ToText(value);
+            }
+            catch (Exception exception)
+            {
+                if (!_hasLoggedError)
+                {
+                    _hasLoggedError = true;
+                    Debug.LogError($"{DatabaseConstants.LogPrefix}The cell handler {_handler.GetType()} failed to convert a value of " +
+                        $"the column \"{_name}\" to text {purpose}. The next errors of this column are not logged.");
+                    Debug.LogException(exception);
+                }
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Converts a text to a value of the column through its handler, for the paste and the import.
+        /// </summary>
+        /// <remarks>
+        /// An error of the handler is logged once per column (see <see cref="HasLoggedError"/>), and the text is then not converted.
+        /// </remarks>
+        /// <param name="text">The text to convert.</param>
+        /// <param name="asset">The asset of the cell, or null for an asset that an import will create.</param>
+        /// <param name="purpose">Why the text is converted, at the end of the error message (for example "to paste it").</param>
+        /// <param name="value">Outputs the converted value, or null if the text can't be converted.</param>
+        /// <returns>Returns true if the text has been converted.</returns>
+        public bool TryParse(string text, Object asset, string purpose, out object value)
+        {
+            try
+            {
+                CellContext context = new CellContext(asset, _field, _accessor.ValueType);
+                return _handler.TryParse(text, context, out value);
+            }
+            catch (Exception exception)
+            {
+                if (!_hasLoggedError)
+                {
+                    _hasLoggedError = true;
+                    Debug.LogError($"{DatabaseConstants.LogPrefix}The cell handler {_handler.GetType()} failed to convert a text " +
+                        $"{purpose} in the column \"{_name}\". The next errors of this column are not logged.");
+                    Debug.LogException(exception);
+                }
+
+                value = null;
+                return false;
+            }
+        }
+
+        /// <summary>
         /// Creates the column that displays a column of a table definition.
         /// </summary>
         /// <param name="column">The column of the table definition.</param>
@@ -205,7 +277,12 @@ namespace SideXP.Database.EditorOnly
                 ? column.Fields[column.Fields.Count - 1]
                 : null;
 
-            return new TableViewColumn(column.Id, column.Name, column.Tooltip, column.Width, ValueAccessors.Create(column), field,
+            // The header of a computed column says that it's read-only, since its cells look like the others
+            string tooltip = column.Tooltip;
+            if (column.IsComputed)
+                tooltip = string.IsNullOrEmpty(tooltip) ? ComputedTooltip : $"{tooltip}\n\n{ComputedTooltip}";
+
+            return new TableViewColumn(column.Id, column.Name, tooltip, column.Width, ValueAccessors.Create(column), field,
                 column.PropertyPath);
         }
 

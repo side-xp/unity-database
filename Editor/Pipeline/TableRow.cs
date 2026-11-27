@@ -39,7 +39,7 @@ namespace SideXP.Database.EditorOnly
 
         /// <summary>
         /// The text of the row compared with the search, built from the cached values by the owner of the pipeline, or null if it must
-        /// be built again. Cleared each time the values are read.
+        /// be built again. Cleared each time the values are read, and when a computed value changes.
         /// </summary>
         private string _searchText = null;
 
@@ -106,7 +106,8 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Reads the values of all the columns from the asset.
+        /// Reads the values of the columns from the asset. The values of the computed columns are kept: the pipeline computes them
+        /// (see <see cref="SetComputedValue"/>).
         /// </summary>
         /// <param name="accessors">The accessors of the columns.</param>
         internal void Read(IReadOnlyList<IValueAccessor> accessors)
@@ -114,12 +115,29 @@ namespace SideXP.Database.EditorOnly
             using (ValueReadContext context = new ValueReadContext(_asset))
             {
                 for (int i = 0; i < accessors.Count; i++)
-                    _values[i] = accessors[i].Read(context);
+                {
+                    if (!(accessors[i] is ComputedAccessor))
+                        _values[i] = accessors[i].Read(context);
+                }
             }
 
             // Built from the previous values
             _searchText = null;
             _isValid = true;
+        }
+
+        /// <summary>
+        /// Sets the cached value of a computed column. The text of the row compared with the search is cleared if the value changed,
+        /// since the search reads the computed columns too.
+        /// </summary>
+        /// <param name="columnIndex">The index of the computed column, in the order of the accessors of the pipeline.</param>
+        /// <param name="value">The computed value.</param>
+        internal void SetComputedValue(int columnIndex, object value)
+        {
+            if (!Equals(_values[columnIndex], value))
+                _searchText = null;
+
+            _values[columnIndex] = value;
         }
 
         #endregion
