@@ -19,7 +19,7 @@ namespace SideXP.Database
     /// method with another signature is ignored, with a warning.
     /// <para>
     /// The values are computed again when the data of the table changes (an edit, a reload) and when the filters change, never on
-    /// each repaint. Use the <see cref="ITableContext"/> to compute values from the other assets of the table (totals, rankings), and
+    /// each repaint. The column can be sorted, filtered and searched like the others, but not edited. Use the <see cref="ITableContext"/> to compute values from the other assets of the table (totals, rankings), and
     /// <see cref="ITableContext.GetShared{T}(Func{ITableContext, T})"/> to build the data shared by all the rows once. This attribute
     /// is stripped from player builds.
     /// </para>

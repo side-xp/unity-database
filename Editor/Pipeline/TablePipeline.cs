@@ -9,17 +9,20 @@ namespace SideXP.Database.EditorOnly
 {
 
     /// <summary>
-    /// Computes the rows of a table through separate stages: source, value cache, filter, computed values, sort and paginate.
+    /// Computes the rows of a table through separate stages: source, value cache, filter, computed values, post-filter, sort and
+    /// paginate.
     /// </summary>
     /// <remarks>
     /// Each stage only reruns when its input changes: invalidating the source reloads the assets and reads all the values again,
     /// invalidating a row reads its values again, and both rerun the filter and the next stages. Changing the filter reruns the
-    /// filter and the next stages, changing the sort reruns the sort and the paginate stage, changing the page or its size only reruns
-    /// the paginate stage. Invalidations are deferred: call <see cref="Update"/> to apply them.
+    /// filter and the next stages, changing the post-filter reruns the post-filter and the next stages (not the computed values),
+    /// changing the sort reruns the sort and the paginate stage, changing the page or its size only reruns the paginate stage.
+    /// Invalidations are deferred: call <see cref="Update"/> to apply them.
     /// <para>
     /// The values of the computed columns (see <see cref="ComputedAccessor"/>) are computed after the filter, since they can depend on
-    /// the visible rows, and only for the visible rows: the other rows have no value. The filter must not use them. A computed column
-    /// that throws an exception has no value until the next computation, and the first exception of each column is logged.
+    /// the rows that pass it (the visible assets of their context), and only for these rows: the other rows have no value. The filter
+    /// must not use them: the post-filter, which runs after them, can. A computed column that throws an exception has no value until
+    /// the next computation, and the first exception of each column is logged.
     /// </para>
     /// <para>
     /// The pages only split the visible rows for the display: <see cref="VisibleRows"/> always holds the rows of all the pages.
@@ -62,14 +65,26 @@ namespace SideXP.Database.EditorOnly
         private Dictionary<Object, TableRow> _rowsByAsset = new Dictionary<Object, TableRow>();
 
         /// <summary>
-        /// The rows that pass the filter, in the order of the sort.
+        /// The rows that pass the filter, in the order of the source. Their computed values are computed, and they are the visible
+        /// assets of the context of the computed columns.
+        /// </summary>
+        private List<TableRow> _filteredRows = new List<TableRow>();
+
+        /// <summary>
+        /// The rows that pass the filter and the post-filter, in the order of the sort.
         /// </summary>
         private List<TableRow> _visibleRows = new List<TableRow>();
 
         /// <summary>
-        /// The condition a row must meet to be visible, or null to show all the rows.
+        /// The condition a row must meet to be visible, checked before the computed values are computed, or null to keep all the rows.
         /// </summary>
         private Predicate<TableRow> _filter = null;
+
+        /// <summary>
+        /// The condition a row that passes the filter must meet to be visible, checked after the computed values are computed, so it
+        /// can use them. Null to keep all the rows that pass the filter.
+        /// </summary>
+        private Predicate<TableRow> _postFilter = null;
 
         /// <summary>
         /// The columns used to sort the rows, by priority: the rows are sorted by the first column, then the rows of equal values by
@@ -119,9 +134,14 @@ namespace SideXP.Database.EditorOnly
         private bool _isFilterValid = false;
 
         /// <summary>
-        /// Checks if the values of the computed columns match the values of the rows and the visible rows.
+        /// Checks if the values of the computed columns match the values of the rows and the rows that pass the filter.
         /// </summary>
         private bool _areComputedValuesValid = false;
+
+        /// <summary>
+        /// Checks if the visible rows match the post-filter.
+        /// </summary>
+        private bool _isPostFilterValid = false;
 
         /// <summary>
         /// Checks if the visible rows match the sort.
@@ -171,6 +191,9 @@ namespace SideXP.Database.EditorOnly
         /// <inheritdoc cref="_visibleRows"/>
         public IReadOnlyList<TableRow> VisibleRows => _visibleRows;
 
+        /// <inheritdoc cref="_filteredRows"/>
+        public IReadOnlyList<TableRow> FilteredRows => _filteredRows;
+
         /// <inheritdoc cref="_sourceVersion"/>
         public int SourceVersion => _sourceVersion;
 
@@ -178,7 +201,8 @@ namespace SideXP.Database.EditorOnly
         public IReadOnlyList<SortKey> SortKeys => _sortKeys;
 
         /// <summary>
-        /// The condition a row must meet to be visible, or null to show all the rows. Setting it invalidates the filter.
+        /// The condition a row must meet to be visible, checked before the computed values are computed, so it must not use them. Null
+        /// to keep all the rows. Setting it invalidates the filter, so the computed values are computed again.
         /// </summary>
         public Predicate<TableRow> Filter
         {
@@ -187,6 +211,21 @@ namespace SideXP.Database.EditorOnly
             {
                 _filter = value;
                 InvalidateFilter();
+            }
+        }
+
+        /// <summary>
+        /// The condition a row that passes the <see cref="Filter"/> must meet to be visible, checked after the computed values are
+        /// computed, so it can use them. Null to keep all the rows that pass the filter. Setting it invalidates the post-filter only:
+        /// the computed values are not computed again.
+        /// </summary>
+        public Predicate<TableRow> PostFilter
+        {
+            get => _postFilter;
+            set
+            {
+                _postFilter = value;
+                InvalidatePostFilter();
             }
         }
 
@@ -345,6 +384,14 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
+        /// Marks the post-filter as outdated, so it reruns on the next update, without computing the computed values again.
+        /// </summary>
+        public void InvalidatePostFilter()
+        {
+            _isPostFilterValid = false;
+        }
+
+        /// <summary>
         /// Gets the row of an asset.
         /// </summary>
         /// <param name="asset">The asset of which to get the row.</param>
@@ -388,6 +435,12 @@ namespace SideXP.Database.EditorOnly
             if (!_areComputedValuesValid)
             {
                 ComputeValues();
+                hasChanged = true;
+            }
+
+            if (!_isPostFilterValid)
+            {
+                ApplyPostFilter();
                 hasChanged = true;
             }
 
@@ -462,45 +515,39 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         private void ApplyFilter()
         {
-            _visibleRows.Clear();
+            _filteredRows.Clear();
             foreach (TableRow row in _rows)
             {
                 if (_filter == null || _filter(row))
-                    _visibleRows.Add(row);
+                    _filteredRows.Add(row);
             }
 
             _isFilterValid = true;
-            // The computed values can depend on the visible rows
+            // The computed values can depend on the rows that pass the filter
             _areComputedValuesValid = false;
         }
 
         /// <summary>
-        /// Computes the values of the computed columns for the visible rows, with a context shared by all the columns. The other rows
-        /// get no value, so they don't keep values computed from other data.
+        /// Computes the values of the computed columns for the rows that pass the filter, with a context shared by all the columns. The
+        /// other rows get no value, so they don't keep values computed from other data.
         /// </summary>
         private void ComputeValues()
         {
             _areComputedValuesValid = true;
-            _isSortValid = false;
+            _isPostFilterValid = false;
             if (_computedColumns.Length == 0)
                 return;
 
-            // In the order of the source, whatever the previous sort of the visible rows
-            List<Object> allAssets = new List<Object>(_rows.Count);
-            HashSet<TableRow> visibleRows = new HashSet<TableRow>(_visibleRows);
-            List<Object> visibleAssets = new List<Object>(_visibleRows.Count);
-            foreach (TableRow row in _rows)
-            {
-                allAssets.Add(row.Asset);
-                if (visibleRows.Contains(row))
-                    visibleAssets.Add(row.Asset);
-            }
+            // Both in the order of the source
+            List<Object> allAssets = _rows.ConvertAll(row => row.Asset);
+            List<Object> visibleAssets = _filteredRows.ConvertAll(row => row.Asset);
+            HashSet<TableRow> filteredRows = new HashSet<TableRow>(_filteredRows);
 
             TableContext context = new TableContext(allAssets, visibleAssets);
             try
             {
                 foreach (int columnIndex in _computedColumns)
-                    ComputeColumn(columnIndex, context, visibleRows);
+                    ComputeColumn(columnIndex, context, filteredRows);
             }
             finally
             {
@@ -509,11 +556,27 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
+        /// Selects the rows that pass the filter and the post-filter, in the order of the source, to be sorted.
+        /// </summary>
+        private void ApplyPostFilter()
+        {
+            _visibleRows.Clear();
+            foreach (TableRow row in _filteredRows)
+            {
+                if (_postFilter == null || _postFilter(row))
+                    _visibleRows.Add(row);
+            }
+
+            _isPostFilterValid = true;
+            _isSortValid = false;
+        }
+
+        /// <summary>
         /// Computes the values of a computed column. After an exception, the other rows of the column get no value.
         /// </summary>
         /// <param name="columnIndex">The index of the computed column.</param>
         /// <param name="context">The context of the computation.</param>
-        /// <param name="visibleRows">The visible rows, which get a value.</param>
+        /// <param name="visibleRows">The rows that pass the filter, which get a value.</param>
         private void ComputeColumn(int columnIndex, TableContext context, HashSet<TableRow> visibleRows)
         {
             ComputedAccessor accessor = (ComputedAccessor)_accessors[columnIndex];

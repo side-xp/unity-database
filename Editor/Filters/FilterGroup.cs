@@ -13,7 +13,7 @@ namespace SideXP.Database.EditorOnly
     /// <remarks>
     /// The nodes that don't apply to the table are ignored (see <see cref="FilterNode.Compile"/>): they don't make an "or" group match
     /// every row, nor an "and" group match none. A group without any node that applies is ignored too, so an empty filter shows all
-    /// the rows.
+    /// the rows. The nodes that can't be checked yet (<see cref="FilterNode.Deferred"/>) count as met.
     /// </remarks>
     [Serializable]
     internal class FilterGroup : FilterNode
@@ -71,16 +71,30 @@ namespace SideXP.Database.EditorOnly
         public override Predicate<TableRow> Compile(IReadOnlyDictionary<string, FilterColumn> columns)
         {
             List<Predicate<TableRow>> conditions = new List<Predicate<TableRow>>(_nodes.Count);
+            bool hasDeferredNodes = false;
             foreach (FilterNode node in _nodes)
             {
                 // A node of a hand-edited file, or of a type that doesn't exist anymore, can be null
                 Predicate<TableRow> condition = node?.Compile(columns);
-                if (condition != null)
-                    conditions.Add(condition);
+                if (condition == null)
+                    continue;
+
+                // A deferred node counts as met: it makes an "or" group keep all the rows, and changes nothing in an "and" group
+                if (condition == Deferred)
+                {
+                    if (_operator == FilterOperator.Or)
+                        return Deferred;
+
+                    hasDeferredNodes = true;
+                    continue;
+                }
+
+                conditions.Add(condition);
             }
 
+            // Only deferred nodes: the group can't be checked yet, but must not be ignored
             if (conditions.Count == 0)
-                return null;
+                return hasDeferredNodes ? Deferred : null;
 
             if (conditions.Count == 1)
                 return conditions[0];

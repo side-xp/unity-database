@@ -51,6 +51,19 @@ namespace SideXP.Database.EditorOnly
         private Predicate<TableRow> _compiledFilter = null;
 
         /// <summary>
+        /// The filter of the first pass of the pipeline (see <see cref="TablePipeline.Filter"/>), before the computed values are
+        /// computed: <see cref="_compiledFilter"/>, or, if it uses computed columns, the filter compiled with their conditions counted
+        /// as met. Null if it keeps all the rows.
+        /// </summary>
+        private Predicate<TableRow> _firstPassFilter = null;
+
+        /// <summary>
+        /// The filter of the second pass of the pipeline (see <see cref="TablePipeline.PostFilter"/>), after the computed values are
+        /// computed: <see cref="_compiledFilter"/> if it uses computed columns, null otherwise (the first pass already applied it).
+        /// </summary>
+        private Predicate<TableRow> _secondPassFilter = null;
+
+        /// <summary>
         /// The identifiers of the columns used by the conditions of the filter that apply to the table, marked in their header.
         /// </summary>
         private HashSet<string> _filteredColumnIds = new HashSet<string>();
@@ -111,8 +124,8 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Gets the columns that the filters can use: all the columns except <i>Controls</i> and the computed columns (whose values are
-        /// computed after the filters), hidden ones included, since the filters also apply to them.
+        /// Gets the columns that the filters can use: all the columns except <i>Controls</i>, hidden ones included, since the filters
+        /// also apply to them.
         /// </summary>
         /// <returns>Returns the columns in their display order, or an empty list if no table is displayed.</returns>
         public List<TableViewColumn> GetFilterableColumns()
@@ -169,10 +182,17 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Compiles the filter for the columns of the table.
+        /// Compiles the filter for the columns of the table, and splits it in the two passes of the pipeline if it uses computed columns.
         /// </summary>
+        /// <remarks>
+        /// The first pass runs before the computed values are computed: the conditions on computed columns count as met, so it keeps
+        /// every row that may meet the whole filter, and these rows are the visible assets of the computed columns. The second pass
+        /// checks the whole filter on these rows, once their computed values are known.
+        /// </remarks>
         private void CompileFilter()
         {
+            _firstPassFilter = null;
+            _secondPassFilter = null;
             if (_filter == null)
             {
                 _compiledFilter = null;
@@ -182,17 +202,34 @@ namespace SideXP.Database.EditorOnly
 
             // A condition on a column left out is ignored, like a condition on a column that doesn't exist anymore
             Dictionary<string, FilterColumn> columns = new Dictionary<string, FilterColumn>(_columns.Count);
+            Dictionary<string, FilterColumn> firstPassColumns = new Dictionary<string, FilterColumn>(_columns.Count);
+            HashSet<string> computedColumnIds = new HashSet<string>();
             for (int i = 0; i < _columns.Count; i++)
             {
                 TableViewColumn column = _columns[i];
                 if (!IsFilterable(column))
                     continue;
 
-                columns[column.Id] = new FilterColumn(i, column.Accessor.ValueType, value => ToFilterText(column, value));
+                Type valueType = column.Accessor.ValueType;
+                Func<object, string> toText = value => ToFilterText(column, value);
+                columns[column.Id] = new FilterColumn(i, valueType, toText);
+                firstPassColumns[column.Id] = new FilterColumn(i, valueType, toText, column.IsComputed);
+                if (column.IsComputed)
+                    computedColumnIds.Add(column.Id);
             }
 
             _compiledFilter = _filter.Compile(columns);
             _filteredColumnIds = FilterConditions.GetFilteredColumnIds(_filter, columns);
+
+            if (!_filteredColumnIds.Overlaps(computedColumnIds))
+            {
+                _firstPassFilter = _compiledFilter;
+                return;
+            }
+
+            Predicate<TableRow> firstPassFilter = _filter.Compile(firstPassColumns);
+            _firstPassFilter = firstPassFilter == FilterNode.Deferred ? null : firstPassFilter;
+            _secondPassFilter = _compiledFilter;
         }
 
         /// <summary>
@@ -221,12 +258,10 @@ namespace SideXP.Database.EditorOnly
         /// Checks if the filters can use a column.
         /// </summary>
         /// <param name="column">The column to check.</param>
-        /// <returns>Returns false for the <i>Controls</i> column, which has no value, and for the computed columns, whose values are
-        /// computed after the filters.</returns>
+        /// <returns>Returns false for the <i>Controls</i> column, which has no value.</returns>
         private static bool IsFilterable(TableViewColumn column)
         {
-            // @todo 25b3: filter the computed columns, in a second filter pass after their values are computed
-            return !column.IsControls && !column.IsComputed;
+            return !column.IsControls;
         }
 
         /// <summary>
@@ -250,32 +285,44 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Sets the filter of the pipeline: the compiled filter and the search, both optional. The rows are filtered on the next
-        /// update of the pipeline.
+        /// Sets the filters of the pipeline: the first pass of the filter, then the second pass of the filter and the search, all
+        /// optional. The rows are filtered on the next update of the pipeline.
         /// </summary>
+        /// <remarks>
+        /// The search is part of the second pass, so it can search the computed columns, and typing a search doesn't compute their
+        /// values again: they only depend on the filter (the visible assets of their context are the rows of the first pass).
+        /// </remarks>
         private void ApplyRowFilter()
         {
+            // Set only if it changed, since a new filter of the first pass computes the computed values again
+            if (_pipeline.Filter != _firstPassFilter)
+                _pipeline.Filter = _firstPassFilter;
+
             // With both, the filter is checked first: its conditions usually compare values, while the search may build the text of
             // the row
-            Predicate<TableRow> filter = _compiledFilter;
+            Predicate<TableRow> filter = _secondPassFilter;
             if (filter != null && IsSearching)
-                _pipeline.Filter = row => filter(row) && MatchesSearch(row);
+                _pipeline.PostFilter = row => filter(row) && MatchesSearch(row);
             else if (filter != null)
-                _pipeline.Filter = filter;
+                _pipeline.PostFilter = filter;
             else if (IsSearching)
-                _pipeline.Filter = MatchesSearch;
+                _pipeline.PostFilter = MatchesSearch;
             else
-                _pipeline.Filter = null;
+                _pipeline.PostFilter = null;
         }
 
         /// <summary>
         /// Checks if the filters hide a row, whatever the search.
         /// </summary>
         /// <param name="row">The row to check.</param>
-        /// <returns>Returns true if a filter applies and the row doesn't meet it.</returns>
+        /// <returns>Returns true if a filter applies and the row doesn't meet it, in either pass.</returns>
         private bool IsHiddenByFilters(TableRow row)
         {
-            return _compiledFilter != null && !_compiledFilter(row);
+            // The second pass reads the computed values, which only the rows of the first pass have
+            if (_firstPassFilter != null && !_firstPassFilter(row))
+                return true;
+
+            return _secondPassFilter != null && !_secondPassFilter(row);
         }
 
         /// <summary>

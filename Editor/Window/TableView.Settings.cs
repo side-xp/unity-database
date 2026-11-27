@@ -177,10 +177,10 @@ namespace SideXP.Database.EditorOnly
             // priority
             ApplyRememberedSort();
             SaveSort();
-            // The texts of the rows contain the displayed columns only
+            // The texts of the rows contain the displayed columns only. The search is in the second pass of the filters
             ClearSearchTexts();
             if (IsSearching)
-                _pipeline.InvalidateFilter();
+                _pipeline.InvalidatePostFilter();
 
             RebuildListViews(true);
             Refresh();

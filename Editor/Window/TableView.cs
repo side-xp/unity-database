@@ -370,6 +370,8 @@ namespace SideXP.Database.EditorOnly
             _source = null;
             _filter = null;
             _compiledFilter = null;
+            _firstPassFilter = null;
+            _secondPassFilter = null;
             _filteredColumnIds.Clear();
             _folderScope = FolderScope.WholeProject;
             _columns = new List<TableViewColumn>();

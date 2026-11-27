@@ -79,6 +79,10 @@ namespace SideXP.Database.EditorOnly
             if (column.ValueType == null || !CanApplyTo(column.ValueType))
                 return null;
 
+            // Checked after the type, so a condition that doesn't apply is ignored in both passes of the filters
+            if (column.IsDeferred)
+                return Deferred;
+
             int columnIndex = column.Index;
             Predicate<object> matcher = CreateMatcher(column);
             return row => matcher(row.GetValue(columnIndex));

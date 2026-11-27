@@ -39,7 +39,7 @@ namespace SideXP.Database.EditorOnly
 
         /// <summary>
         /// The text of the row compared with the search, built from the cached values by the owner of the pipeline, or null if it must
-        /// be built again. Cleared each time the values are read.
+        /// be built again. Cleared each time the values are read, and when a computed value changes.
         /// </summary>
         private string _searchText = null;
 
@@ -127,12 +127,16 @@ namespace SideXP.Database.EditorOnly
         }
 
         /// <summary>
-        /// Sets the cached value of a computed column.
+        /// Sets the cached value of a computed column. The text of the row compared with the search is cleared if the value changed,
+        /// since the search reads the computed columns too.
         /// </summary>
         /// <param name="columnIndex">The index of the computed column, in the order of the accessors of the pipeline.</param>
         /// <param name="value">The computed value.</param>
         internal void SetComputedValue(int columnIndex, object value)
         {
+            if (!Equals(_values[columnIndex], value))
+                _searchText = null;
+
             _values[columnIndex] = value;
         }
 

@@ -24,9 +24,15 @@ namespace SideXP.Database
         IReadOnlyList<Object> AllAssets { get; }
 
         /// <summary>
-        /// The assets of the table that pass the filters and the search, in the order of the rows before any sort. A value based on
-        /// these assets changes when the filters change.
+        /// The assets of the table that pass the filters, in the order of the rows before any sort. A value based on these assets
+        /// changes when the filters change.
         /// </summary>
+        /// <remarks>
+        /// The values are computed before the search and before the conditions on computed columns, which use them: these assets are
+        /// the ones that pass the conditions on the other columns (a condition on a computed column counts as met). So typing a search
+        /// doesn't change the values, and a filter on a computed column (such as a rank) compares the values computed for the assets
+        /// filtered by the other conditions.
+        /// </remarks>
         IReadOnlyList<Object> VisibleAssets { get; }
 
         /// <summary>

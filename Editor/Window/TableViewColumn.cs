@@ -171,7 +171,8 @@ namespace SideXP.Database.EditorOnly
 
         /// <summary>
         /// Checks if the values of the column are computed by a method (see <see cref="ComputedColumnAttribute"/>). Its cells are
-        /// read-only, and its values are computed after the filters, so the filters and the search can't use them yet.
+        /// read-only, and its values are computed between the two passes of the filters, so only the second pass and the search can
+        /// use them.
         /// </summary>
         public bool IsComputed => _accessor is ComputedAccessor;
 

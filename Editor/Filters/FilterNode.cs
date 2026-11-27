@@ -17,6 +17,18 @@ namespace SideXP.Database.EditorOnly
     internal abstract class FilterNode
     {
 
+        #region Fields
+
+        /// <summary>
+        /// The condition of a node whose values are not known yet (see <see cref="FilterColumn.IsDeferred"/>): it counts as met. Unlike
+        /// a node that is ignored (null), it makes an "or" group keep all the rows, since the row may meet it once its values are
+        /// known. Compare the compiled condition with it to know if a filter has nothing to check yet.
+        /// </summary>
+        public static readonly Predicate<TableRow> Deferred = row => true;
+
+        #endregion
+
+
         #region Public API
 
         /// <summary>
@@ -26,7 +38,8 @@ namespace SideXP.Database.EditorOnly
         /// <returns>
         /// Returns the condition of the node, or null if the node doesn't apply to the table and must be ignored: a condition on a
         /// column that doesn't exist, or whose values are of a type the condition doesn't support, or a group without any condition
-        /// that applies.
+        /// that applies. Returns <see cref="Deferred"/> if the node can't be checked yet, since it depends on values that are not
+        /// known yet.
         /// </returns>
         public abstract Predicate<TableRow> Compile(IReadOnlyDictionary<string, FilterColumn> columns);
 

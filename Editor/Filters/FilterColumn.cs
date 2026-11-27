@@ -28,6 +28,13 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         public readonly Func<object, string> ToText;
 
+        /// <summary>
+        /// Checks if the values of the column are not known yet when the filter runs (the values of a computed column, in the first
+        /// filter pass of the pipeline). The conditions that apply to the column then count as met (see
+        /// <see cref="FilterNode.Deferred"/>), so the filter keeps every row that may meet it once the values are known.
+        /// </summary>
+        public readonly bool IsDeferred;
+
         #endregion
 
 
@@ -37,11 +44,13 @@ namespace SideXP.Database.EditorOnly
         /// <param name="index"><inheritdoc cref="Index" path="/summary"/></param>
         /// <param name="valueType"><inheritdoc cref="ValueType" path="/summary"/></param>
         /// <param name="toText"><inheritdoc cref="ToText" path="/summary"/></param>
-        public FilterColumn(int index, Type valueType, Func<object, string> toText)
+        /// <param name="isDeferred"><inheritdoc cref="IsDeferred" path="/summary"/></param>
+        public FilterColumn(int index, Type valueType, Func<object, string> toText, bool isDeferred = false)
         {
             Index = index;
             ValueType = valueType;
             ToText = toText;
+            IsDeferred = isDeferred;
         }
 
         #endregion

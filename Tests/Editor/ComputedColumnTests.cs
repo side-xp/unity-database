@@ -283,6 +283,29 @@ namespace SideXP.Database.Tests
         }
 
         /// <summary>
+        /// The post-filter uses the computed values, which are computed for the rows of the filter: changing the post-filter doesn't
+        /// compute them again, and doesn't change the visible assets of the context.
+        /// </summary>
+        [Test]
+        public void Update_PostFilter_UsesComputedValuesWithoutComputingAgain()
+        {
+            _pipeline.Filter = row => (int)row.GetValue(NumberColumn) >= 2;
+            _pipeline.PostFilter = row => (int)row.GetValue(RankColumn) <= 2;
+            _pipeline.Update();
+
+            CollectionAssert.AreEqual(new[] { "A", "C", "D" }, _pipeline.FilteredRows.Select(i => i.Asset.name));
+            CollectionAssert.AreEqual(new[] { "A", "C" }, _pipeline.VisibleRows.Select(i => i.Asset.name));
+            CollectionAssert.AreEqual(new object[] { 304, null, 304, 304 }, GetValues(TotalColumn), "The context has the filtered rows.");
+            Assert.AreEqual(3, ComputedColumnTestMethods.DoubleCount);
+
+            _pipeline.PostFilter = row => (int)row.GetValue(RankColumn) == 3;
+            _pipeline.Update();
+
+            CollectionAssert.AreEqual(new[] { "D" }, _pipeline.VisibleRows.Select(i => i.Asset.name));
+            Assert.AreEqual(3, ComputedColumnTestMethods.DoubleCount, "The post-filter doesn't compute the values again.");
+        }
+
+        /// <summary>
         /// The values are computed again when a row changes and when the filter changes, but not when the sort or the page changes.
         /// </summary>
         [Test]

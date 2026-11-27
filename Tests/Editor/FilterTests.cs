@@ -101,6 +101,17 @@ namespace SideXP.Database.Tests
         };
 
         /// <summary>
+        /// The columns of <see cref="Columns"/>, with the column of numbers deferred, like a computed column in the first pass of the
+        /// filters.
+        /// </summary>
+        private static readonly Dictionary<string, FilterColumn> DeferredNumberColumns = new Dictionary<string, FilterColumn>
+        {
+            { NumberId, new FilterColumn(0, typeof(int), ToText, true) },
+            { CheckedId, new FilterColumn(1, typeof(bool), ToText) },
+            { LabelId, new FilterColumn(2, typeof(string), ToText) },
+        };
+
+        /// <summary>
         /// The objects created by a test, destroyed after it.
         /// </summary>
         private List<Object> _objects = new List<Object>();
@@ -509,6 +520,73 @@ namespace SideXP.Database.Tests
             Assert.IsNull(new FilterGroup().Compile(Columns));
             Assert.IsNull(new FilterGroup(FilterOperator.Or, new BoolCondition(MissingId, true)).Compile(Columns));
             Assert.IsNull(new FilterGroup(FilterOperator.And, new FilterGroup(FilterOperator.Or)).Compile(Columns));
+        }
+
+        #endregion
+
+
+        #region Deferred conditions
+
+        /// <summary>
+        /// A condition on a deferred column counts as met, unless it doesn't apply to the column, in which case it's ignored.
+        /// </summary>
+        [Test]
+        public void Compile_DeferredColumn_CountsAsMetIfApplicable()
+        {
+            Assert.AreSame(FilterNode.Deferred, new NumberRangeCondition(NumberId, 10, null).Compile(DeferredNumberColumns));
+            Assert.IsNull(new BoolCondition(NumberId, true).Compile(DeferredNumberColumns));
+        }
+
+        /// <summary>
+        /// In an "and" group, a deferred condition changes nothing: the other conditions are checked.
+        /// </summary>
+        [Test]
+        public void Compile_AndGroupWithDeferredCondition_OtherConditionsOnly()
+        {
+            FilterGroup group = new FilterGroup(FilterOperator.And,
+                new NumberRangeCondition(NumberId, 10, null),
+                new BoolCondition(CheckedId, true));
+            Predicate<TableRow> filter = group.Compile(DeferredNumberColumns);
+
+            Assert.IsTrue(filter(CreateRow(5, true, "A")), "The number is not checked yet.");
+            Assert.IsFalse(filter(CreateRow(10, false, "A")));
+        }
+
+        /// <summary>
+        /// In an "or" group, a deferred condition makes the group keep all the rows, since any row may meet it once its values are
+        /// known. Unlike an ignored condition, which is removed from the group.
+        /// </summary>
+        [Test]
+        public void Compile_OrGroupWithDeferredCondition_KeepsAllRows()
+        {
+            FilterGroup group = new FilterGroup(FilterOperator.Or,
+                new NumberRangeCondition(NumberId, 10, null),
+                new BoolCondition(CheckedId, true));
+
+            Assert.AreSame(FilterNode.Deferred, group.Compile(DeferredNumberColumns));
+        }
+
+        /// <summary>
+        /// A group of deferred conditions is deferred, not ignored, so an "or" group that contains it keeps all the rows, and an
+        /// "and" group checks its other conditions.
+        /// </summary>
+        [Test]
+        public void Compile_NestedDeferredGroups_KeepRowsThatMayMatch()
+        {
+            FilterGroup deferredGroup = new FilterGroup(FilterOperator.And, new NumberRangeCondition(NumberId, 10, null));
+            Assert.AreSame(FilterNode.Deferred, deferredGroup.Compile(DeferredNumberColumns));
+
+            // Label contains "sword" or (Checked and Number at least 10): the first pass keeps the swords and the checked rows
+            FilterGroup group = new FilterGroup(FilterOperator.Or,
+                new TextCondition(LabelId, "sword"),
+                new FilterGroup(FilterOperator.And,
+                    new BoolCondition(CheckedId, true),
+                    new NumberRangeCondition(NumberId, 10, null)));
+            Predicate<TableRow> filter = group.Compile(DeferredNumberColumns);
+
+            Assert.IsTrue(filter(CreateRow(5, false, "Sword")));
+            Assert.IsTrue(filter(CreateRow(5, true, "Shield")));
+            Assert.IsFalse(filter(CreateRow(10, false, "Shield")));
         }
 
         #endregion
