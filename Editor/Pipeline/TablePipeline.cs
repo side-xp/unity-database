@@ -1,19 +1,26 @@
 using System;
 using System.Collections.Generic;
 
+using UnityEngine;
+
 using Object = UnityEngine.Object;
 
 namespace SideXP.Database.EditorOnly
 {
 
     /// <summary>
-    /// Computes the rows of a table through separate stages: source, value cache, filter, sort and paginate.
+    /// Computes the rows of a table through separate stages: source, value cache, filter, computed values, sort and paginate.
     /// </summary>
     /// <remarks>
     /// Each stage only reruns when its input changes: invalidating the source reloads the assets and reads all the values again,
-    /// invalidating a row reads its values again, and both rerun the filter, the sort and the paginate stage. Changing the filter
-    /// reruns the filter and the next stages, changing the sort reruns the sort and the paginate stage, changing the page or its size
-    /// only reruns the paginate stage. Invalidations are deferred: call <see cref="Update"/> to apply them.
+    /// invalidating a row reads its values again, and both rerun the filter and the next stages. Changing the filter reruns the
+    /// filter and the next stages, changing the sort reruns the sort and the paginate stage, changing the page or its size only reruns
+    /// the paginate stage. Invalidations are deferred: call <see cref="Update"/> to apply them.
+    /// <para>
+    /// The values of the computed columns (see <see cref="ComputedAccessor"/>) are computed after the filter, since they can depend on
+    /// the visible rows, and only for the visible rows: the other rows have no value. The filter must not use them. A computed column
+    /// that throws an exception has no value until the next computation, and the first exception of each column is logged.
+    /// </para>
     /// <para>
     /// The pages only split the visible rows for the display: <see cref="VisibleRows"/> always holds the rows of all the pages.
     /// </para>
@@ -32,6 +39,17 @@ namespace SideXP.Database.EditorOnly
         /// The accessors of the columns. The index of an accessor is the index of its column in the pipeline.
         /// </summary>
         private IReadOnlyList<IValueAccessor> _accessors = null;
+
+        /// <summary>
+        /// The indices of the computed columns, in the order of the accessors.
+        /// </summary>
+        private int[] _computedColumns = null;
+
+        /// <summary>
+        /// The indices of the computed columns whose exception has already been logged, so a column that keeps failing doesn't flood
+        /// the console on each change.
+        /// </summary>
+        private HashSet<int> _loggedComputeErrors = new HashSet<int>();
 
         /// <summary>
         /// All the rows of the table, in the order of the source.
@@ -101,6 +119,11 @@ namespace SideXP.Database.EditorOnly
         private bool _isFilterValid = false;
 
         /// <summary>
+        /// Checks if the values of the computed columns match the values of the rows and the visible rows.
+        /// </summary>
+        private bool _areComputedValuesValid = false;
+
+        /// <summary>
         /// Checks if the visible rows match the sort.
         /// </summary>
         private bool _isSortValid = false;
@@ -122,6 +145,14 @@ namespace SideXP.Database.EditorOnly
         {
             _source = source;
             _accessors = accessors;
+
+            List<int> computedColumns = new List<int>();
+            for (int i = 0; i < accessors.Count; i++)
+            {
+                if (accessors[i] is ComputedAccessor)
+                    computedColumns.Add(i);
+            }
+            _computedColumns = computedColumns.ToArray();
         }
 
         #endregion
@@ -354,6 +385,12 @@ namespace SideXP.Database.EditorOnly
                 hasChanged = true;
             }
 
+            if (!_areComputedValuesValid)
+            {
+                ComputeValues();
+                hasChanged = true;
+            }
+
             if (!_isSortValid)
             {
                 ApplySort();
@@ -433,7 +470,79 @@ namespace SideXP.Database.EditorOnly
             }
 
             _isFilterValid = true;
+            // The computed values can depend on the visible rows
+            _areComputedValuesValid = false;
+        }
+
+        /// <summary>
+        /// Computes the values of the computed columns for the visible rows, with a context shared by all the columns. The other rows
+        /// get no value, so they don't keep values computed from other data.
+        /// </summary>
+        private void ComputeValues()
+        {
+            _areComputedValuesValid = true;
             _isSortValid = false;
+            if (_computedColumns.Length == 0)
+                return;
+
+            // In the order of the source, whatever the previous sort of the visible rows
+            List<Object> allAssets = new List<Object>(_rows.Count);
+            HashSet<TableRow> visibleRows = new HashSet<TableRow>(_visibleRows);
+            List<Object> visibleAssets = new List<Object>(_visibleRows.Count);
+            foreach (TableRow row in _rows)
+            {
+                allAssets.Add(row.Asset);
+                if (visibleRows.Contains(row))
+                    visibleAssets.Add(row.Asset);
+            }
+
+            TableContext context = new TableContext(allAssets, visibleAssets);
+            try
+            {
+                foreach (int columnIndex in _computedColumns)
+                    ComputeColumn(columnIndex, context, visibleRows);
+            }
+            finally
+            {
+                context.End();
+            }
+        }
+
+        /// <summary>
+        /// Computes the values of a computed column. After an exception, the other rows of the column get no value.
+        /// </summary>
+        /// <param name="columnIndex">The index of the computed column.</param>
+        /// <param name="context">The context of the computation.</param>
+        /// <param name="visibleRows">The visible rows, which get a value.</param>
+        private void ComputeColumn(int columnIndex, TableContext context, HashSet<TableRow> visibleRows)
+        {
+            ComputedAccessor accessor = (ComputedAccessor)_accessors[columnIndex];
+            bool hasFailed = false;
+            foreach (TableRow row in _rows)
+            {
+                object value = null;
+                if (!hasFailed && visibleRows.Contains(row))
+                {
+                    try
+                    {
+                        value = accessor.Compute(row.Asset, context);
+                    }
+                    catch (Exception exception)
+                    {
+                        hasFailed = true;
+                        if (_loggedComputeErrors.Add(columnIndex))
+                        {
+                            string assetName = row.Asset != null ? row.Asset.name : "a missing asset";
+                            Debug.LogWarning($"{DatabaseConstants.LogPrefix}The computed column {accessor.MethodLabel} has thrown an " +
+                                $"exception for {assetName}, so the column has no value until its values are computed again (after a " +
+                                $"change of the data or of the filters). Next exceptions of this column are not logged.\n{exception}",
+                                row.Asset);
+                        }
+                    }
+                }
+
+                row.SetComputedValue(columnIndex, value);
+            }
         }
 
         /// <summary>

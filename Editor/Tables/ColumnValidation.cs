@@ -20,7 +20,7 @@ namespace SideXP.Database.EditorOnly
         #region Public API
 
         /// <summary>
-        /// Gets the columns that have a serialized property on a given asset.
+        /// Gets the columns that have a serialized property on a given asset. The computed columns are always kept.
         /// </summary>
         /// <param name="columns">The columns to validate.</param>
         /// <param name="asset">An asset of the table. Any asset works, since the columns are declared on the table type or its base
@@ -37,7 +37,8 @@ namespace SideXP.Database.EditorOnly
             {
                 foreach (ColumnDefinition column in columns)
                 {
-                    if (serializedObject.FindProperty(column.PropertyPath) != null)
+                    // A computed column has no serialized property: its method is checked when its definition is built
+                    if (column.IsComputed || serializedObject.FindProperty(column.PropertyPath) != null)
                     {
                         validColumns.Add(column);
                     }

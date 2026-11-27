@@ -82,8 +82,10 @@ namespace SideXP.Database.EditorOnly
         /// </summary>
         /// <param name="type">The type of which to build the table.</param>
         /// <param name="warnings">The list to which the issues found in the declarations are added.</param>
+        /// <param name="computedColumns">The computed columns of the project, added after the columns of the fields, or null to build
+        /// the table without computed columns.</param>
         /// <returns>Returns the definition of the table, or null if the type is not a table.</returns>
-        public static TableDefinition Build(Type type, ICollection<string> warnings)
+        public static TableDefinition Build(Type type, ICollection<string> warnings, ComputedColumns computedColumns = null)
         {
             if (!TryResolveDeclaration(type, out Type declaringType, out TableAttribute declaration))
                 return null;
@@ -118,6 +120,10 @@ namespace SideXP.Database.EditorOnly
                 ? GetDeclaredName(type, declaration)
                 : GetInheritedName(type, declaringType, declaration);
 
+            List<ColumnDefinition> columns = CollectColumns(type, warnings);
+            if (computedColumns != null)
+                columns.AddRange(computedColumns.GetColumns(type, warnings));
+
             return new TableDefinition(
                 GetId(type),
                 type,
@@ -125,7 +131,7 @@ namespace SideXP.Database.EditorOnly
                 type.IsDefined(typeof(ObsoleteAttribute), false),
                 declaration.HideAssetName,
                 declaration.AllowRenameAsset,
-                CollectColumns(type, warnings));
+                columns);
         }
 
         /// <summary>

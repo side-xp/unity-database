@@ -1075,7 +1075,13 @@ namespace SideXP.Database.EditorOnly
             List<TableViewColumn> columns = new List<TableViewColumn>(definitionColumns.Count + 2);
             columns.Add(TableViewColumn.CreateAssetNameColumn());
             foreach (ColumnDefinition column in definitionColumns)
+            {
+                // @todo 25b2: display the computed columns (read-only, not searched nor filtered until 25b3)
+                if (column.IsComputed)
+                    continue;
+
                 columns.Add(TableViewColumn.FromDefinition(column));
+            }
 
             // Last, since the first column is frozen and must show what identifies the rows
             columns.Add(TableViewColumn.CreateControlsColumn());
