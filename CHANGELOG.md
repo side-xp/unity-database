@@ -2,6 +2,103 @@
 
 <!-- version list -->
 
+## v1.1.0 (2026-11-27)
+
+### Documentation
+
+- Add guides for new features & update docs
+  ([`afa2b56`](https://github.com/side-xp/unity-database/commit/afa2b563f3f220a4fad6d33cb2b3b28840179c17))
+
+### Features
+
+- Computed column attribute
+  ([`5a683c5`](https://github.com/side-xp/unity-database/commit/5a683c5e82768228df26eff25b17d2556c3e7cfd))
+
+- Computed column handler
+  ([`d8c44dd`](https://github.com/side-xp/unity-database/commit/d8c44ddd93f0dbebeb493b55ab6d8f45ab939e8c))
+
+- Copy-paste in table view
+  ([`3b2098d`](https://github.com/side-xp/unity-database/commit/3b2098d58ca710abcbc4a5f7f0853b906842de4d))
+
+- Csv import model
+  ([`a973a1a`](https://github.com/side-xp/unity-database/commit/a973a1a20dca06284d581ff614162bb093eadba3))
+
+- Csv/tsv export
+  ([`c158f08`](https://github.com/side-xp/unity-database/commit/c158f08cc2d143af4af5fab3a412d38fec8190ca))
+
+- Filters for computed columns
+  ([`ab88698`](https://github.com/side-xp/unity-database/commit/ab88698fe41844b9b274a56f254287f094454e60))
+
+- Filters logic
+  ([`74878ac`](https://github.com/side-xp/unity-database/commit/74878ac32235e61a2dafa6dfeeb012999592cbb8))
+
+- Filters view & editor
+  ([`187b598`](https://github.com/side-xp/unity-database/commit/187b598e81c57740aa669458ff169a3e1793f672))
+
+- Folder filters
+  ([`e4fda9b`](https://github.com/side-xp/unity-database/commit/e4fda9bc9314f5dbcae578664fce0bfc5b6e80b3))
+
+- Folder scope filter
+  ([`1d1fd6f`](https://github.com/side-xp/unity-database/commit/1d1fd6f8a7fbd19db31fbb297304f0b0c1fb7162))
+
+- Import controls
+  ([`00fd061`](https://github.com/side-xp/unity-database/commit/00fd06170fcf6f714ee8abdb179b7175525a36fa))
+
+- Move pagination settings to preferences
+  ([`463f51b`](https://github.com/side-xp/unity-database/commit/463f51b45ff532a81899171525924e37c44debf1))
+
+- Multi-editing
+  ([`560b21d`](https://github.com/side-xp/unity-database/commit/560b21d1f775e7ace276e09fc2539fe4f1d37380))
+
+- Multi-selection
+  ([`354f0f5`](https://github.com/side-xp/unity-database/commit/354f0f54a7226b78d23e71f3dd800537b3106b0b))
+
+- Multi-selection on drag
+  ([`75fd651`](https://github.com/side-xp/unity-database/commit/75fd65107c702d28c83ff953a89b84c9b9d5d50a))
+
+- Multi-sorting
+  ([`e47328f`](https://github.com/side-xp/unity-database/commit/e47328f8e1a8274cc529cd77e20a88f24905875f))
+
+- Nested paths attribute
+  ([`5d046c5`](https://github.com/side-xp/unity-database/commit/5d046c5d004279755b6b7d29649cd01a8767994a))
+
+- Open in database button in inspector
+  ([`dd94884`](https://github.com/side-xp/unity-database/commit/dd94884c88796ddd1c344ad8dc98bf99629b0a81))
+
+- Overrides model
+  ([`53f537d`](https://github.com/side-xp/unity-database/commit/53f537dd219556e6874bc014670d56d543f2c038))
+
+- Overrides revert controls
+  ([`dd08108`](https://github.com/side-xp/unity-database/commit/dd0810885d9ade7ac65ccbd0a0406d4486c73486))
+
+- Pagination
+  ([`f3bb243`](https://github.com/side-xp/unity-database/commit/f3bb24390c91fab3d8b3bc4e8b75908246f203db))
+
+- Reference filters
+  ([`46479c9`](https://github.com/side-xp/unity-database/commit/46479c9b3b6b60839c3709ab30b2ce8998f8dc31))
+
+- Row & column selection
+  ([`4966766`](https://github.com/side-xp/unity-database/commit/49667665e1c386bf0027993ae6dc8d2d17fab355))
+
+- Selection sync
+  ([`9a4175d`](https://github.com/side-xp/unity-database/commit/9a4175d9ac1915625a94eb11866a1672589e20a9))
+
+- Split project & personal views
+  ([`1c92dfa`](https://github.com/side-xp/unity-database/commit/1c92dfa6a45d0732a9d2b7992c741d835e317040))
+
+- Tables tree view
+  ([`8bc2a5b`](https://github.com/side-xp/unity-database/commit/8bc2a5b7dd77cfdc7811971d468e3e0cf4cc9ec1))
+
+- View feedbacks & config from database window
+  ([`4144295`](https://github.com/side-xp/unity-database/commit/4144295c86a9a38e50af40c4959a4a80febb729b))
+
+- Views logic
+  ([`92c6a90`](https://github.com/side-xp/unity-database/commit/92c6a904e816c2620eb1f48a3d9340c01f10b79b))
+
+- **alg2**: Views UI
+  ([`f83e016`](https://github.com/side-xp/unity-database/commit/f83e0165dfee593dc7e3e1e00018f43bb480fb0c))
+
+
 ## v1.0.1 (2026-11-25)
 
 ### Bug Fixes
